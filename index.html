@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Sideline</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:rgba(0,0,0,0);}
+  html,body{margin:0;padding:0;background:#0c3b2a;}
+  #root{min-height:100vh;}
+  .si-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
+  .si-card{background:#f4efe1;border-radius:18px;padding:30px 24px;max-width:340px;width:100%;text-align:center;
+    box-shadow:0 22px 60px rgba(0,0,0,.45);}
+  .si-card h1{font-family:Georgia,serif;font-size:32px;margin:0 0 6px;color:#0c3b2a;letter-spacing:2px;}
+  .si-card p{color:#5c6b60;font-size:14px;margin:0 0 22px;line-height:1.55;}
+  .si-btn{display:inline-block;background:#fff;border:1px solid #d8cfb8;border-radius:11px;padding:12px 20px;
+    font-size:15px;font-weight:600;color:#222;cursor:pointer;}
+  .si-btn:disabled{opacity:.6;}
+  .si-btn:active{transform:translateY(1px);}
+  .si-status{margin-top:16px;font-size:13px;color:#5c6b60;min-height:18px;}
+</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+
+const { useState, useMemo, useEffect, useRef } = React;
+
+/* ====== EDIT THIS: paste your Google OAuth Client ID ====== */
+const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com.apps.googleusercontent.com";
+/* ========================================================== */
+
+const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
+let accessToken = null, fileId = null, cache = {}, tokenClient = null;
+
+async function dfetch(url, opts) {
+  opts = opts || {};
+  const headers = Object.assign({ Authorization: "Bearer " + accessToken }, opts.headers || {});
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
+  if (res.status === 401) { const er = new Error("auth"); er.code = 401; throw er; }
+  return res;
+}
+async function ensureFile() {
+  if (fileId) return fileId;
+  const q = encodeURIComponent("name='sideline.json'");
+  const r = await dfetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=" + q);
+  const j = await r.json();
+  if (j.files && j.files.length) { fileId = j.files[0].id; return fileId; }
+  const cr = await dfetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "sideline.json", parents: ["appDataFolder"] }),
+  });
+  const cj = await cr.json(); fileId = cj.id; return fileId;
+}
+async function driveLoad() {
+  await ensureFile();
+  const r = await dfetch("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
+  if (r.ok) { try { cache = await r.json(); } catch (e) { cache = {}; } } else { cache = {}; }
+  if (!cache || typeof cache !== "object") cache = {};
+}
+async function driveSave() {
+  await ensureFile();
+  await dfetch("https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media", {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cache),
+  });
+}
+const store = {
+  ok: true,
+  async list() { return Object.keys(cache).map((id) => "match:" + id); },
+  async get(id) { return cache[id] || null; },
+  async set(id, data) { cache[id] = data; try { await driveSave(); return true; } catch (e) { return false; } },
+  async del(id) { delete cache[id]; try { await driveSave(); return true; } catch (e) { return false; } },
+};
+
+function gpTotal(g, p, mode) { return mode === "goals" ? g : g * 3 + p; }
+function fmtScore(g, p, mode) { return mode === "goals" ? String(g) : `${g}-${p}`; }
+function squash(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const pad2 = (n) => String(n).padStart(2, "0");
+const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const fmtDate = (s) => { if (!s) return ""; const d = new Date(s); if (isNaN(d)) return ""; return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const fmtDateShort = (s) => { if (!s) return ""; const d = new Date(s); if (isNaN(d)) return ""; return `${d.getDate()} ${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`; };
+const dateKey = (s, fb) => { const d = s ? Date.parse(s) : NaN; return isNaN(d) ? (fb || 0) : d; };
+
+/* ============================================================
+   SHAREABLE INFOGRAPHIC  (pure SVG -> PNG, no external deps)
+   ============================================================ */
+function buildInfographicSVG(m) {
+  const W = 420, P = 18, CW = W - 2 * P;
+  const PITCH = "#0c3b2a", PAPER = "#f4efe1", INK = "#11241b", MUTE = "#6f7d72", LINE = "#ded4ba";
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const T = (x, y, s, size, fill, o = {}) => `<text x="${x}" y="${y}" font-family="Arial,Helvetica,sans-serif" font-size="${size}" fill="${fill}" font-weight="${o.w || 400}" text-anchor="${o.a || "start"}"${o.ls ? ` letter-spacing="${o.ls}"` : ""}>${esc(s)}</text>`;
+  const R = (x, y, w, h, fill, rx = 0, o = {}) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"${rx ? ` rx="${rx}"` : ""}${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw || 1}"` : ""}/>`;
+  const L = (x1, y1, x2, y2, stroke, sw = 1, dash = "") => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${sw}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+  const C = (cx, cy, r, fill, o = {}) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw || 1}"` : ""}/>`;
+  const flag = (x, y, w, h, c1, c2, stroke = "rgba(0,0,0,.3)") =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h / 2}" fill="${c1}" rx="1.5"/><rect x="${x}" y="${y + h / 2}" width="${w}" height="${h / 2}" fill="${c2}"/><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="1" rx="2"/>`;
+
+  const head = [], body = [];
+  const HH = 196;
+
+  // ---- header band ----
+  head.push(R(0, 0, W / 2, 6, m.colorUs), R(W / 2, 0, W / 2, 6, m.colorThem));
+  head.push(T(P, 30, (m.grade || m.sport || "Match").toUpperCase(), 12, PAPER, { w: 700, ls: 1 }));
+  head.push(T(W - P, 30, m.dateStr, 11, "#cfe3d8", { a: "end" }));
+  head.push(flag(W * 0.27 - 16, 46, 32, 19, m.colorUs, m.colorUs2, "rgba(255,255,255,.55)"));
+  head.push(flag(W * 0.73 - 16, 46, 32, 19, m.colorThem, m.colorThem2, "rgba(255,255,255,.55)"));
+  head.push(T(W * 0.27, 84, m.usName, 15, PAPER, { w: 700, a: "middle" }));
+  head.push(T(W * 0.73, 84, `${m.themName} (${m.homeAway === "home" ? "H" : "A"})`, 15, PAPER, { w: 700, a: "middle" }));
+  head.push(T(W * 0.27, 132, m.totals.us.str, 44, PAPER, { w: 800, a: "middle" }));
+  head.push(T(W * 0.73, 132, m.totals.them.str, 44, PAPER, { w: 800, a: "middle" }));
+  head.push(T(W * 0.5, 124, "–", 24, "#7fa395", { a: "middle" }));
+  const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
+  const margin = Math.abs(m.totals.us.total - m.totals.them.total);
+  const resFull = resTxt + (m.effMode === "gaa" && margin ? ` BY ${margin}` : "");
+  const resBg = m.result === "Win" ? "#f5c518" : m.result === "Loss" ? "#c0392b" : "#e7dec6";
+  const resFg = m.result === "Loss" ? "#ffffff" : "#11241b";
+  const cw = resFull.length * 7.6 + 24;
+  head.push(R(W / 2 - cw / 2, 152, cw, 24, resBg, 12));
+  head.push(T(W / 2, 168, resFull, 11.5, resFg, { w: 700, a: "middle", ls: 1 }));
+
+  let y = HH + 20;
+
+  // ---- stats 2x2 ----
+  const stats = [["Half-time", m.ht], ["Lead changes", String(m.leadChanges)], ["Times level", String(m.timesLevel)],
+    ["Biggest lead", `${m.maxLead}${m.maxLeadSide ? " " + (m.maxLeadSide === "us" ? m.usName.split(" ")[0] : m.themName.split(" ")[0]) : ""}`]];
+  const colW = CW / 2, rowH = 46;
+  body.push(L(P + colW, y, P + colW, y + 2 * rowH, LINE, 1));
+  body.push(L(P, y + rowH, P + CW, y + rowH, LINE, 1));
+  stats.forEach((st, i) => {
+    const c = i % 2, r = i < 2 ? 0 : 1;
+    const cx = P + c * colW + colW / 2, yt = y + r * rowH;
+    const big = st[0] === "Lead changes" || st[0] === "Times level";
+    body.push(T(cx, yt + 21, st[1], big ? 21 : 15, PITCH, { w: 800, a: "middle" }));
+    body.push(T(cx, yt + 37, st[0].toUpperCase(), 9, MUTE, { w: 700, a: "middle", ls: 0.5 }));
+  });
+  y += 2 * rowH + 16;
+
+  // ---- chart ----
+  const usShort = m.usName.split(" ")[0], themShort = m.themName.split(" ")[0];
+  body.push(T(P, y, "SCORE PROGRESSION", 11, MUTE, { w: 700, ls: 1 }));
+  // legend on title row, right side
+  let lx = W - P;
+  body.push(T(lx, y, themShort, 10, INK, { w: 700, a: "end" })); lx -= themShort.length * 5.6 + 6;
+  body.push(flag(lx - 14, y - 8, 14, 9, m.colorThem, m.colorThem2)); lx -= 14 + 12;
+  body.push(T(lx, y, usShort, 10, INK, { w: 700, a: "end" })); lx -= usShort.length * 5.6 + 6;
+  body.push(flag(lx - 14, y - 8, 14, 9, m.colorUs, m.colorUs2));
+  y += 10;
+  const chH = 150;
+  body.push(R(P, y, CW, chH, "#ffffff", 10, { stroke: LINE, sw: 1 }));
+  const plotL = P + 32, plotR = P + CW - 12, plotT = y + 12, plotB = y + chH - 18;
+  const xMax = Math.max(1, ...m.series.map((p) => p.x));
+  const yMax = Math.max(1, ...m.series.map((p) => Math.max(p.us, p.them)));
+  const pX = (x) => plotL + (plotR - plotL) * (x / xMax);
+  const pY = (v) => plotB - (plotB - plotT) * (v / yMax);
+  for (let g = 0; g <= 2; g++) { const v = Math.round((yMax * g) / 2); const yy = pY(v); body.push(L(plotL, yy, plotR, yy, "#eee5cf", 1)); body.push(T(plotL - 6, yy + 4, String(v), 9, MUTE, { a: "end" })); }
+  if (m.htLine != null) { const hx = pX(m.htLine); body.push(L(hx, plotT, hx, plotB, PITCH, 1, "4 3")); body.push(T(hx, plotT - 3, "HT", 8, PITCH, { a: "middle", w: 700 })); }
+  const step = (key) => { let d = ""; m.series.forEach((p, i) => { const px = pX(p.x), py = pY(p[key]); if (!i) d += `M ${px} ${py}`; else { d += ` L ${px} ${pY(m.series[i - 1][key])} L ${px} ${py}`; } }); return d; };
+  body.push(`<path d="${step("them")}" fill="none" stroke="${m.colorThem}" stroke-width="2.5"/>`);
+  body.push(`<path d="${step("us")}" fill="none" stroke="${m.colorUs}" stroke-width="3"/>`);
+  m.goalDots.forEach((d) => body.push(C(pX(d.x), pY(d.y), 4, d.side === "us" ? m.colorUs : m.colorThem, { stroke: "#fff", sw: 1.5 })));
+  y += chH + 22;
+
+  // ---- our scorers ----
+  body.push(T(P, y, `SCORERS · ${m.usName.toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
+  y += 14;
+  if (!m.usScorers.length) { body.push(T(P, y + 6, "No scores recorded", 12, MUTE)); y += 20; }
+  m.usScorers.forEach((s) => {
+    body.push(L(P, y + 17, P + CW, y + 17, "#ece3cb", 1));
+    body.push(T(P, y + 12, `${s.num ? s.num + ". " : ""}${s.name}`, 13, INK, { w: 600 }));
+    body.push(T(P + CW, y + 12, `${s.g}-${s.p}${s.frees ? `  (${s.frees}f)` : ""}`, 13, PITCH, { w: 700, a: "end" }));
+    y += 23;
+  });
+  y += 16;
+
+  // ---- lineup ----
+  body.push(T(P, y, "TEAM", 11, MUTE, { w: 700, ls: 1 }));
+  body.push(flag(P + 44, y - 9, 18, 11, m.colorUs, m.colorUs2));
+  y += 12;
+  const rows = m.formationRows && m.formationRows.length ? m.formationRows : [];
+  const pitchH = rows.length ? rows.length * 54 + 20 : 28;
+  body.push(R(P, y, CW, pitchH, PITCH, 12));
+  body.push(R(P, y + pitchH / 2 - 0.5, CW, 1, "#1c5a40"));
+  body.push(C(P + CW / 2, y + pitchH / 2, 18, "none", { stroke: "#1c5a40", sw: 1 }));
+  const findName = (n) => { const p = (m.starters || []).find((x) => x.num === n); return p ? p.name : ""; };
+  rows.forEach((row, ri) => {
+    const jw = 27, gap = Math.min(54, (CW - 24 - row.length * jw) / Math.max(1, row.length - 1 + 0.0001));
+    const total = row.length * jw + (row.length - 1) * gap;
+    const sx = P + (CW - total) / 2, ry = y + 13 + ri * 54;
+    row.forEach((n, ci) => {
+      const jx = sx + ci * (jw + (isFinite(gap) ? gap : 0));
+      body.push(R(jx, ry, jw, jw, m.colorUs, 7));
+      body.push(T(jx + jw / 2, ry + 18, String(n), 13, "#11241b", { w: 800, a: "middle" }));
+      body.push(T(jx + jw / 2, ry + jw + 12, findName(n), 9.5, "#eaf3ee", { w: 600, a: "middle" }));
+    });
+  });
+  y += pitchH + 10;
+  if (m.subs && m.subs.length) { body.push(T(P, y + 8, "Subs: " + m.subs.map((p) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
+  if (m.missing && m.missing.length) { body.push(T(P, y + 8, "Missing: " + m.missing.map((p) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
+  y += 16;
+
+  // ---- timeline ----
+  body.push(T(P, y, "TIMELINE", 11, MUTE, { w: 700, ls: 1 }));
+  y += 16;
+  const halves = [...new Set(m.timeline.map((t) => t.half))].sort((a, b) => a - b);
+  halves.forEach((h) => {
+    body.push(T(P, y, h === 1 ? "FIRST HALF" : h === 2 ? "SECOND HALF" : `PERIOD ${h}`, 10, PITCH, { w: 700, ls: 1 }));
+    y += 16;
+    m.timeline.filter((t) => t.half === h).forEach((it) => {
+      const cy = y + 7;
+      if (it.kind === "score") {
+        const col = it.side === "us" ? m.colorUs : m.colorThem;
+        const ring = it.side === "us" ? m.colorUs2 : m.colorThem2;
+        body.push(C(P + 5, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
+        body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
+        body.push(T(P + 42, cy + 4, `${it.scorer}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`, 12, INK, { w: it.type === "goal" ? 700 : 400 }));
+        body.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 11, PITCH, { w: 700, a: "end" }));
+      } else if (it.kind === "sub") {
+        body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
+        body.push(T(P + 42, cy + 4, `${it.on} on for ${it.off}`, 11.5, MUTE, { w: 600 }));
+      } else {
+        body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
+        body.push(T(P + 42, cy + 4, it.text, 11.5, MUTE));
+      }
+      y += 21;
+    });
+    y += 8;
+  });
+
+  // ---- footer ----
+  body.push(L(P, y + 2, P + CW, y + 2, LINE, 1));
+  body.push(T(W / 2, y + 22, `Sideline · ${m.grade || m.sport || ""}`, 9.5, MUTE, { a: "middle", ls: 0.5 }));
+  const H = y + 38;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+    + R(0, 0, W, H, PAPER) + R(0, 0, W, HH, PITCH) + head.join("") + body.join("") + `</svg>`;
+  return { svg, width: W, height: H };
+}
+
+function downloadBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+function svgToPng(svg, W, H) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = 2;
+        const c = document.createElement("canvas");
+        c.width = W * scale; c.height = H * scale;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#f4efe1"; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+        const dataUrl = c.toDataURL("image/png");
+        c.toBlob((blob) => { blob ? resolve({ blob, dataUrl }) : reject(new Error("no blob")); }, "image/png");
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => reject(new Error("img load fail"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+}
+
+
+function parseMatch(raw, settings = {}) {
+  const lines = raw.split("\n").map((l) => l.replace(/\s+$/, ""));
+  const warnings = [];
+  const timeRe = /^\s*(\d{1,2}):(\d{2})\s*$/;
+
+  let firstTimeIdx = lines.findIndex((l) => timeRe.test(l));
+  if (firstTimeIdx === -1) firstTimeIdx = lines.length;
+  const preamble = lines.slice(0, firstTimeIdx).filter((l) => l.trim() !== "");
+  const eventLines = lines.slice(firstTimeIdx);
+  const headerRaw = preamble[0] || "";
+
+  // Detect sport: a team score with an internal hyphen (0-1, 2-7) means goals+points
+  // => Gaelic games. Otherwise fall back to the sport named in the header, then goals.
+  const detectedMode = /\d+-\d+/.test(eventLines.join("\n")) ? "gaa"
+    : (/hurl|camog|gaelic|gaa|football/i.test(headerRaw) && !/soccer/i.test(headerRaw)) ? "gaa"
+    : "goals";
+  const mode = settings.scoringMode || detectedMode;
+
+  // --- header ---
+  const header = { raw: headerRaw, sport: "", opposition: "", homeAway: "", label: "" };
+  if (preamble[0]) {
+    const h = preamble[0];
+    let m;
+    if ((m = h.match(/^(.*?)\s+@\s*(.*)$/))) { header.homeAway = "away"; header.opposition = m[2].trim(); header.label = m[1].trim(); }
+    else if ((m = h.match(/^(.*?)\s+v(?:s|\.)?\s*(.*)$/i))) { header.homeAway = "home"; header.opposition = m[2].trim(); header.label = m[1].trim(); }
+    else { header.label = h.trim(); }
+    if (/hurl/i.test(h)) header.sport = "Hurling";
+    else if (/camog/i.test(h)) header.sport = "Camogie";
+    else if (/gaelic|football|gaa/i.test(h)) header.sport = "Gaelic Football";
+    else if (/soccer/i.test(h)) header.sport = "Soccer";
+  }
+
+  // --- roster (preserve the formation exactly as written, row by row) ---
+  const roster = [];
+  const formationRows = [];
+  let section = "starting";
+  for (let i = 1; i < preamble.length; i++) {
+    const line = preamble[i].trim();
+    if (/^subs?\b/i.test(line)) { section = "sub"; continue; }
+    if (/^missing/i.test(line)) { section = "missing"; continue; }
+    const rowNums = [];
+    for (const chunk of line.split("|")) {
+      const m = chunk.trim().match(/^(\d{1,2})\s*[.)]?\s*(.*)$/);
+      if (m && m[2].trim()) { const num = parseInt(m[1], 10); roster.push({ num, name: m[2].trim(), role: section }); if (section === "starting") rowNums.push(num); }
+    }
+    if (section === "starting" && rowNums.length) formationRows.push(rowNums);
+  }
+  const matchPlayer = (txt) => {
+    const c = squash(txt);
+    if (!c) return null;
+    for (const p of roster) {
+      const full = squash(p.name);
+      const first = squash(p.name.split(" ")[0]);
+      if (full === c || first === c || full === squash(txt.split(" ")[0])) return p;
+    }
+    return null;
+  };
+
+  // --- walk events ---
+  const scoring = [];
+  const notes = [];
+  let half = 0, startMin = 0, seq = 0, lastElapsed = 0;
+  const halfMarks = [];
+
+  const peelScore = (rest) => {
+    const toks = rest.trim().split(/\s+/);
+    const score = [];
+    while (toks.length) {
+      const t = toks[toks.length - 1];
+      if (t === "-" || /^\d+(-\d+)?$/.test(t)) score.unshift(toks.pop());
+      else break;
+    }
+    return { text: toks.join(" ").trim(), scoreToks: score.filter((t) => t !== "-") };
+  };
+
+  for (const rawLine of eventLines) {
+    const line = rawLine.trim();
+    if (line === "") continue;
+    const tm = line.match(timeRe);
+    if (tm) { half += 1; startMin = parseInt(tm[2], 10); halfMarks.push({ half, clock: `${tm[1]}:${tm[2]}` }); continue; }
+
+    const lead = line.match(/^(\d{1,2})\b\s*(.*)$/);
+    if (lead) {
+      const minute = parseInt(lead[1], 10);
+      let elapsed = minute - startMin; if (elapsed < 0) elapsed += 60;
+      const restFull = lead[2];
+      if (/^(ht|ft|half ?time|full ?time|end)\b/i.test(restFull.trim())) {
+        halfMarks.push({ half, marker: /^f/i.test(restFull.trim()) ? "FT" : "HT", minute, elapsed });
+        continue;
+      }
+      const { text, scoreToks } = peelScore(restFull);
+      const isGoal = /goal/i.test(restFull);
+      const isFree = /\bfree\b/i.test(restFull) || /\bf\b/i.test(restFull);
+      const scorerText = text.replace(/\b(goal|free|point|pts?|pen|penalty|45|65)\b/gi, "").replace(/\?/g, "").trim();
+      // a bare minute on its own line marks the start of a half (e.g. "51" for the 2nd half)
+      if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
+        half += 1; startMin = minute; halfMarks.push({ half, startMin: minute }); continue;
+      }
+
+      let side, scorer, player = null, sure = true;
+      const player0 = matchPlayer(scorerText);
+      if (player0) { side = "us"; scorer = player0.name; player = player0; }
+      else if (/^t\d*$/i.test(squash(scorerText)) || /^t\b/i.test(scorerText)) { side = "them"; scorer = "Opposition"; }
+      else if (/cwell|craughwell/i.test(scorerText) || (settings.myTeam && squash(scorerText) && squash(scorerText) === squash(settings.myTeam))) { side = "us"; scorer = "Unknown"; }
+      else if (scorerText) { side = "them"; scorer = scorerText; sure = false; } // a name we don't recognise — could be either side
+      else { side = "them"; scorer = ""; sure = false; } // no scorer at all — deduce the team from the score change
+
+      lastElapsed = elapsed;
+      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, scorer, playerNum: player ? player.num : null, scoreToks });
+    } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
+      halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed });
+    } else if (/\bfor\b/i.test(line)) {
+      const m = line.match(/(.+?)\s+for\s+(.+)/i);
+      notes.push({ seq: seq++, half: half || 1, type: "sub", on: m ? m[1].trim() : "", off: m ? m[2].trim() : "", text: line });
+    } else {
+      notes.push({ seq: seq++, half: half || 1, type: "note", text: line });
+    }
+  }
+
+  // --- decide whether the written running score drives the totals ---
+  const parseCol = (tok) => {
+    if (tok == null) return { g: 0, p: 0 };
+    if (tok.includes("-")) { const a = tok.split("-"); return { g: parseInt(a[0], 10) || 0, p: parseInt(a[1], 10) || 0 }; }
+    const n = parseInt(tok, 10) || 0; return mode === "goals" ? { g: n, p: 0 } : { g: 0, p: n }; // bare number: "3" = 0-3, "0" = 0-0
+  };
+  const writtenCount = scoring.filter((s) => s.scoreToks && s.scoreToks.length === 2).length;
+  const scoreFromWritten = scoring.length > 0 && writtenCount >= scoring.length / 2;
+
+  // work out which written column is "us" (auto-handles team order and home/away)
+  let usCol = header.homeAway === "home" ? 0 : 1;
+  if (scoreFromWritten) {
+    const vote = [0, 0]; let prev = [{ g: 0, p: 0 }, { g: 0, p: 0 }];
+    for (const s of scoring) {
+      if (!(s.scoreToks && s.scoreToks.length === 2)) continue;
+      const cols = [parseCol(s.scoreToks[0]), parseCol(s.scoreToks[1])];
+      const ch0 = cols[0].g !== prev[0].g || cols[0].p !== prev[0].p;
+      const ch1 = cols[1].g !== prev[1].g || cols[1].p !== prev[1].p;
+      if (ch0 !== ch1 && s.sure) { const changed = ch0 ? 0 : 1; if (s.side === "us") vote[changed]++; else vote[1 - changed]++; }
+      prev = cols;
+    }
+    if (vote[0] + vote[1] > 0) usCol = vote[0] >= vote[1] ? 0 : 1;
+  }
+  const themCol = 1 - usCol;
+
+  // --- running totals + series ---
+  let ug = 0, up = 0, tg = 0, tp = 0;
+  const h1max = Math.max(0, ...scoring.filter((s) => s.half === 1).map((s) => s.elapsed),
+    ...halfMarks.filter((m) => m.half === 1 && m.elapsed != null).map((m) => m.elapsed));
+  const GAP = 4;
+  const xOf = (s) => (s.half === 1 ? s.elapsed : h1max + GAP + s.elapsed);
+  const series = [{ x: 0, us: 0, them: 0, label: "Throw-in", half: 1 }];
+  const goalDots = [];
+  const scorers = {};
+  const bump = (name, side, type, free, num) => {
+    const k = side + ":" + squash(name);
+    if (!scorers[k]) scorers[k] = { name: titleCase(name), side, g: 0, p: 0, frees: 0, num: num || null };
+    if (/[A-Z]/.test(name) && !/[A-Z]/.test(scorers[k].name)) scorers[k].name = name;
+    if (type === "goal") scorers[k].g++; else scorers[k].p++;
+    if (free) scorers[k].frees++;
+  };
+
+  let leadChanges = 0, prevLeader = 0, maxLead = 0, maxLeadSide = null, timesLevel = 0, prevEqual = true;
+  for (const s of scoring) {
+    const pUg = ug, pUp = up, pTg = tg, pTp = tp;
+    if (scoreFromWritten && s.scoreToks && s.scoreToks.length === 2) {
+      const cols = [parseCol(s.scoreToks[0]), parseCol(s.scoreToks[1])];
+      ug = cols[usCol].g; up = cols[usCol].p; tg = cols[themCol].g; tp = cols[themCol].p; // take the score as written
+    } else {
+      const effType = mode === "goals" ? "goal" : s.type;
+      if (s.side === "us") { if (effType === "goal") ug++; else up++; }
+      else { if (effType === "goal") tg++; else tp++; }
+    }
+    // see what changed, to attribute the score and classify goal vs point
+    const dUsG = ug - pUg, dUsP = up - pUp, dThemG = tg - pTg, dThemP = tp - pTp;
+    let aSide, dg, dp;
+    if (s.side === "us" && (dUsG || dUsP)) { aSide = "us"; dg = dUsG; dp = dUsP; }
+    else if (s.side === "them" && (dThemG || dThemP)) { aSide = "them"; dg = dThemG; dp = dThemP; }
+    else if (dUsG || dUsP) { aSide = "us"; dg = dUsG; dp = dUsP; }
+    else if (dThemG || dThemP) { aSide = "them"; dg = dThemG; dp = dThemP; }
+    else { aSide = s.side; dg = 0; dp = 0; }
+    if (dUsG < 0 || dUsP < 0 || dThemG < 0 || dThemP < 0)
+      warnings.push({ minute: s.minute, half: s.half, msg: `score seems to drop here (you wrote "${s.scoreToks ? s.scoreToks.join(" ") : "?"}")` });
+    s.side = aSide; s.type = dg > 0 ? "goal" : "point";
+    if (!s.scorer) s.scorer = aSide === "us" ? "Unknown" : "Opposition"; // deduced from which score changed
+    for (let i = 0; i < dg; i++) bump(s.scorer, aSide, "goal", false, s.playerNum);
+    for (let i = 0; i < dp; i++) bump(s.scorer, aSide, "point", s.fromFree && i === 0, s.playerNum);
+
+    const usT = gpTotal(ug, up, mode), themT = gpTotal(tg, tp, mode);
+    const leader = Math.sign(usT - themT);
+    if (leader !== 0 && prevLeader !== 0 && leader !== prevLeader) leadChanges++;
+    if (leader !== 0) prevLeader = leader;
+    const eq = usT === themT;
+    if (eq && !prevEqual) timesLevel++;
+    prevEqual = eq;
+    const lead = Math.abs(usT - themT);
+    if (lead > maxLead) { maxLead = lead; maxLeadSide = usT > themT ? "us" : "them"; }
+    const x = xOf(s);
+    s.usScore = fmtScore(ug, up, mode);
+    s.themScore = fmtScore(tg, tp, mode);
+    series.push({
+      x, half: s.half, minute: s.minute, us: usT, them: themT,
+      usScore: fmtScore(ug, up, mode), themScore: fmtScore(tg, tp, mode),
+      label: `${s.scorer}${dg > 0 ? " GOAL" : s.fromFree ? " (free)" : ""}`,
+      side: aSide, type: s.type,
+    });
+    if (dg > 0) goalDots.push({ x, y: aSide === "us" ? usT : themT, side: aSide });
+  }
+
+  const totals = {
+    us: { g: ug, p: up, total: gpTotal(ug, up, mode), str: fmtScore(ug, up, mode) },
+    them: { g: tg, p: tp, total: gpTotal(tg, tp, mode), str: fmtScore(tg, tp, mode) },
+  };
+  let result = "Draw";
+  if (totals.us.total > totals.them.total) result = "Win";
+  else if (totals.us.total < totals.them.total) result = "Loss";
+
+  const htX = halfMarks.find((m) => m.marker === "HT");
+  const htLine = htX ? xOf({ half: 1, elapsed: htX.elapsed }) : (scoring.some((s) => s.half === 2) ? h1max + GAP / 2 : null);
+
+  return { header, roster, formationRows, scoring, notes, halfMarks, series, goalDots, scorers: Object.values(scorers), totals, result, leadChanges, timesLevel, maxLead, maxLeadSide, warnings, mode, detectedMode, htLine };
+}
+
+/* ============================================================
+   STORAGE  (window.storage, with graceful fallback)
+   ============================================================ */
+/* store is defined in the head (Google Drive backed) */
+
+/* ============================================================
+   SAMPLE DATA
+   ============================================================ */
+const SAMPLE = `U13A Hurling @ Toms
+                        1 Mikey
+2.Dylan F | 3. Jack M | 4. James
+ 5.Mathew | 6. Aaron Burke | 7. Danny 
+          8.Shane | 9. Jack H 
+  10.Ethan | 11. Roan | 12. Biel 
+13. Cian | 14.DKC | 15. DKB
+
+Subs
+16. 
+17. Cillian
+18. Aaron C
+Missing:
+20. Taylor
+
+18:21
+21 Cwell Point? 0 1
+23 Roan free 0 0-2
+24 Roan free 0 0-3
+25 T11 0-1 0-3
+30 Roan goal 0-1 - 1-3
+31 T free  0-2 - 1-3
+32 Roan free 0-2 - 1-4
+33 Ethan 0-2 - 1-5
+They swapped 6 and 3
+36 freddie 0-3 - 1-5
+37 T free 0-4 - 1-5
+38 Freddie goal 1-4 - 1-5
+43 HT
+
+18:50
+59 T free 1-5 - 1-5
+03 roan goal 1-5 - 2-5
+05 T goal 2-5 - 2-5
+Aaron C for dkb
+06 roan free 2-5 - 2-6
+08 free T 2-6 - 2-6
+Cillian for Cian
+10 T free 2-7 - 2-6
+13 FT`;
+
+/* ============================================================
+   UI
+   ============================================================ */
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap');
+.mt-root{ --ink:#11241b; --paper:#f4efe1; --pitch:#0c3b2a; --pitch2:#10543a; --line:#d8cfb8; --muted:#6f7d72;
+  font-family:'Newsreader',Georgia,serif; color:var(--ink); background:
+  radial-gradient(140% 120% at 0% 0%, #faf6ea 0%, #efe8d4 60%, #e7dec6 100%);
+  border:1px solid var(--line); border-radius:14px; overflow:hidden; max-width:980px; margin:0 auto;
+  box-shadow:0 24px 60px -28px rgba(12,59,42,.45); position:relative;}
+.mt-root *{box-sizing:border-box;}
+.mt-bar{display:flex; gap:8px; align-items:center; padding:12px 16px; background:var(--pitch);
+  color:var(--paper); flex-wrap:wrap;}
+.mt-logo{font-family:'Bebas Neue'; font-size:26px; letter-spacing:1px; line-height:1; display:flex; align-items:center; gap:9px;}
+.mt-logo span{display:inline-block; width:13px; height:22px; background:repeating-linear-gradient(90deg,#f5c518 0 4px,#0c3b2a 4px 8px); border-radius:2px;}
+.mt-bar .grow{flex:1;}
+.mt-sel,.mt-btn,.mt-inp{font-family:'Oswald',sans-serif; font-size:13px; border-radius:7px; border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.08); color:var(--paper); padding:6px 10px; cursor:pointer;}
+.mt-sel option{color:#11241b;}
+.mt-btn:hover{background:rgba(255,255,255,.2);}
+.mt-btn.solid{background:#f5c518; color:#11241b; border-color:#f5c518; font-weight:600;}
+.mt-btn.solid:hover{background:#ffd530;}
+.mt-board{background:linear-gradient(160deg,var(--pitch) 0%,var(--pitch2) 100%); color:var(--paper);
+  padding:18px 16px 20px; position:relative;}
+.mt-board:before{content:""; position:absolute; inset:0; background:
+  repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,255,255,.03) 38px 76px); pointer-events:none;}
+.mt-meta{font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:2px; font-size:11px;
+  opacity:.8; text-align:center; margin-bottom:10px;}
+.mt-score{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; position:relative;}
+.mt-team{display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0;}
+.mt-team .nm{font-family:'Oswald',sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:1px;
+  font-size:15px; display:flex; align-items:center; gap:7px; max-width:100%;}
+.mt-team .nm b{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mt-chip{width:14px; height:14px; border-radius:50%; flex:none; border:2px solid rgba(255,255,255,.7);}
+.mt-big{font-family:'Bebas Neue'; font-size:58px; line-height:.82; letter-spacing:1px;}
+.mt-tot{font-family:'Oswald'; font-size:12px; opacity:.75; margin-top:2px;}
+.mt-vs{font-family:'Bebas Neue'; font-size:20px; opacity:.6;}
+.mt-resbar{text-align:center; margin-top:12px;}
+.mt-res{display:inline-block; font-family:'Oswald'; font-weight:600; text-transform:uppercase; letter-spacing:2px;
+  font-size:12px; padding:4px 14px; border-radius:30px;}
+.mt-res.Win{background:#f5c518; color:#11241b;} .mt-res.Loss{background:#c0392b;} .mt-res.Draw{background:#e7dec6; color:#11241b;}
+.mt-tabs{display:flex; gap:0; background:var(--paper); border-bottom:1px solid var(--line); overflow-x:auto;}
+.mt-tab{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1px; font-size:12.5px; padding:11px 16px;
+  border:none; background:none; cursor:pointer; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap;}
+.mt-tab.on{color:var(--pitch); border-bottom-color:#f5c518; font-weight:600;}
+.mt-body{padding:18px 16px 22px;}
+.mt-h{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1.5px; font-size:12px; color:var(--muted); margin:0 0 10px;}
+.mt-stats{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;}
+.mt-warn{background:#fbf3d6; border:1px solid #e6cf7a; border-left:4px solid #d9af00; border-radius:8px;
+  padding:10px 12px; margin-bottom:14px; font-family:'Oswald',sans-serif; font-size:12.5px; color:#5c4a12; line-height:1.45;}
+.mt-warn b{display:block; margin-bottom:2px;}
+.mt-stat{flex:1; min-width:120px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
+.mt-stat .v{font-family:'Bebas Neue'; font-size:26px; line-height:1; color:var(--pitch);}
+.mt-stat .k{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1px; font-size:10px; color:var(--muted);}
+table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
+.mt-tbl th{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1px; font-size:10.5px; color:var(--muted);
+  text-align:left; padding:7px 8px; border-bottom:2px solid var(--line);}
+.mt-tbl td{padding:8px; border-bottom:1px solid var(--line);}
+.mt-tbl td.n{font-family:'Bebas Neue'; font-size:19px; color:var(--pitch);}
+.mt-tbl tr.them td{color:#8a5a52;}
+.mt-num{display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--pitch); color:var(--paper);
+  font-family:'Oswald'; font-size:11px; align-items:center; justify-content:center; margin-right:7px;}
+.mt-tl{position:relative; margin-left:8px; padding-left:18px; border-left:2px solid var(--line);}
+.mt-ev{position:relative; padding:7px 0 7px 4px; font-size:14px; display:flex; gap:10px; align-items:baseline;}
+.mt-ev:before{content:""; position:absolute; left:-25px; top:12px; width:11px; height:11px; border-radius:50%;
+  background:var(--dot,#fff); border:2px solid var(--ring,var(--muted)); box-sizing:border-box;}
+.mt-ev.goal:before{width:16px; height:16px; left:-27px; top:11px; border-width:3px;}
+.mt-ev.note:before{background:var(--paper); border-style:dashed; border-color:var(--muted);}
+.mt-ev .m{font-family:'Oswald'; font-weight:600; color:var(--muted); font-size:12px; min-width:30px;}
+.mt-ev .sc{font-family:'Oswald'; font-weight:600; color:var(--pitch); margin-left:auto; font-size:13px;}
+.mt-half{font-family:'Oswald'; text-transform:uppercase; letter-spacing:2px; font-size:11px; color:var(--pitch);
+  background:var(--paper); display:inline-block; padding:3px 10px; border-radius:20px; border:1px solid var(--line);
+  margin:14px 0 4px -8px;}
+.mt-pill{display:inline-block; font-family:'Oswald'; font-size:10px; text-transform:uppercase; letter-spacing:1px;
+  padding:1px 7px; border-radius:20px; margin-left:6px;}
+.mt-pill.goal{background:#c0392b; color:#fff;} .mt-pill.free{background:#e7dec6; color:#5a4;} .mt-pill.sub{background:#dfeee6; color:#0c3b2a;}
+textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12.5px;
+  border:1px solid var(--line); border-radius:10px; padding:12px; background:#fffdf6; color:#222; line-height:1.5; resize:vertical;}
+.mt-live{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px;}
+.mt-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+.mt-live select,.mt-live input{font-family:'Oswald'; font-size:13px; padding:7px 9px; border:1px solid var(--line);
+  border-radius:7px; background:#fffdf6; color:#222;}
+.mt-live input{width:60px;}
+.mt-add{font-family:'Oswald'; font-weight:600; text-transform:uppercase; letter-spacing:1px; font-size:12px;
+  background:var(--pitch); color:var(--paper); border:none; border-radius:7px; padding:8px 16px; cursor:pointer;}
+.mt-add:hover{background:#10543a;}
+.mt-add.alt{background:#fff; color:var(--pitch); border:1px solid var(--line);}
+.mt-toggle{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+.mt-toggle .tg{font-family:'Oswald'; font-weight:500; font-size:12.5px; text-transform:uppercase; letter-spacing:.5px;
+  padding:8px 16px; border:none; background:#fffdf6; color:var(--muted); cursor:pointer; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mt-toggle .tg:not(.on):hover{background:#f1ead8;}
+.mt-panel{background:#fff; border-bottom:1px solid var(--line); padding:14px 16px;}
+.mt-panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+.mt-panel h3{font-family:'Oswald',sans-serif; margin:0; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--pitch);}
+.mt-panel img.shot{width:100%; max-width:420px; height:auto; border-radius:8px; border:1px solid var(--line); display:block; margin:0 auto;}
+.mt-panel .hint{font-family:'Oswald',sans-serif; font-size:12px; color:var(--muted); margin:10px 0 4px; line-height:1.5; text-align:center;}
+.mt-panel textarea{width:100%; height:90px; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; border:1px solid var(--line); border-radius:8px; padding:8px; background:#fffdf6; color:#333; resize:vertical;}
+.mt-panel .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; justify-content:center;}
+.mt-add:disabled{opacity:.45; cursor:not-allowed;}
+.mt-pitch{display:grid; gap:7px; background:linear-gradient(var(--pitch),var(--pitch2)); border-radius:12px; padding:16px 10px;}
+.mt-line{display:flex; justify-content:center; gap:8px; flex-wrap:wrap;}
+.mt-jersey{display:flex; flex-direction:column; align-items:center; gap:4px; width:84px;}
+.mt-jersey .j{width:26px; height:26px; border-radius:7px; background:#f5c518; color:#11241b; font-family:'Bebas Neue';
+  font-size:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.3);}
+.mt-jersey .nm{font-family:'Oswald'; font-weight:500; font-size:14px; color:#eaf3ee; text-align:center; line-height:1.15; max-width:84px;}
+.mt-bench{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+.mt-bench .b{font-family:'Oswald'; font-size:12px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 11px;}
+.mt-bench .b.miss{opacity:.55; text-decoration:line-through;}
+.mt-note{font-family:'Oswald'; font-size:11px; color:var(--muted); margin-top:10px;}
+.mt-tip{background:var(--pitch); color:var(--paper); border-radius:8px; padding:8px 10px; font-family:'Oswald'; font-size:12px;}
+.mt-tip .sc{font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px;}
+.mt-settings{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 16px; background:#fff;
+  border-bottom:1px solid var(--line); font-family:'Oswald'; font-size:12px;}
+.mt-settings label{display:flex; align-items:center; gap:6px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+.mt-settings input[type=text],.mt-settings input[type=datetime-local]{font-family:'Oswald'; font-size:12px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; width:120px;}
+.mt-settings input[type=datetime-local]{width:auto;}
+.mt-settings input[type=color]{width:26px; height:26px; border:1px solid var(--line); border-radius:6px; padding:0; background:none;}
+`;
+
+function StatCard({ k, v }) {
+  return <div className="mt-stat"><div className="v">{v}</div><div className="k">{k}</div></div>;
+}
+
+function ChartTip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="mt-tip">
+      <div className="sc">{d.usScore ?? 0} – {d.themScore ?? 0}</div>
+      <div>{d.label}{d.minute != null ? ` · ${d.minute}'` : ""}{d.half ? ` · H${d.half}` : ""}</div>
+    </div>
+  );
+}
+
+function MatchTracker() {
+  const [raw, setRaw] = useState(SAMPLE);
+  const [myTeam, setMyTeam] = useState("Craughwell");
+  const [scoringMode, setScoringMode] = useState("gaa");
+  const [autoMode, setAutoMode] = useState(true);
+  const [colorUs, setColorUs] = useState("#f5c518");
+  const [colorUs2, setColorUs2] = useState("#1f7a4d");
+  const [colorThem, setColorThem] = useState("#c0392b");
+  const [colorThem2, setColorThem2] = useState("#2c5fa8");
+  const [tab, setTab] = useState("overview");
+  const [matchDate, setMatchDate] = useState("2026-06-02T18:21");
+  const [curId, setCurId] = useState(null);
+  const [saved, setSaved] = useState([]);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [modal, setModal] = useState(null);
+  const [exportText, setExportText] = useState("");
+  const [importText, setImportText] = useState("");
+
+  // live entry form
+  const [lvTeam, setLvTeam] = useState("us");
+  const [lvScorer, setLvScorer] = useState("");
+  const [lvOpp, setLvOpp] = useState("");
+  const [lvType, setLvType] = useState("point");
+  const [lvMin, setLvMin] = useState("");
+
+  const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: autoMode ? undefined : scoringMode }), [raw, myTeam, scoringMode, autoMode]);
+  const { header, roster, totals, result, series, goalDots, scorers, notes, halfMarks, htLine } = parsed;
+  const effMode = parsed.mode;
+
+  const usName = myTeam || "My Team";
+  const themName = header.opposition || "Opposition";
+
+  // auto-switch handled in parser via score format; effMode = parsed.mode
+
+  // load saved list on mount
+  const refreshList = async () => {
+    const keys = await store.list();
+    const items = [];
+    for (const k of keys) {
+      const id = k.replace(/^match:/, "");
+      const d = await store.get(id);
+      if (!d) continue;
+      let opp = "Opponent", ha = "away", grade = "";
+      try { const h = parseMatch(d.raw || "", {}).header; if (h.opposition) opp = h.opposition; if (h.homeAway) ha = h.homeAway; if (h.label) grade = h.label; } catch (e) {}
+      const label = `${grade ? grade + " · " : ""}${opp} (${ha === "home" ? "H" : "A"})${d.date ? " — " + fmtDate(d.date) : ""}`;
+      items.push({ id, label, date: d.date || null, savedAt: d.savedAt || 0 });
+    }
+    items.sort((a, b) => dateKey(b.date, b.savedAt) - dateKey(a.date, a.savedAt));
+    setSaved(items);
+    return items;
+  };
+  useEffect(() => {
+    (async () => {
+      const items = await refreshList();
+      if (items.length && !curId) doLoad(items[0].id); // open the most recent match by default
+    })(); /* eslint-disable-next-line */
+  }, []);
+
+  const doSave = async () => {
+    const id = curId || ("m" + Date.now());
+    const ok = await store.set(id, { raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, colorUs, colorUs2, colorThem, colorThem2, savedAt: Date.now() });
+    setCurId(id);
+    await refreshList();
+    setSavedMsg(ok ? "Saved ✓" : "Saved in session (storage off)");
+    setTimeout(() => setSavedMsg(""), 2000);
+  };
+  const doLoad = async (key) => {
+    const id = key.replace(/^match:/, "");
+    const d = await store.get(id);
+    if (!d) return;
+    setRaw(d.raw); setMyTeam(d.myTeam || "My Team"); setScoringMode(d.scoringMode || "gaa");
+    setAutoMode(d.autoMode !== undefined ? d.autoMode : true);
+    setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
+    setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
+    setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
+  };
+  const doNew = () => {
+    setRaw(`New Match @ Opponent\n1 \n\n${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}\n`);
+    setMatchDate(toLocalInput(new Date())); setCurId(null); setTab("notation");
+  };
+  const doDuplicate = () => {
+    setCurId(null);
+    setSavedMsg("Editing a new copy — change the date/opponent, then Save");
+    setTimeout(() => setSavedMsg(""), 3500);
+  };
+  const doDelete = async () => {
+    if (curId) { await store.del(curId); setCurId(null); await refreshList(); setSavedMsg("Deleted"); setTimeout(() => setSavedMsg(""), 1500); }
+  };
+
+  // edit header (opponent / home-away / label) without touching the raw text
+  const setHeaderField = (field, value) => {
+    const label = field === "label" ? value : (header.label || "Match");
+    const opposition = field === "opposition" ? value : (header.opposition || "");
+    const homeAway = field === "homeAway" ? value : (header.homeAway || "away");
+    const sym = homeAway === "home" ? "v" : "@";
+    const newHeader = `${label || "Match"} ${sym} ${opposition}`.replace(/\s+/g, " ").trim();
+    setRaw((r) => {
+      const lines = r.split("\n");
+      let hi = lines.findIndex((l) => l.trim() !== "");
+      if (hi === -1) return newHeader + "\n" + r;
+      lines[hi] = newHeader;
+      return lines.join("\n");
+    });
+  };
+
+  // ---- live append helpers ----
+  const append = (text) => setRaw((r) => r.replace(/\s*$/, "") + "\n" + text);
+  const addScore = () => {
+    const min = lvMin.trim() || String(new Date().getMinutes());
+    let label;
+    if (lvTeam === "us") {
+      label = lvScorer || (myTeam || "Cwell"); // blank scorer = unattributed for my team
+    } else {
+      const t = lvOpp.trim();
+      label = t ? (/^\d+$/.test(t) ? `T${t}` : t) : "T"; // number -> T11, name kept, blank -> T
+    }
+    let line = `${min} ${label}`;
+    if (lvType === "goal") line += " goal";
+    else if (lvType === "free") line += " free";
+    append(line);
+    setLvMin(""); setLvOpp("");
+  };
+  const addHalf = () => append(`\n${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}`);
+  const addMarker = (mk) => append(`${new Date().getMinutes()} ${mk}`);
+
+  // merged timeline for display
+  const timeline = useMemo(() => {
+    const items = [];
+    parsed.scoring.forEach((s) => items.push({ kind: "score", ...s }));
+    parsed.notes.forEach((n) => items.push({ kind: n.type, ...n }));
+    // Preserve the order they were written. A missing timestamp (e.g. a sub)
+    // just slots between the events either side of it.
+    return items.sort((a, b) => (a.half - b.half) || (a.seq - b.seq));
+  }, [parsed]);
+
+  const usScorers = scorers.filter((s) => s.side === "us").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const themScorers = scorers.filter((s) => s.side === "them").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const starters = roster.filter((p) => p.role === "starting");
+  const subs = roster.filter((p) => p.role === "sub");
+  const missing = roster.filter((p) => p.role === "missing");
+  const chunk = (arr, n) => arr.reduce((a, _, i) => (i % n ? a : [...a, arr.slice(i, i + n)]), []);
+  const formationRows = parsed.formationRows && parsed.formationRows.length
+    ? parsed.formationRows
+    : chunk(starters.map((p) => p.num), 3);
+
+  const doExport = () => {
+    if (modal && modal.kind === "share") { setModal(null); return; }
+    const h1 = parsed.series.filter((p) => p.half === 1 && p.usScore);
+    const ht = h1.length ? `${h1[h1.length - 1].usScore} – ${h1[h1.length - 1].themScore}` : `${fmtScore(0, 0, effMode)} – ${fmtScore(0, 0, effMode)}`;
+    const model = {
+      grade: header.label || "", sport: header.sport || "", homeAway: header.homeAway,
+      usName, themName, dateStr: matchDate ? fmtDate(matchDate) : "",
+      totals, result, effMode, ht,
+      leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
+      series: parsed.series, goalDots: parsed.goalDots, htLine: parsed.htLine,
+      usScorers, formationRows, starters, subs, missing, timeline,
+      colorUs, colorUs2, colorThem, colorThem2,
+    };
+    const safe = (s) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    const filename = `${safe(header.label)}-${safe(themName)}.png`;
+    const title = `${usName} ${totals.us.str} – ${totals.them.str} ${themName}`;
+    try {
+      const { svg, width, height } = buildInfographicSVG(model);
+      const svgUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      setModal({ kind: "share", img: svgUrl, svg, filename, title, blob: null, png: false });
+      svgToPng(svg, width, height)
+        .then(({ blob, dataUrl }) => setModal((mm) => (mm && mm.kind === "share") ? { ...mm, blob, img: dataUrl, png: true } : mm))
+        .catch(() => setModal((mm) => (mm && mm.kind === "share") ? { ...mm, png: false, pngFailed: true } : mm));
+    } catch (e) {
+      setModal({ kind: "share", error: true });
+    }
+  };
+  const nativeShare = () => {
+    if (!modal || !modal.blob) return;
+    const file = new File([modal.blob], modal.filename, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: modal.title }).catch(() => {});
+    else downloadBlob(modal.blob, modal.filename);
+  };
+  const downloadSvg = () => {
+    if (!modal || !modal.svg) return;
+    downloadBlob(new Blob([modal.svg], { type: "image/svg+xml" }), (modal.filename || "match.png").replace(/\.png$/, ".svg"));
+  };
+  const openBackup = async () => {
+    if (modal && modal.kind === "backup") { setModal(null); return; }
+    const keys = await store.list();
+    const matches = [];
+    for (const k of keys) { const id = k.replace(/^match:/, ""); const d = await store.get(id); if (d) matches.push({ id, ...d }); }
+    setExportText(JSON.stringify({ v: 1, matches }));
+    setImportText("");
+    setModal({ kind: "backup", count: matches.length });
+  };
+  const copyExport = () => {
+    if (navigator.clipboard) navigator.clipboard.writeText(exportText).then(() => { setSavedMsg("Copied ✓"); setTimeout(() => setSavedMsg(""), 1500); }).catch(() => {});
+  };
+  const doImport = async () => {
+    try {
+      const obj = JSON.parse(importText.trim());
+      const arr = obj.matches || (Array.isArray(obj) ? obj : []);
+      let n = 0;
+      for (const mm of arr) {
+        const id = mm.id || ("m" + Date.now() + Math.floor(Math.random() * 1000));
+        const { id: _drop, ...rec } = mm;
+        if (await store.set(id, rec)) n++;
+      }
+      await refreshList();
+      setModal(null); setSavedMsg(`Imported ${n} match${n === 1 ? "" : "es"} ✓`); setTimeout(() => setSavedMsg(""), 2500);
+    } catch (e) { setSavedMsg("Import failed — check the text"); setTimeout(() => setSavedMsg(""), 2500); }
+  };
+
+  const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
+
+  return (
+    <div className="mt-root">
+      <style>{CSS}</style>
+
+      {/* top bar */}
+      <div className="mt-bar">
+        <div className="mt-logo"><span></span>SIDELINE</div>
+        <div className="grow" />
+        <select className="mt-sel" value={curId || ""} onChange={(e) => e.target.value && doLoad(e.target.value)}>
+          <option value="">{store.ok ? "Saved matches…" : "Storage off"}</option>
+          {saved.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+        <button className="mt-btn" onClick={doNew}>New</button>
+        <button className="mt-btn solid" onClick={doSave}>Save</button>
+        <button className="mt-btn" onClick={doExport}>Share image</button>
+        <button className="mt-btn" onClick={openBackup}>Backup</button>
+        {curId && <button className="mt-btn" onClick={doDuplicate}>Duplicate</button>}
+        {curId && <button className="mt-btn" onClick={doDelete}>Delete</button>}
+        {savedMsg && <span style={{ fontFamily: "Oswald", fontSize: 12 }}>{savedMsg}</span>}
+      </div>
+
+      {modal && (
+        <div className="mt-panel">
+          {modal.kind === "share" && (
+            <>
+              <div className="mt-panel-head"><h3>Match image</h3><button className="mt-add alt" onClick={() => setModal(null)}>Close</button></div>
+              {modal.error && <p className="hint">Couldn't build the image — try again.</p>}
+              {modal.img && <img className="shot" src={modal.img} alt="match infographic" />}
+              {modal.img && <p className="hint"><b>Press and hold the image</b> to save it to Photos or share it{modal.png ? "." : " (preparing a saveable version…)"}</p>}
+              <div className="row">
+                {modal.png && <button className="mt-add" onClick={nativeShare}>Save / Share</button>}
+                {modal.img && !modal.png && <button className="mt-add alt" onClick={downloadSvg}>Download</button>}
+              </div>
+              {modal.pngFailed && <p className="hint">A PNG couldn't be made in this browser — long-press the image above to save it, or use Download.</p>}
+            </>
+          )}
+          {modal.kind === "backup" && (
+            <>
+              <div className="mt-panel-head"><h3>Backup &amp; transfer</h3><button className="mt-add alt" onClick={() => setModal(null)}>Close</button></div>
+              <p className="hint">From the device that has your matches, tap Copy, then paste it into Import on the other device. ({modal.count} saved here.)</p>
+              <textarea readOnly value={exportText} onClick={(e) => e.target.select()} />
+              <div className="row"><button className="mt-add" onClick={copyExport}>Copy</button></div>
+              <p className="hint" style={{ marginTop: 14 }}>Import — paste a backup here to load every match onto this device:</p>
+              <textarea value={importText} placeholder="paste backup text here" onChange={(e) => setImportText(e.target.value)} />
+              <div className="row"><button className="mt-add" onClick={doImport} disabled={!importText.trim()}>Import</button></div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* settings */}
+      <div className="mt-settings">
+        <label>Date <input type="datetime-local" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} /></label>
+        <label>My team <input type="text" value={myTeam} onChange={(e) => setMyTeam(e.target.value)} /> <input type="color" title="Primary" value={colorUs} onChange={(e) => setColorUs(e.target.value)} /><input type="color" title="Secondary" value={colorUs2} onChange={(e) => setColorUs2(e.target.value)} /></label>
+        <label>
+          <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
+            value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => setHeaderField("homeAway", e.target.value)}>
+            <option value="away">Away @</option>
+            <option value="home">Home v</option>
+          </select>
+        </label>
+        <label>Opponent <input type="text" value={header.opposition || ""} placeholder="Opponent"
+          onChange={(e) => setHeaderField("opposition", e.target.value)} /> <input type="color" title="Primary" value={colorThem} onChange={(e) => setColorThem(e.target.value)} /><input type="color" title="Secondary" value={colorThem2} onChange={(e) => setColorThem2(e.target.value)} /></label>
+        <label>Scoring
+          <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
+            value={autoMode ? "auto" : scoringMode}
+            onChange={(e) => { if (e.target.value === "auto") setAutoMode(true); else { setAutoMode(false); setScoringMode(e.target.value); } }}>
+            <option value="auto">Auto: {effMode === "gaa" ? "Gaelic" : "goals"}</option>
+            <option value="gaa">GAA (goals & points)</option>
+            <option value="goals">Goals only (soccer)</option>
+          </select>
+        </label>
+      </div>
+
+      {/* scoreboard */}
+      <div className="mt-board">
+        <div className="mt-meta">{header.sport || "Match"} · {header.homeAway === "away" ? "Away" : header.homeAway === "home" ? "Home" : ""} {header.label ? "· " + header.label : ""}{matchDate ? " · " + fmtDate(matchDate) : ""}</div>
+        <div className="mt-score">
+          <div className="mt-team">
+            <div className="nm"><span className="mt-chip" style={{ background: `linear-gradient(135deg, ${colorUs} 0 50%, ${colorUs2} 50% 100%)` }} /><b>{usName}</b></div>
+            <div className="mt-big">{totals.us.str}</div>
+            <div className="mt-tot">{effMode === "gaa" ? `${totals.us.total} pts` : "goals"}</div>
+          </div>
+          <div className="mt-vs">vs</div>
+          <div className="mt-team">
+            <div className="nm"><b>{themName}</b><span className="mt-chip" style={{ background: `linear-gradient(135deg, ${colorThem} 0 50%, ${colorThem2} 50% 100%)` }} /></div>
+            <div className="mt-big">{totals.them.str}</div>
+            <div className="mt-tot">{effMode === "gaa" ? `${totals.them.total} pts` : "goals"}</div>
+          </div>
+        </div>
+        <div className="mt-resbar">
+          <span className={"mt-res " + result}>
+            {result === "Win" ? "Win" : result === "Loss" ? "Defeat" : "Draw"}
+            {effMode === "gaa" && totals.us.total !== totals.them.total ? ` by ${Math.abs(totals.us.total - totals.them.total)}` : ""}
+          </span>
+        </div>
+      </div>
+
+      {/* tabs */}
+      <div className="mt-tabs">
+        {tabs.map(([id, lbl]) => (
+          <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
+        ))}
+      </div>
+
+      <div className="mt-body">
+        {tab === "overview" && (
+          <>
+            {parsed.warnings.length > 0 && (
+              <div className="mt-warn">
+                <b>Heads up — check {parsed.warnings.length} {parsed.warnings.length === 1 ? "entry" : "entries"}.</b>
+                <span> {parsed.warnings.map((w) => `${w.minute}' — ${w.msg}`).join("; ")}.</span>
+              </div>
+            )}
+            <div className="mt-stats">
+              <StatCard k="Half-time" v={(() => {
+                let g = 0, p = 0, tg = 0, tp = 0;
+                parsed.scoring.filter((s) => s.half === 1).forEach((s) => s.side === "us" ? (s.type === "goal" ? g++ : p++) : (s.type === "goal" ? tg++ : tp++));
+                return `${fmtScore(g, p, effMode)} – ${fmtScore(tg, tp, effMode)}`;
+              })()} />
+              <StatCard k="Lead changes" v={parsed.leadChanges} />
+              <StatCard k="Times level" v={parsed.timesLevel} />
+              <StatCard k={`Biggest lead${parsed.maxLeadSide ? " · " + (parsed.maxLeadSide === "us" ? usName : themName) : ""}`} v={parsed.maxLead} />
+              <StatCard k="Top scorer" v={usScorers[0] ? `${usScorers[0].name.split(" ")[0]} ${usScorers[0].g}-${usScorers[0].p}` : "—"} />
+            </div>
+
+            <p className="mt-h">Score progression</p>
+            <div style={{ width: "100%" }}>
+              <ScoreChart series={series} goalDots={goalDots} htLine={htLine} colorUs={colorUs === "#f5c518" ? "#d9af00" : colorUs} colorThem={colorThem} />
+            </div>
+            <p className="mt-note">● large dots mark goals. Step lines show the running total ({effMode === "gaa" ? "goals ×3 + points" : "goals"}).</p>
+
+            <p className="mt-h" style={{ marginTop: 18 }}>Top scorers — {usName}</p>
+            <table className="mt-tbl">
+              <thead><tr><th>Player</th><th>Goals</th><th>Points</th><th>Frees</th><th>Total</th></tr></thead>
+              <tbody>
+                {usScorers.map((s, i) => (
+                  <tr key={i}>
+                    <td>{s.num ? <span className="mt-num">{s.num}</span> : null}{s.name}</td>
+                    <td className="n">{s.g}</td><td className="n">{s.p}</td>
+                    <td>{s.frees || "–"}</td>
+                    <td className="n">{s.g}-{s.p}</td>
+                  </tr>
+                ))}
+                {usScorers.length === 0 && <tr><td colSpan={5} style={{ color: "#6f7d72" }}>No scores parsed yet.</td></tr>}
+              </tbody>
+            </table>
+
+            {themScorers.length > 0 && (
+              <>
+                <p className="mt-h" style={{ marginTop: 18 }}>{themName} scorers</p>
+                <table className="mt-tbl">
+                  <thead><tr><th>Player</th><th>Goals</th><th>Points</th><th>Frees</th><th>Total</th></tr></thead>
+                  <tbody>
+                    {themScorers.map((s, i) => (
+                      <tr className="them" key={i}><td>{s.name}</td><td className="n">{s.g}</td><td className="n">{s.p}</td><td>{s.frees || "–"}</td><td className="n">{s.g}-{s.p}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        )}
+
+        {tab === "timeline" && (
+          <div className="mt-tl">
+            {[1, 2].map((h) => {
+              const items = timeline.filter((t) => t.half === h);
+              if (!items.length) return null;
+              const mk = halfMarks.find((m) => m.half === h && m.clock);
+              return (
+                <div key={h}>
+                  <div className="mt-half">{h === 1 ? "First half" : "Second half"}{mk ? ` · ${mk.clock}` : ""}</div>
+                  {items.map((it, i) => {
+                    if (it.kind === "score") {
+                      return (
+                        <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
+                          <span className="m">{it.minute}'</span>
+                          <span>{it.scorer}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : ""}</span>
+                          <span className="sc">{it.usScore} – {it.themScore}</span>
+                        </div>
+                      );
+                    }
+                    if (it.kind === "sub") return <div key={i} className="mt-ev note"><span className="m">↺</span><span>{it.on} <span className="mt-pill sub">on</span> for {it.off}</span></div>;
+                    return <div key={i} className="mt-ev note"><span className="m">✎</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
+                  })}
+                </div>
+              );
+            })}
+            {timeline.length === 0 && <p style={{ color: "#6f7d72" }}>No events parsed.</p>}
+          </div>
+        )}
+
+        {tab === "lineup" && (
+          <>
+            <div className="mt-pitch" style={{ background: `linear-gradient(${colorUs2}22, #0c3b2a 60%)` }}>
+              {formationRows.map((row, ri) => (
+                <div className="mt-line" key={ri}>
+                  {row.map((n) => {
+                    const p = starters.find((x) => x.num === n);
+                    return (
+                      <div className="mt-jersey" key={n}>
+                        <div className="j" style={{ background: colorUs, color: "#11241b", borderBottom: `4px solid ${colorUs2}` }}>{n}</div>
+                        <div className="nm">{p ? p.name : ""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => <span className="b" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
+            {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
+          </>
+        )}
+
+        {tab === "notation" && (
+          <>
+            <div className="mt-live">
+              <p className="mt-h" style={{ marginBottom: 8 }}>Add as it happens</p>
+              <div className="mt-row" style={{ marginBottom: 10 }}>
+                <div className="mt-toggle">
+                  <button className={"tg" + (lvTeam === "us" ? " on" : "")} style={lvTeam === "us" ? { background: colorUs, color: "#11241b" } : undefined} onClick={() => setLvTeam("us")}>{usName}</button>
+                  <button className={"tg" + (lvTeam === "them" ? " on" : "")} style={lvTeam === "them" ? { background: colorThem, color: "#fff" } : undefined} onClick={() => setLvTeam("them")}>{themName}</button>
+                </div>
+              </div>
+              <div className="mt-row">
+                <input style={{ width: 56 }} placeholder={`${new Date().getMinutes()}'`} value={lvMin} onChange={(e) => setLvMin(e.target.value)} />
+                {lvTeam === "us" ? (
+                  <select value={lvScorer} onChange={(e) => setLvScorer(e.target.value)}>
+                    <option value="">{usName} — unattributed</option>
+                    {roster.map((p) => <option key={p.num + p.name} value={p.name}>{p.num}. {p.name}</option>)}
+                  </select>
+                ) : (
+                  <input style={{ width: 150 }} placeholder="opp #/name (optional)" value={lvOpp} onChange={(e) => setLvOpp(e.target.value)} />
+                )}
+                <select value={lvType} onChange={(e) => setLvType(e.target.value)}>
+                  <option value="point">{effMode === "goals" ? "Goal" : "Point"}</option>
+                  {effMode !== "goals" && <option value="free">Free</option>}
+                  {effMode !== "goals" && <option value="goal">Goal</option>}
+                </select>
+                <button className="mt-add" onClick={addScore}>+ Score</button>
+                <button className="mt-add alt" onClick={addHalf}>Start half</button>
+                <button className="mt-add alt" onClick={() => addMarker("HT")}>HT</button>
+                <button className="mt-add alt" onClick={() => addMarker("FT")}>FT</button>
+              </div>
+              <p className="mt-note">Pick which side scored, then the scorer. Leave the minute blank to stamp the current minute ({new Date().getMinutes()}'). Everything updates live.</p>
+            </div>
+            <p className="mt-h">Raw notation (edit freely — re-parses instantly)</p>
+            <textarea className="mt-ta" value={raw} onChange={(e) => setRaw(e.target.value)} spellCheck={false} />
+            <p className="mt-note" style={{ marginTop: 8 }}>
+              Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Roan</code> ·
+              start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal]</code> ·
+              opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · notes anything else.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+/* ---- dependency-free score chart (replaces recharts) ---- */
+function ScoreChart({ series, goalDots, htLine, colorUs, colorThem }) {
+  const W = 720, H = 280, L = 40, Rp = 14, Tp = 14, Bp = 26;
+  const xMax = Math.max(1, ...series.map((p) => p.x));
+  const yMax = Math.max(1, ...series.map((p) => Math.max(p.us, p.them)));
+  const pX = (x) => L + (W - L - Rp) * (x / xMax);
+  const pY = (v) => (H - Bp) - ((H - Bp) - Tp) * (v / yMax);
+  const stepPath = (key) => {
+    let d = "";
+    series.forEach((p, i) => {
+      const px = pX(p.x), py = pY(p[key]);
+      if (!i) d += "M " + px + " " + py;
+      else d += " L " + px + " " + pY(series[i - 1][key]) + " L " + px + " " + py;
+    });
+    return d;
+  };
+  const grid = [];
+  for (let g = 0; g <= 2; g++) { const v = Math.round((yMax * g) / 2); grid.push({ v, y: pY(v) }); }
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: "auto", display: "block" }}>
+      {grid.map((gd, i) => (
+        <g key={i}>
+          <line x1={L} y1={gd.y} x2={W - Rp} y2={gd.y} stroke="#e3d9bf" />
+          <text x={L - 6} y={gd.y + 4} fontSize="11" fill="#6f7d72" textAnchor="end" fontFamily="Oswald,sans-serif">{gd.v}</text>
+        </g>
+      ))}
+      {htLine != null && (
+        <g>
+          <line x1={pX(htLine)} y1={Tp} x2={pX(htLine)} y2={H - Bp} stroke="#0c3b2a" strokeDasharray="4 3" />
+          <text x={pX(htLine)} y={Tp - 2} fontSize="10" fill="#0c3b2a" textAnchor="middle" fontWeight="700" fontFamily="Oswald,sans-serif">HT</text>
+        </g>
+      )}
+      <path d={stepPath("them")} fill="none" stroke={colorThem} strokeWidth="2.5" />
+      <path d={stepPath("us")} fill="none" stroke={colorUs} strokeWidth="3" />
+      {goalDots.map((d, i) => (
+        <circle key={i} cx={pX(d.x)} cy={pY(d.y)} r="4.5" fill={d.side === "us" ? colorUs : colorThem} stroke="#fff" strokeWidth="1.5" />
+      ))}
+    </svg>
+  );
+}
+
+/* ---- sign-in + Google Drive bootstrap ---- */
+function SignIn({ phase, err, onSignIn }) {
+  const busy = phase === "wait" || phase === "load";
+  const label = phase === "load" ? "Loading your matches…" : phase === "wait" ? "Starting…" : "Sign in with Google";
+  return (
+    <div className="si-wrap"><div className="si-card">
+      <h1>SIDELINE</h1>
+      <p>Match data is saved privately in your own Google Drive and synced across your devices.</p>
+      <button className="si-btn" onClick={onSignIn} disabled={busy}>{label}</button>
+      <div className="si-status">{err || (phase === "load" ? "Syncing…" : "")}</div>
+    </div></div>
+  );
+}
+function App() {
+  const [phase, setPhase] = useState("wait");
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+        clearInterval(iv);
+        try {
+          tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID, scope: SCOPES,
+            callback: async (resp) => {
+              if (resp && resp.access_token) {
+                accessToken = resp.access_token;
+                setPhase("load");
+                try { await driveLoad(); setPhase("ready"); }
+                catch (e) { setErr("Couldn't read Drive. Check the Client ID, that the Drive API is enabled, and that you're a test user."); setPhase("out"); }
+              } else { setPhase("out"); }
+            },
+            error_callback: (e) => { setErr("Sign-in failed (" + ((e && e.type) || "error") + ")."); setPhase("out"); },
+          });
+          setPhase("out");
+        } catch (e) { setErr("Google sign-in failed to initialise."); setPhase("out"); }
+      } else if (tries > 100) { clearInterval(iv); setErr("Google sign-in didn't load — check your connection."); setPhase("out"); }
+    }, 100);
+    return () => clearInterval(iv);
+  }, []);
+  const signIn = () => { setErr(""); if (tokenClient) tokenClient.requestAccessToken(); else setErr("Still starting up — try again in a second."); };
+  if (phase === "ready") return <MatchTracker />;
+  return <SignIn phase={phase} err={err} onSignIn={signIn} />;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>
