@@ -34,9 +34,7 @@
 
 const { useState, useMemo, useEffect, useRef } = React;
 
-/* ====== EDIT THIS: paste your Google OAuth Client ID ====== */
-const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com.apps.googleusercontent.com";
-/* ========================================================== */
+const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
 const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
 let accessToken = null, fileId = null, cache = {}, tokenClient = null;
