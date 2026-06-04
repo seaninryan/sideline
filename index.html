@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v17";
+const APP_VERSION = "v18";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -1043,14 +1043,52 @@ function MatchTracker() {
     else { setSavedMsg("Couldn't renew — try again"); setTimeout(() => setSavedMsg(""), 2500); }
   };
 
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, colorUs, colorUs2, colorThem, colorThem2 });
+  // unsaved changes? compare editor state against the cached Drive record
+  const dirty = useMemo(() => {
+    if (!curId) return true; // new match, never saved
+    const d = cache[curId];
+    if (!d) return true;
+    const p = recordPayload();
+    return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
+    // eslint-disable-next-line
+  }, [curId, raw, matchDate, myTeam, effMode, autoMode, colorUs, colorUs2, colorThem, colorThem2, saved]);
+
   const doSave = async () => {
     await ensureFreshToken(); // we're inside a click — roll the token now rather than 401 mid-save
     const id = curId || ("m" + Date.now());
-    const ok = await store.set(id, { raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, colorUs, colorUs2, colorThem, colorThem2, savedAt: Date.now() });
+    const ok = await store.set(id, { ...recordPayload(), savedAt: Date.now() });
     setCurId(id);
     await refreshList();
     setSavedMsg(ok ? "Saved ✓" : "NOT saved to Drive!");
     setTimeout(() => setSavedMsg(""), ok ? 2000 : 6000);
+  };
+  // Auto-save matches that already live in Drive, a beat after the last change.
+  // A brand-new match still needs its first explicit Save.
+  useEffect(() => {
+    if (!curId || !dirty) return;
+    const t = setTimeout(async () => {
+      const ok = await store.set(curId, { ...recordPayload(), savedAt: Date.now() });
+      if (ok) { setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
+      else { setSavedMsg("NOT saved to Drive!"); setTimeout(() => setSavedMsg(""), 6000); }
+      await refreshList();
+    }, 2500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, colorUs, colorUs2, colorThem, colorThem2]);
+  // Pull the Drive copy (e.g. changes made on the phone) on demand.
+  const doResync = async () => {
+    if (dirty && curId && !window.confirm("This match has unsaved changes here — load the Drive copy over them?")) return;
+    setSavedMsg("Syncing…");
+    try {
+      await ensureFreshToken();
+      try { await driveLoad(); }
+      catch (e) { if (e.code === 401 && (await reauth())) await driveLoad(); else throw e; }
+      await refreshList();
+      if (curId && cache[curId]) doLoad(curId);
+      else if (curId) setCurId(null); // deleted on the other device
+      setSavedMsg("Synced ✓"); setTimeout(() => setSavedMsg(""), 2000);
+    } catch (e) { setSavedMsg("Sync failed — try again"); setTimeout(() => setSavedMsg(""), 4000); }
   };
   // The banner's button click is a user gesture, so the re-auth popup won't be blocked.
   // Everything is still in `cache`, so one driveSave pushes the pending change.
@@ -1276,13 +1314,14 @@ function MatchTracker() {
         </div>
         <div className="grow" />
         <select className="mt-sel" value={curId || ""} onChange={(e) => e.target.value && doLoad(e.target.value)}>
-          <option value="">{store.ok ? "Saved matches…" : "Storage off"}</option>
-          {saved.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <option value="">{store.ok ? (curId ? "Saved matches…" : "* new match — not saved") : "Storage off"}</option>
+          {saved.map((m) => <option key={m.id} value={m.id}>{m.id === curId && dirty ? "* " + m.label : m.label}</option>)}
         </select>
         <button className="mt-btn" onClick={doNew}>New</button>
-        <button className="mt-btn solid" onClick={doSave}>Save</button>
+        <button className="mt-btn solid" onClick={doSave}>Save{dirty ? " *" : ""}</button>
         <button className="mt-btn" onClick={doExport}>Share image</button>
         <button className="mt-btn" onClick={openBackup}>Backup</button>
+        <button className="mt-btn" onClick={doResync}>Resync</button>
         {curId && <button className="mt-btn" onClick={doDuplicate}>Duplicate</button>}
         {curId && <button className="mt-btn" onClick={doDelete}>Delete</button>}
         {savedMsg && <span style={{ fontFamily: "Oswald", fontSize: 12 }}>{savedMsg}</span>}
