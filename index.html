@@ -730,6 +730,9 @@ function ChartTip({ active, payload }) {
   );
 }
 
+// Header labels that are just template placeholders, not something the user typed.
+const isPlaceholderLabel = (s) => ["", "new match", "my team", "match"].includes((s || "").trim().toLowerCase());
+
 function MatchTracker() {
   const [raw, setRaw] = useState(SAMPLE);
   const [myTeam, setMyTeam] = useState("Racoons");
@@ -775,6 +778,7 @@ function MatchTracker() {
       if (!d) continue;
       let opp = "Opponent", ha = "away", grade = "";
       try { const h = parseMatch(d.raw || "", {}).header; if (h.opposition) opp = h.opposition; if (h.homeAway) ha = h.homeAway; if (h.label) grade = h.label; } catch (e) {}
+      if (isPlaceholderLabel(grade)) grade = (d.myTeam || "").trim(); // pre-fix saves still show the team, not "New Match"
       const label = `${grade ? grade + " · " : ""}${opp} (${ha === "home" ? "H" : "A"})${d.date ? " — " + fmtDate(d.date) : ""}`;
       items.push({ id, label, date: d.date || null, savedAt: d.savedAt || 0 });
     }
@@ -820,7 +824,7 @@ function MatchTracker() {
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
   const doNew = () => {
-    setRaw(`New Match @ Opponent\n1 \n\n${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}\n`);
+    setRaw(`${myTeam.trim() || "My Team"} @ Opponent\n1 \n\n${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}\n`);
     setMatchDate(toLocalInput(new Date())); setCurId(null); setTab("notation");
   };
   const doDuplicate = () => {
@@ -846,6 +850,12 @@ function MatchTracker() {
       lines[hi] = newHeader;
       return lines.join("\n");
     });
+  };
+  // My team edits follow through to the header label, unless the user typed their own label (e.g. a grade).
+  const onMyTeamChange = (v) => {
+    const cur = (header.label || "").trim();
+    if (isPlaceholderLabel(cur) || cur === myTeam.trim()) setHeaderField("label", v.trim() || "My Team");
+    setMyTeam(v);
   };
 
   // ---- live append helpers ----
@@ -1014,7 +1024,7 @@ function MatchTracker() {
       {/* settings */}
       <div className="mt-settings">
         <label>Date <input type="datetime-local" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} /></label>
-        <label>My team <input type="text" value={myTeam} onChange={(e) => setMyTeam(e.target.value)} /> <input type="color" title="Primary" value={colorUs} onChange={(e) => setColorUs(e.target.value)} /><input type="color" title="Secondary" value={colorUs2} onChange={(e) => setColorUs2(e.target.value)} /></label>
+        <label>My team <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <input type="color" title="Primary" value={colorUs} onChange={(e) => setColorUs(e.target.value)} /><input type="color" title="Secondary" value={colorUs2} onChange={(e) => setColorUs2(e.target.value)} /></label>
         <label>
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => setHeaderField("homeAway", e.target.value)}>
