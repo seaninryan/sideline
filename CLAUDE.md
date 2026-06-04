@@ -10,7 +10,7 @@ Sideline — a personal match tracker for GAA (hurling/football) and soccer that
 
 - **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + Google Identity Services loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
 - **`SETUP.md`** — end-user setup guide (Google Cloud OAuth + GitHub Pages).
-- **`icon-180.png`** — app icon (favicon + `apple-touch-icon`): flat soccer ball on pitch green. Don't edit by hand — regenerate with `python3 tools/make-icon.py` (needs PIL).
+- **`icon-180.png`** / **`icon-touch-180.png`** — app icons: a green-pattern soccer ball, transparent for the favicon and on a pitch-green tile for `apple-touch-icon` (iOS blackens transparency). Don't edit by hand — regenerate both with `python3 tools/make-icon.py` (needs PIL). The top-bar logo SVG uses the same geometry/colours.
 - **`tools/`** — dev-only helpers, not served: `make-icon.py`, `parser-harness.js` (extracts the pure parser from `index.html` for node), `run-tests.js` (parser regression tests).
 
 The app was originally a Claude artifact (`match-tracker.jsx`, persisted via the chat's `window.storage`, charted with recharts) converted by a script into this standalone. Neither the jsx nor the script is in the repo — **`index.html` is the source of truth; edit it directly.**
