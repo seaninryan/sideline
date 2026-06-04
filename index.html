@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v25";
+const APP_VERSION = "v26";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -559,8 +559,9 @@ function parseMatch(raw, settings = {}) {
         notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "corner", side, text: line });
         continue;
       }
-      // a missed chance ("10 Jack miss pen", "wide", "saved") is a note, not a score
-      if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short)\b/i.test(restFull)) {
+      // a missed chance ("10 Jack miss pen", "wide", "saved") or a stoppage
+      // ("46 Water Break") is a note, not a score
+      if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short|water)\b/i.test(restFull)) {
         notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "note", text: restFull.trim() });
         continue;
       }

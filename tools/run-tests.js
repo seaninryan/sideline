@@ -74,6 +74,17 @@ Alfie 50?
   const p = parseMatch("19:02\n42 long range dropped 2-1\n44 2-2\n", { scoringMode: "goals" });
   t("score-bearing line with risky word still counts", [p.totals.us.str, p.totals.them.str], ["2", "2"]);
 }
+{
+  // "NN Water Break" is a note, not an opposition score — a phantom point here
+  // forced the next written score's points column down (fake "score drops" warning)
+  // and credited "Water Break" in the scorers table
+  const p = parseMatch("U12 Hurling @ Wildebeests\n1. Rick\n2. Morty\n\n7:00\n05 Rick 0-1 0-0\n10 Water Break\n15 T 0-1 1-0\n", {});
+  t("water break is a note", p.notes.some((n) => n.type === "note" && /water break/i.test(n.text)), true);
+  t("water break not a score", p.scoring.length, 2);
+  t("water break no drop warning", p.warnings.length, 0);
+  t("water break totals", [p.totals.us.str, p.totals.them.str], ["0-1", "1-0"]);
+  t("water break not a scorer", p.scorers.some((s) => /water/i.test(s.name)), false);
+}
 
 // ---- match-minute labels ----
 {
