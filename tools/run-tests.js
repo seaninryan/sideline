@@ -75,6 +75,16 @@ Alfie 50?
   t("score-bearing line with risky word still counts", [p.totals.us.str, p.totals.them.str], ["2", "2"]);
 }
 
+// ---- added time at HT/FT ----
+{
+  const ht = (raw) => parseMatch(raw, { scoringMode: "goals" }).halfMarks.find((m) => m.marker);
+  t("28' half deduces +3", ht("19:02\n14 dkb 0-1\n30 HT\n").added, 3); // 19:02 -> 30 is 28 elapsed
+  t("exact multiple no added", ht("19:02\n14 dkb 0-1\n32 HT\n").added, undefined);
+  t("inline override 'HT +6'", ht("19:02\n14 dkb 0-1\n30 HT +6\n").added, 6);
+  t("standalone '+6' line overrides", ht("19:02\n14 dkb 0-1\n30 HT\n+6\n").added, 6);
+  t("'+0' suppresses deduction", ht("19:02\n14 dkb 0-1\n30 HT\n+0\n").added, undefined);
+}
+
 // ---- minute-prefixed subs ----
 {
   const p = parseMatch("U13 Hurling @ Tribesmen\n10. Morty\nSubs\n17. Pencilvester\n18:21\n7 Morty 0-1 0-0\n43 Pencilvester for Morty\n", {});
