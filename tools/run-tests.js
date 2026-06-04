@@ -46,6 +46,8 @@ Alfie 50?
   t("soccer result", p.result, "Loss");
   t("soccer warnings", p.warnings.length, 0);
   t("soccer miss pen is a note", p.notes.some((n) => n.type === "note" && /miss pen/.test(n.text)), true);
+  t("miss note has no duplicated minute", p.notes.find((n) => /miss pen/.test(n.text)).text, "Jack miss pen");
+  t("descriptive scorer keeps full desc", p.scoring.find((s) => s.minute === 23).desc, "long free");
   t("soccer miss not in scoring", p.scoring.some((s) => /miss/i.test(s.scorer || "")), false);
   t("soccer scoring count", p.scoring.length, 6);
 }

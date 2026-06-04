@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v8";
+const APP_VERSION = "v9";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -452,7 +452,7 @@ function parseMatch(raw, settings = {}) {
       const { text, scoreToks } = peelScore(restFull);
       // a missed chance ("10 Jack miss pen", "wide", "saved") is a note, not a score
       if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short)\b/i.test(restFull)) {
-        notes.push({ seq: seq++, half: half || 1, minute, type: "note", text: line });
+        notes.push({ seq: seq++, half: half || 1, minute, type: "note", text: restFull.trim() });
         continue;
       }
       // "43 Rick for Morty" — a substitution with the minute in front
@@ -479,7 +479,7 @@ function parseMatch(raw, settings = {}) {
       else { side = "them"; scorer = ""; sure = false; } // no scorer at all — deduce the team from the score change
 
       lastElapsed = elapsed;
-      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, scorer, playerNum: player ? player.num : null, scoreToks });
+      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, scorer, desc: text, playerNum: player ? player.num : null, scoreToks });
     } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
       halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed });
     } else if (/\bfor\b/i.test(line)) {
@@ -728,6 +728,9 @@ table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .mt-ev.note:before{background:var(--paper); border-style:dashed; border-color:var(--muted);}
 .mt-ev .m{font-family:'Oswald'; font-weight:600; color:var(--muted); font-size:12px; min-width:30px;}
 .mt-ev .sc{font-family:'Oswald'; font-weight:600; color:var(--pitch); margin-left:auto; font-size:13px;}
+.mt-ev.them{flex-direction:row-reverse;} /* opposition events mirror to the right */
+.mt-ev.them .sc{margin-left:0; margin-right:auto;}
+.mt-ev.them .m{text-align:right;}
 .mt-half{font-family:'Oswald'; text-transform:uppercase; letter-spacing:2px; font-size:11px; color:var(--pitch);
   background:var(--paper); display:inline-block; padding:3px 10px; border-radius:20px; border:1px solid var(--line);
   margin:14px 0 4px -8px;}
@@ -1246,10 +1249,16 @@ function MatchTracker() {
                   <div className="mt-half">{h === 1 ? "First half" : "Second half"}{mk ? ` · ${mk.clock}` : ""}</div>
                   {items.map((it, i) => {
                     if (it.kind === "score") {
+                      // a scorer we couldn't attribute is description, not a name: "GOAL long free"
+                      const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
                       return (
                         <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
                           <span className="m">{it.minute}'</span>
-                          <span>{it.scorer}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : ""}</span>
+                          <span>
+                            {descriptive
+                              ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
+                              : <>{it.scorer}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : ""}</>}
+                          </span>
                           <span className="sc">{it.usScore} – {it.themScore}</span>
                         </div>
                       );
