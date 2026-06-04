@@ -14,4 +14,4 @@ const end = lines.findIndex((l) => l.startsWith("const CSS"));
 const extra = lines.filter((l) => l.startsWith("const isPlaceholderLabel"));
 const chunk = lines.slice(start, end).concat(extra).join("\n");
 
-module.exports = new Function(chunk + "\n; return { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG };")();
+module.exports = new Function(chunk + "\n; return { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG, swapRosterNums, renumRoster };")();

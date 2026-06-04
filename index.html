@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v15";
+const APP_VERSION = "v16";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -698,6 +698,40 @@ function parseMatch(raw, settings = {}) {
   return { header, roster, formationRows, scoring, notes, halfMarks, series, goalDots, scorers: Object.values(scorers), totals, result, leadChanges, timesLevel, maxLead, maxLeadSide, warnings, mode, detectedMode, htLine };
 }
 
+/* ---- roster edits on the raw notation (lineup tab tools) ---- */
+const rosterEnd = (lines) => { const e = lines.findIndex((l) => /^\s*\d{1,2}:\d{2}\s*$/.test(l)); return e === -1 ? lines.length : e; };
+const locRoster = (lines, end, num) => {
+  for (let li = 1; li < end; li++) {
+    if (/^(subs?\b|missing)/i.test(lines[li].trim())) continue;
+    const chunks = lines[li].split("|");
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const m = chunks[ci].trim().match(/^(\d{1,2})\s*[.)]?\s*/);
+      if (m && parseInt(m[1], 10) === num) return { li, ci };
+    }
+  }
+  return null;
+};
+// swap two players' slots (works across formation rows and the Subs section)
+function swapRosterNums(raw, numA, numB) {
+  const lines = raw.split("\n"), end = rosterEnd(lines);
+  const a = locRoster(lines, end, numA), b = locRoster(lines, end, numB);
+  if (!a || !b) return raw;
+  const ca = lines[a.li].split("|"), cb = a.li === b.li ? ca : lines[b.li].split("|");
+  const t = ca[a.ci]; ca[a.ci] = cb[b.ci]; cb[b.ci] = t;
+  lines[a.li] = ca.join("|"); lines[b.li] = cb.join("|");
+  return lines.join("\n");
+}
+// change a player's shirt number in place
+function renumRoster(raw, num, newNum) {
+  const lines = raw.split("\n"), end = rosterEnd(lines);
+  const a = locRoster(lines, end, num);
+  if (!a) return raw;
+  const ch = lines[a.li].split("|");
+  ch[a.ci] = ch[a.ci].replace(/\d{1,2}/, String(newNum));
+  lines[a.li] = ch.join("|");
+  return lines.join("\n");
+}
+
 /* ============================================================
    STORAGE  (window.storage, with graceful fallback)
    ============================================================ */
@@ -925,6 +959,11 @@ function MatchTracker() {
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
+  // lineup tools: "swap" (reshuffle two players) or "renum" (change a shirt number)
+  const [lineupMode, setLineupMode] = useState(null);
+  const [swapFirst, setSwapFirst] = useState(null); // {num, name}
+  const [renumTarget, setRenumTarget] = useState(null); // {num, name}
+  const [newNum, setNewNum] = useState("");
 
   // live entry form
   const [lvTeam, setLvTeam] = useState("us");
@@ -1047,6 +1086,29 @@ function MatchTracker() {
   const tapBench = (p) => {
     if (subPick && subPick.role === "off") return completeSub(p.name, subPick.name);
     setSubPick(subPick && subPick.role === "on" && subPick.num === p.num ? null : { role: "on", ...p });
+  };
+  // lineup tools route every tap through here; default falls through to the sub flow
+  const resetLineupModes = () => { setLineupMode(null); setSwapFirst(null); setRenumTarget(null); setNewNum(""); setSubPick(null); };
+  const tapPlayer = (p, where) => {
+    if (lineupMode === "swap") {
+      if (!swapFirst) return setSwapFirst(p);
+      if (swapFirst.num === p.num) return setSwapFirst(null);
+      setRaw((r) => swapRosterNums(r, swapFirst.num, p.num));
+      setSavedMsg(`Swapped ${swapFirst.name || swapFirst.num} & ${p.name || p.num}`); setTimeout(() => setSavedMsg(""), 2500);
+      return resetLineupModes();
+    }
+    if (lineupMode === "renum") { setRenumTarget(p); setNewNum(String(p.num)); return; }
+    return where === "pitch" ? tapPitch(p) : tapBench(p);
+  };
+  const renumValid = (() => {
+    const n = parseInt(newNum, 10);
+    return renumTarget && n >= 1 && n <= 99 && !roster.some((p) => p.num === n && p.num !== renumTarget.num);
+  })();
+  const applyRenum = () => {
+    if (!renumValid) return;
+    setRaw((r) => renumRoster(r, renumTarget.num, parseInt(newNum, 10)));
+    setSavedMsg(`${renumTarget.name || renumTarget.num} now wears ${newNum}`); setTimeout(() => setSavedMsg(""), 2500);
+    resetLineupModes();
   };
   const addScore = () => {
     const min = lvMin.trim() || String(new Date().getMinutes());
@@ -1388,8 +1450,8 @@ function MatchTracker() {
                   {row.map((n) => {
                     const p = starters.find((x) => x.num === n);
                     return (
-                      <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPitch({ num: n, name: p ? p.name : String(n) })}>
-                        <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: subPick && subPick.role === "off" && subPick.num === n ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
+                      <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch")}>
+                        <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: (subPick && subPick.role === "off" && subPick.num === n) || (swapFirst && swapFirst.num === n) || (renumTarget && renumTarget.num === n) ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
                         <div className="nm">{p ? p.name : ""} {subArrows(n)}</div>
                         {scoreFor(n)}
                       </div>
@@ -1398,7 +1460,33 @@ function MatchTracker() {
                 </div>
               ))}
             </div>
-            {subPick ? (
+            {renumTarget ? (
+              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
+                <div className="mt-row">
+                  <span className="mt-h" style={{ margin: 0 }}>New number for {renumTarget.num}. {renumTarget.name}</span>
+                  <input style={{ width: 56 }} value={newNum} onChange={(e) => setNewNum(e.target.value.replace(/\D/g, ""))} />
+                  {!renumValid && newNum && <span className="mt-note" style={{ margin: 0 }}>taken</span>}
+                  <button className="mt-add" disabled={!renumValid} onClick={applyRenum}>OK</button>
+                  <button className="mt-add alt" onClick={resetLineupModes}>Cancel</button>
+                </div>
+              </div>
+            ) : lineupMode === "swap" ? (
+              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
+                <div className="mt-row">
+                  <span className="mt-h" style={{ margin: 0 }}>
+                    {swapFirst ? <>Swapping {swapFirst.num}. {swapFirst.name} — tap the second player</> : <>Reshuffle — tap two players to swap their spots (subs too)</>}
+                  </span>
+                  <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={resetLineupModes}>Cancel</button>
+                </div>
+              </div>
+            ) : lineupMode === "renum" ? (
+              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
+                <div className="mt-row">
+                  <span className="mt-h" style={{ margin: 0 }}>Change number — tap the player wearing a different number</span>
+                  <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={resetLineupModes}>Cancel</button>
+                </div>
+              </div>
+            ) : subPick ? (
               <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
                 <div className="mt-row">
                   <span className="mt-h" style={{ margin: 0 }}>
@@ -1408,14 +1496,18 @@ function MatchTracker() {
                 </div>
               </div>
             ) : (
-              <p className="mt-note">Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
+              <div className="mt-row" style={{ marginTop: 8 }}>
+                <p className="mt-note" style={{ margin: 0, flex: 1, minWidth: 180 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
+                <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("swap"); }}>Reshuffle</button>
+                <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("renum"); }}>Change number</button>
+              </div>
             )}
             {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => {
-              const picked = subPick && subPick.role === "on" && subPick.num === p.num;
+              const picked = (subPick && subPick.role === "on" && subPick.num === p.num) || (swapFirst && swapFirst.num === p.num) || (renumTarget && renumTarget.num === p.num);
               const used = subbedOn.has(p.num) || subbedOff.has(p.num); // used subs wear the team colours
               const st = picked ? { background: "#f5c518", borderColor: "#f5c518" }
                 : used ? { background: colorUs, color: contrastOn(colorUs), borderColor: colorUs2 } : {};
-              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapBench({ num: p.num, name: p.name })}>{p.num}. {p.name} {subArrows(p.num)} {scoreFor(p.num)}</span>;
+              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>{p.num}. {p.name} {subArrows(p.num)} {scoreFor(p.num)}</span>;
             })}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
           </>

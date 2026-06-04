@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Parser regression tests. Run: node tools/run-tests.js  (needs Node 18+)
-const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG } = require("./parser-harness");
+const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG, swapRosterNums, renumRoster } = require("./parser-harness");
 
 let fail = 0;
 const t = (name, got, want) => {
@@ -158,6 +158,26 @@ Alfie 50?
   };
   const { svg } = buildInfographicSVG(model);
   t("soccer infographic scorer in goals", svg.includes(">2</text>") && !svg.includes(">2-0"), true);
+}
+
+// ---- roster edits (reshuffle / change number) ----
+{
+  const RAW = "U13 Hurling @ Tribesmen\n10.Morty | 11. Rick\n  12. Summer | 13. Jerry\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-1 0-0\n";
+  const swapped = swapRosterNums(RAW, 10, 11);
+  t("swap same row", parseMatch(swapped, {}).formationRows[0], [11, 10]);
+  t("swap keeps names with numbers", /11\. Rick\s*\|\s*10\.Morty/.test(swapped.split("\n")[1]), true);
+  const cross = swapRosterNums(RAW, 10, 17);
+  const pc = parseMatch(cross, {});
+  t("swap pitch<->sub: sub starts", pc.formationRows[0], [17, 11]);
+  t("swap pitch<->sub: starter benched", pc.roster.find((r) => r.num === 10).role, "sub");
+  t("swap preserves other rows", cross.split("\n")[2], "  12. Summer | 13. Jerry");
+  t("swap unknown num is a no-op", swapRosterNums(RAW, 10, 99), RAW);
+  const renum = renumRoster(RAW, 11, 21);
+  const pr = parseMatch(renum, {});
+  t("renum changes the number", pr.roster.find((r) => r.name === "Rick").num, 21);
+  t("renum updates formation row", pr.formationRows[0], [10, 21]);
+  t("renum leaves scoring lines alone", pr.scoring[0].scorer, "Rick");
+  t("renum unknown num is a no-op", renumRoster(RAW, 99, 5), RAW);
 }
 
 // ---- placeholder labels ----
