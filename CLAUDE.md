@@ -1,0 +1,75 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Sideline — a personal match tracker for GAA (hurling/football) and soccer that parses handwritten-style match notation into a scoreboard, running-score chart, scorers table, timeline, lineup, and a shareable infographic image. The sample data uses fictional teams/players (Racoons v Wildebeests, Rick & Morty names) — keep it that way; no real player or club names in the repo.
+
+## Repository layout
+
+- **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + Google Identity Services loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
+- **`SETUP.md`** — end-user setup guide (Google Cloud OAuth + GitHub Pages).
+
+The app was originally a Claude artifact (`match-tracker.jsx`, persisted via the chat's `window.storage`, charted with recharts) converted by a script into this standalone. Neither the jsx nor the script is in the repo — **`index.html` is the source of truth; edit it directly.**
+
+## Commands
+
+There is no build/test toolchain. After editing, syntax-check the JSX (needs Node 18+, `nvm use 18`):
+
+```bash
+sed -n '/<script type="text\/babel"/,/<\/script>/p' index.html | sed '1d;$d' > /tmp/sideline-app.jsx
+npx esbuild /tmp/sideline-app.jsx --loader:.jsx=jsx --outfile=/dev/null
+```
+
+To test the parser, extract the pure functions (`parseMatch` and helpers) into a node harness and run the canonical sample (the `SAMPLE` constant in the file) with `{myTeam: "Racoons"}`. Expected results: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings.
+
+**Deploy:** push to `main`; GitHub Pages serves `index.html` at https://seaninryan.github.io/sideline/. Google sign-in only works from the authorized JS origin (`https://seaninryan.github.io`), so the Drive flow can only be exercised on the deployed page, not from a local server.
+
+## Architecture
+
+Order of code inside the babel script: Drive store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → `SAMPLE` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
+
+### Auth + storage (no server)
+
+- GitHub Pages serves the static page; the "backend" is the user's own Google Drive. The page holds no data and no secrets.
+- **Auth:** GIS token client (`google.accounts.oauth2.initTokenClient`), scope `https://www.googleapis.com/auth/drive.appdata`. Token flow uses authorized JS origins — no redirect URIs. Access tokens last ~1 hour.
+- `CLIENT_ID` is public, not secret. Gotcha: it must end in a **single** `.apps.googleusercontent.com` — a doubled suffix (placeholder + pasted ID) once caused `Error 401: invalid_client`.
+- **"Only me" lock:** the OAuth consent screen ("Google Auth Platform" in the new console) stays in **External / Testing** with only the owner's account as a test user, so only that account can sign in. Expect the "Google hasn't verified this app" → Advanced → proceed screen.
+- **Storage:** one hidden file `sideline.json` in the Drive `appDataFolder`, holding `{ "<id>": <matchRecord>, ... }`. Kept in an in-memory `cache`; the whole object is rewritten to Drive on every change.
+- **`store` API** (same method shapes the original artifact's `window.storage` wrapper had): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool.
+- Drive REST via `dfetch` (fetch + `Authorization: Bearer`); a 401 throws an error with `.code = 401`.
+- `App`/`SignIn` poll until GIS loads, init the token client, and only render `<MatchTracker/>` after a successful token + `driveLoad()`.
+
+### Parser (`parseMatch`) — pure JS
+
+Input is plain text:
+
+- **Header (first line):** `<grade/label> @ <Opp>`; `@` = away, `v`/`vs` = home.
+- **Roster block** (before the first clock line): each line is a formation row, players split on `|` (e.g. `10. Morty | 11. Rick`). `Subs` / `Missing:` headers switch role. Formation rows are preserved exactly as written (supports 13-a-side etc.).
+- **Halves:** an `HH:MM` line starts a half; scoring lines then use just the wall-clock minute (wraps past the hour). A bare minute-only line also starts a new half when HT is omitted; a bare `HT`/`FT` line is a half marker.
+- **Scoring line:** `min scorer [free|goal] [written-score]`. Opposition scorer = `T`/`T11`; roster names = us; an unrostered name → opposition; team name (matched against settings `myTeam`) → us, unattributed.
+- **Subs:** `X for Y`. Any other non-numeric line is a note.
+
+Key decisions (preserve these when modifying):
+
+- **Sport detection:** GAA if any score token has an internal hyphen (`\d+-\d+`); else by sport keyword in the header; else goals-only.
+- **Written score is source of truth:** if ≥ half the scoring lines carry a written running score, totals/chart come from the written cumulative score. Goal vs point is inferred from the score jump (a 3-point jump with no "goal" word = a goal). A column-vote on "sure" rows (rostered name or `T`) decides which written column is "us" — this handles home/away order automatically. Without written scores (live entry) it falls back to keyword goal/point counting. A reconciliation warning fires only when a written score *drops* (likely typo).
+- **Stats computed:** leadChanges, timesLevel, maxLead/maxLeadSide, half-time score, chart series, goalDots, htLine.
+
+### Share image
+
+- `buildInfographicSVG(model)` builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.
+- `svgToPng` rasterizes via a **data-URL** image → canvas → `toDataURL`/`toBlob`. Keep the data-URL approach — blob URLs hit CSP/canvas-taint issues. The panel displays the PNG so long-press-to-save works on iOS; "Save / Share" uses Web Share when available, else downloads; SVG download is the fallback.
+- The infographic uses **Arial** (reliable rasterization); the app chrome uses Bebas Neue / Oswald / Newsreader via injected CSS.
+
+### UI decisions worth keeping
+
+- Share/Backup are **inline panels** under the top bar, with the top-bar buttons acting as toggles — a fixed overlay didn't receive taps in mobile webviews.
+- `ScoreChart` is a dependency-free inline-SVG component (step lines, gridlines, HT marker, goal dots); don't reintroduce a chart library.
+
+## Known limitations / next steps
+
+- Access tokens expire after ~1h; a save after expiry fails quietly (`store.set` returns false). Planned fix: catch 401s, call `tokenClient.requestAccessToken()` to re-auth + retry, and surface a "session expired, reconnect" state.
+- The live sign-in + Drive read/write flow has not yet been verified end-to-end on the deployed page.
+- Possible additions: visible "Signed in as / Sign out" affordance; PWA manifest + icon; service-worker offline cache.

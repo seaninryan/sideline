@@ -374,7 +374,7 @@ function parseMatch(raw, settings = {}) {
       const player0 = matchPlayer(scorerText);
       if (player0) { side = "us"; scorer = player0.name; player = player0; }
       else if (/^t\d*$/i.test(squash(scorerText)) || /^t\b/i.test(scorerText)) { side = "them"; scorer = "Opposition"; }
-      else if (/cwell|craughwell/i.test(scorerText) || (settings.myTeam && squash(scorerText) && squash(scorerText) === squash(settings.myTeam))) { side = "us"; scorer = "Unknown"; }
+      else if (settings.myTeam && squash(scorerText) && squash(scorerText) === squash(settings.myTeam)) { side = "us"; scorer = "Unknown"; }
       else if (scorerText) { side = "them"; scorer = scorerText; sure = false; } // a name we don't recognise — could be either side
       else { side = "them"; scorer = ""; sure = false; } // no scorer at all — deduce the team from the score change
 
@@ -501,44 +501,44 @@ function parseMatch(raw, settings = {}) {
 /* ============================================================
    SAMPLE DATA
    ============================================================ */
-const SAMPLE = `U13A Hurling @ Toms
-                        1 Mikey
-2.Dylan F | 3. Jack M | 4. James
- 5.Mathew | 6. Aaron Burke | 7. Danny 
-          8.Shane | 9. Jack H 
-  10.Ethan | 11. Roan | 12. Biel 
-13. Cian | 14.DKC | 15. DKB
+const SAMPLE = `U13A Hurling @ Wildebeests
+                        1 Birdperson
+2.Jerry S | 3. Beth S | 4. Summer
+ 5.Squanchy | 6. Mr Poopybutthole | 7. Gearhead
+          8.Snowball | 9. Jessica
+  10.Morty | 11. Rick | 12. Noob Noob
+13. Tammy | 14.Kyle | 15. Zeep
 
 Subs
-16. 
-17. Cillian
-18. Aaron C
+16.
+17. Pencilvester
+18. Sleepy Gary
 Missing:
-20. Taylor
+20. Snuffles
 
 18:21
-21 Cwell Point? 0 1
-23 Roan free 0 0-2
-24 Roan free 0 0-3
+21 Racoons Point? 0 1
+23 Rick free 0 0-2
+24 Rick free 0 0-3
 25 T11 0-1 0-3
-30 Roan goal 0-1 - 1-3
+30 Rick goal 0-1 - 1-3
 31 T free  0-2 - 1-3
-32 Roan free 0-2 - 1-4
-33 Ethan 0-2 - 1-5
+32 Rick free 0-2 - 1-4
+33 Morty 0-2 - 1-5
 They swapped 6 and 3
-36 freddie 0-3 - 1-5
+36 terry 0-3 - 1-5
 37 T free 0-4 - 1-5
-38 Freddie goal 1-4 - 1-5
+38 Terry goal 1-4 - 1-5
 43 HT
 
 18:50
 59 T free 1-5 - 1-5
-03 roan goal 1-5 - 2-5
+03 rick goal 1-5 - 2-5
 05 T goal 2-5 - 2-5
-Aaron C for dkb
-06 roan free 2-5 - 2-6
+Sleepy Gary for zeep
+06 rick free 2-5 - 2-6
 08 free T 2-6 - 2-6
-Cillian for Cian
+Pencilvester for Tammy
 10 T free 2-7 - 2-6
 13 FT`;
 
@@ -678,7 +678,7 @@ function ChartTip({ active, payload }) {
 
 function MatchTracker() {
   const [raw, setRaw] = useState(SAMPLE);
-  const [myTeam, setMyTeam] = useState("Craughwell");
+  const [myTeam, setMyTeam] = useState("Racoons");
   const [scoringMode, setScoringMode] = useState("gaa");
   const [autoMode, setAutoMode] = useState(true);
   const [colorUs, setColorUs] = useState("#f5c518");
@@ -787,7 +787,7 @@ function MatchTracker() {
     const min = lvMin.trim() || String(new Date().getMinutes());
     let label;
     if (lvTeam === "us") {
-      label = lvScorer || (myTeam || "Cwell"); // blank scorer = unattributed for my team
+      label = lvScorer || (myTeam || "Us"); // blank scorer = unattributed for my team
     } else {
       const t = lvOpp.trim();
       label = t ? (/^\d+$/.test(t) ? `T${t}` : t) : "T"; // number -> T11, name kept, blank -> T
@@ -1137,7 +1137,7 @@ function MatchTracker() {
             <p className="mt-h">Raw notation (edit freely — re-parses instantly)</p>
             <textarea className="mt-ta" value={raw} onChange={(e) => setRaw(e.target.value)} spellCheck={false} />
             <p className="mt-note" style={{ marginTop: 8 }}>
-              Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Roan</code> ·
+              Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Rick</code> ·
               start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal]</code> ·
               opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · notes anything else.
             </p>
