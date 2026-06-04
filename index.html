@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v13";
+const APP_VERSION = "v14";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -239,7 +239,7 @@ function buildInfographicSVG(m) {
   m.usScorers.forEach((s) => {
     body.push(L(P, y + 17, P + CW, y + 17, "#ece3cb", 1));
     body.push(T(P, y + 12, `${s.num ? s.num + ". " : ""}${s.name}`, 13, INK, { w: 600 }));
-    body.push(T(P + CW, y + 12, `${s.g}-${s.p}${s.frees ? `  (${s.frees}f)` : ""}`, 13, PITCH, { w: 700, a: "end" }));
+    body.push(T(P + CW, y + 12, `${m.effMode === "goals" ? s.g : `${s.g}-${s.p}`}${s.frees ? `  (${s.frees}f)` : ""}`, 13, PITCH, { w: 700, a: "end" }));
     y += 23;
   });
   y += 16;
@@ -273,49 +273,92 @@ function buildInfographicSVG(m) {
     });
   });
   y += pitchH + 10;
-  if (m.subs && m.subs.length) { body.push(T(P, y + 8, "Subs: " + m.subs.map((p) => `${p.num} ${p.name}${subOnSet.has(p.num) ? " ▲" : ""}`).join("   "), 10, MUTE)); y += 18; }
+  if (m.subs && m.subs.length) {
+    // bench chips, like the app: used subs wear the team colours, with on/off arrows and score badges
+    body.push(T(P, y + 15, "SUBS", 9, MUTE, { w: 700, ls: 1 }));
+    let bx = P + 38, by = y + 4;
+    const chipH = 17;
+    m.subs.forEach((p) => {
+      const used = subOnSet.has(p.num) || subOffSet.has(p.num);
+      const sc = (m.usScorers || []).find((s) => s.num === p.num && (s.g || s.p));
+      const scoreTxt = sc ? (m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`) : "";
+      const label = `${p.num} ${p.name}`;
+      const arrowsW = (subOnSet.has(p.num) ? 9 : 0) + (subOffSet.has(p.num) ? 9 : 0);
+      const w = label.length * 5.4 + arrowsW + (scoreTxt ? scoreTxt.length * 5.6 + 5 : 0) + 16;
+      if (bx + w > P + CW) { bx = P + 38; by += chipH + 5; }
+      body.push(R(bx, by, w, chipH, used ? m.colorUs : "#ffffff", 8.5, { stroke: used ? m.colorUs2 : LINE, sw: 1 }));
+      let tx = bx + 8;
+      body.push(T(tx, by + 12, label, 9.5, used ? contrastOn(m.colorUs) : INK, { w: 600 }));
+      tx += label.length * 5.4 + 3;
+      if (subOnSet.has(p.num)) { body.push(T(tx, by + 12, "▲", 8.5, "#2ecc71", { w: 700 })); tx += 9; }
+      if (subOffSet.has(p.num)) { body.push(T(tx, by + 12, "▼", 8.5, "#ff6e63", { w: 700 })); tx += 9; }
+      if (scoreTxt) body.push(T(tx + 2, by + 12, scoreTxt, 9, used ? contrastOn(m.colorUs) : PITCH, { w: 700 }));
+      bx += w + 6;
+    });
+    y = by + chipH + 6;
+  }
   if (m.missing && m.missing.length) { body.push(T(P, y + 8, "Missing: " + m.missing.map((p) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
   y += 16;
 
-  // ---- timeline ----
+  // ---- timeline (centre rail: us left, them right, like the app) ----
   body.push(T(P, y, "TIMELINE", 11, MUTE, { w: 700, ls: 1 }));
-  y += 16;
+  y += 14;
+  const railX = P + CW / 2;
+  const tlTop = y;
+  const tlBody = []; // items paint over the rail, so collect them and draw the rail first
+  const estW = (s, fs) => String(s).length * fs * 0.54;
   const halves = [...new Set(m.timeline.map((t) => t.half))].sort((a, b) => a - b);
   halves.forEach((h) => {
-    body.push(T(P, y, h === 1 ? "FIRST HALF" : h === 2 ? "SECOND HALF" : `PERIOD ${h}`, 10, PITCH, { w: 700, ls: 1 }));
-    y += 16;
+    const hTxt = h === 1 ? "FIRST HALF" : h === 2 ? "SECOND HALF" : `PERIOD ${h}`;
+    const pw = estW(hTxt, 9) + 22;
+    tlBody.push(R(railX - pw / 2, y, pw, 15, PAPER, 7.5, { stroke: LINE, sw: 1 }));
+    tlBody.push(T(railX, y + 10.5, hTxt, 9, PITCH, { w: 700, ls: 1, a: "middle" }));
+    y += 22;
     m.timeline.filter((t) => t.half === h).forEach((it) => {
-      const cy = y + 7;
+      const cy = y + 6;
+      const mm = it.minute != null ? `${it.mmin || it.minute}'` : "";
       if (it.kind === "score") {
-        const col = it.side === "us" ? m.colorUs : m.colorThem;
-        const ring = it.side === "us" ? m.colorUs2 : m.colorThem2;
+        const us = it.side === "us";
+        const col = us ? m.colorUs : m.colorThem;
+        const ring = us ? m.colorUs2 : m.colorThem2;
         const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
         const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
-        body.push(C(P + 5, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
-        body.push(T(P + 18, cy + 4, `${it.mmin || it.minute}'`, 11, MUTE, { w: 700 }));
-        if (descriptive) body.push(T(P + 42, cy + 4, `${it.type === "goal" ? "GOAL  " : ""}${it.desc || it.scorer}`, 11.5, MUTE, { w: it.type === "goal" ? 700 : 400 }));
-        else body.push(T(P + 42, cy + 4, `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`, 12, INK, { w: it.type === "goal" ? 700 : 400 }));
-        body.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 11, PITCH, { w: 700, a: "end" }));
+        const label = descriptive ? `${it.type === "goal" ? "GOAL  " : ""}${it.desc || it.scorer}`
+          : `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`;
+        tlBody.push(C(railX, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
+        if (us) {
+          tlBody.push(T(railX - 13, cy + 4, `${mm}  ${label}`, 11.5, descriptive ? MUTE : INK, { w: it.type === "goal" ? 700 : 400, a: "end" }));
+          tlBody.push(T(P, cy + 4, `${it.usScore} – ${it.themScore}`, 10.5, PITCH, { w: 700 }));
+        } else {
+          tlBody.push(T(railX + 13, cy + 4, `${mm}  ${label}`, 11.5, descriptive ? MUTE : INK, { w: it.type === "goal" ? 700 : 400 }));
+          tlBody.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 10.5, PITCH, { w: 700, a: "end" }));
+        }
       } else if (it.kind === "sub") {
-        body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.mmin || it.minute}'`, 11, MUTE, { w: 700 }));
-        body.push(T(P + 42, cy + 4, `▲ ${it.on}`, 11.5, "#1f7a4d", { w: 700 }));
-        body.push(T(P + 42 + (String(it.on).length + 2) * 6.4 + 8, cy + 4, `▼ ${it.off}`, 11.5, "#c0392b", { w: 700 }));
+        tlBody.push(C(railX, cy, 6, PAPER, { stroke: MUTE, sw: 1 }));
+        tlBody.push(T(railX, cy + 3, "⇄", 7.5, MUTE, { a: "middle" }));
+        const offTxt = `▼ ${it.off}`, onTxt = `▲ ${it.on}`;
+        let tx = railX - 13;
+        tlBody.push(T(tx, cy + 4, offTxt, 11, "#c0392b", { w: 700, a: "end" })); tx -= estW(offTxt, 11) + 7;
+        tlBody.push(T(tx, cy + 4, onTxt, 11, "#1f7a4d", { w: 700, a: "end" })); tx -= estW(onTxt, 11) + 7;
+        if (mm) tlBody.push(T(tx, cy + 4, mm, 11, MUTE, { w: 700, a: "end" }));
       } else {
-        body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.mmin || it.minute}'`, 11, MUTE, { w: 700 }));
-        body.push(T(P + 42, cy + 4, it.text, 11.5, MUTE));
+        tlBody.push(C(railX, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
+        tlBody.push(T(railX - 13, cy + 4, `${mm ? mm + "  " : ""}${it.text}`, 11, MUTE, { a: "end" }));
       }
-      y += 21;
+      y += 20;
     });
     const am = (m.halfMarks || []).find((x) => x.half === h && x.marker && x.added > 0);
     if (am) {
-      body.push(C(P + 5, y + 7, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-      body.push(T(P + 18, y + 11, `+${am.added} added`, 11, MUTE, { w: 600 }));
-      y += 21;
+      const aTxt = `+${am.added} added`;
+      const aw = estW(aTxt, 9.5) + 20;
+      tlBody.push(R(railX - aw / 2, y + 1, aw, 14, PAPER, 7, { stroke: LINE, sw: 1 }));
+      tlBody.push(T(railX, y + 11, aTxt, 9.5, MUTE, { w: 600, a: "middle" }));
+      y += 20;
     }
-    y += 8;
+    y += 6;
   });
+  body.push(L(railX, tlTop, railX, y - 4, LINE, 1.5));
+  body.push(...tlBody);
 
   // ---- footer ----
   body.push(L(P, y + 2, P + CW, y + 2, LINE, 1));
@@ -1258,7 +1301,7 @@ function MatchTracker() {
               <StatCard k="Lead changes" v={parsed.leadChanges} />
               <StatCard k="Times level" v={parsed.timesLevel} />
               <StatCard k={`Biggest lead${parsed.maxLeadSide ? " · " + (parsed.maxLeadSide === "us" ? usName : themName) : ""}`} v={parsed.maxLead} />
-              <StatCard k="Top scorer" v={usScorers[0] ? `${usScorers[0].name.split(" ")[0]} ${usScorers[0].g}-${usScorers[0].p}` : "—"} />
+              <StatCard k="Top scorer" v={usScorers[0] ? `${usScorers[0].name.split(" ")[0]} ${effMode === "goals" ? usScorers[0].g : `${usScorers[0].g}-${usScorers[0].p}`}` : "—"} />
             </div>
 
             <p className="mt-h">Score progression</p>
@@ -1276,7 +1319,7 @@ function MatchTracker() {
                     <td>{s.num ? <span className="mt-num">{s.num}</span> : null}{s.name}</td>
                     <td className="n">{s.g}</td><td className="n">{s.p}</td>
                     <td>{s.frees || "–"}</td>
-                    <td className="n">{s.g}-{s.p}</td>
+                    <td className="n">{effMode === "goals" ? s.g : `${s.g}-${s.p}`}</td>
                   </tr>
                 ))}
                 {usScorers.length === 0 && <tr><td colSpan={5} style={{ color: "#6f7d72" }}>No scores parsed yet.</td></tr>}
@@ -1290,7 +1333,7 @@ function MatchTracker() {
                   <thead><tr><th>Player</th><th>Goals</th><th>Points</th><th>Frees</th><th>Total</th></tr></thead>
                   <tbody>
                     {themScorers.map((s, i) => (
-                      <tr className="them" key={i}><td>{s.name === "Opposition" ? themName : s.name}</td><td className="n">{s.g}</td><td className="n">{s.p}</td><td>{s.frees || "–"}</td><td className="n">{s.g}-{s.p}</td></tr>
+                      <tr className="them" key={i}><td>{s.name === "Opposition" ? themName : s.name}</td><td className="n">{s.g}</td><td className="n">{s.p}</td><td>{s.frees || "–"}</td><td className="n">{effMode === "goals" ? s.g : `${s.g}-${s.p}`}</td></tr>
                     ))}
                   </tbody>
                 </table>

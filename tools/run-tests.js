@@ -141,6 +141,23 @@ Alfie 50?
   t("infographic added time", svg.includes("+2 added"), true); // 18:21 -> 28 HT is 7' elapsed = 5 +2
   t("infographic opponent name on their score", svg.includes("Tribesmen  (free)") || svg.includes("Tribesmen "), true);
   t("infographic dark kit gets white numbers", svg.includes('fill="#ffffff"'), true);
+  t("infographic GAA scorer keeps g-p", />0-2(\s|<| )/.test(svg) || svg.includes(">0-2 "), true);
+}
+{
+  // soccer: scorer totals in goals, not g-p
+  const p = parseMatch("Soccer @ Rovers\n10. Jack\n19:02\n14 Jack 0-1\n23 Jack 0-2\n", {});
+  const timeline = p.scoring.map((s) => ({ kind: "score", ...s }));
+  const model = {
+    grade: "", sport: "Soccer", homeAway: "away", usName: "Racoons", themName: "Rovers", dateStr: "",
+    totals: p.totals, result: p.result, effMode: p.mode, ht: "0 – 0",
+    leadChanges: p.leadChanges, timesLevel: p.timesLevel, maxLead: p.maxLead, maxLeadSide: p.maxLeadSide,
+    series: p.series, goalDots: p.goalDots, htLine: p.htLine, halfMarks: p.halfMarks,
+    usScorers: p.scorers.filter((s) => s.side === "us"), formationRows: [[10]],
+    starters: p.roster, subs: [], missing: [], timeline,
+    colorUs: "#f5c518", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8",
+  };
+  const { svg } = buildInfographicSVG(model);
+  t("soccer infographic scorer in goals", svg.includes(">2</text>") && !svg.includes(">2-0"), true);
 }
 
 // ---- placeholder labels ----
