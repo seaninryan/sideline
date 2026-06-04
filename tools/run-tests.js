@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Parser regression tests. Run: node tools/run-tests.js  (needs Node 18+)
-const { parseMatch, SAMPLE, isPlaceholderLabel } = require("./parser-harness");
+const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG } = require("./parser-harness");
 
 let fail = 0;
 const t = (name, got, want) => {
@@ -107,6 +107,28 @@ Alfie 50?
     const s = q.notes.find((n) => n.type === "sub");
     return [s && s.on, s && s.off];
   })(), ["Rick", "Morty"]);
+}
+
+// ---- infographic smoke test (subs arrows, added time, opponent name, dark-kit contrast) ----
+{
+  const p = parseMatch("U13 Hurling @ Tribesmen\n10. Morty | 11. Rick\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-2 0-1\n43 Pencilvester for Morty\n28 HT\n", { myTeam: "Racoons" });
+  const timeline = [...p.scoring.map((s) => ({ kind: "score", ...s })), ...p.notes.map((n) => ({ kind: n.type, ...n }))]
+    .sort((a, b) => (a.half - b.half) || (a.seq - b.seq));
+  const model = {
+    grade: "U13", sport: p.header.sport, homeAway: p.header.homeAway, usName: "Racoons", themName: "Tribesmen",
+    dateStr: "", totals: p.totals, result: p.result, effMode: p.mode, ht: "0-0",
+    leadChanges: p.leadChanges, timesLevel: p.timesLevel, maxLead: p.maxLead, maxLeadSide: p.maxLeadSide,
+    series: p.series, goalDots: p.goalDots, htLine: p.htLine, halfMarks: p.halfMarks,
+    usScorers: p.scorers.filter((s) => s.side === "us"), formationRows: p.formationRows,
+    starters: p.roster.filter((r) => r.role === "starting"), subs: p.roster.filter((r) => r.role === "sub"), missing: [],
+    timeline, colorUs: "#111111", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8",
+  };
+  const { svg } = buildInfographicSVG(model);
+  t("infographic builds", typeof svg === "string" && svg.includes("</svg>"), true);
+  t("infographic sub arrows", svg.includes("▲ Pencilvester") && svg.includes("▼ Morty"), true);
+  t("infographic added time", svg.includes("+2 added"), true); // 18:21 -> 28 HT is 7' elapsed = 5 +2
+  t("infographic opponent name on their score", svg.includes("Tribesmen  (free)") || svg.includes("Tribesmen "), true);
+  t("infographic dark kit gets white numbers", svg.includes('fill="#ffffff"'), true);
 }
 
 // ---- placeholder labels ----

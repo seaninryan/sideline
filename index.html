@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v11";
+const APP_VERSION = "v12";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -244,6 +244,10 @@ function buildInfographicSVG(m) {
   });
   y += 16;
 
+  // who was involved in subs (for lineup arrows)
+  const subOnSet = new Set(), subOffSet = new Set();
+  (m.timeline || []).forEach((t) => { if (t.kind === "sub") { if (t.onNum != null) subOnSet.add(t.onNum); if (t.offNum != null) subOffSet.add(t.offNum); } });
+
   // ---- lineup ----
   body.push(T(P, y, "TEAM", 11, MUTE, { w: 700, ls: 1 }));
   body.push(flag(P + 44, y - 9, 18, 11, m.colorUs, m.colorUs2));
@@ -263,10 +267,13 @@ function buildInfographicSVG(m) {
       body.push(R(jx, ry, jw, jw, m.colorUs, 7));
       body.push(T(jx + jw / 2, ry + 18, String(n), 13, contrastOn(m.colorUs), { w: 800, a: "middle" }));
       body.push(T(jx + jw / 2, ry + jw + 12, findName(n), 9.5, "#eaf3ee", { w: 600, a: "middle" }));
+      if (subOffSet.has(n)) body.push(T(jx + jw + 2, ry + 9, "▼", 8, "#ff6e63"));
+      const sc = (m.usScorers || []).find((s) => s.num === n && (s.g || s.p));
+      if (sc) body.push(T(jx + jw / 2, ry + jw + 23, m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`, 9, "#f5c518", { w: 700, a: "middle", ls: m.effMode === "goals" ? 2 : 0 }));
     });
   });
   y += pitchH + 10;
-  if (m.subs && m.subs.length) { body.push(T(P, y + 8, "Subs: " + m.subs.map((p) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
+  if (m.subs && m.subs.length) { body.push(T(P, y + 8, "Subs: " + m.subs.map((p) => `${p.num} ${p.name}${subOnSet.has(p.num) ? " ▲" : ""}`).join("   "), 10, MUTE)); y += 18; }
   if (m.missing && m.missing.length) { body.push(T(P, y + 8, "Missing: " + m.missing.map((p) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
   y += 16;
 
@@ -282,19 +289,31 @@ function buildInfographicSVG(m) {
       if (it.kind === "score") {
         const col = it.side === "us" ? m.colorUs : m.colorThem;
         const ring = it.side === "us" ? m.colorUs2 : m.colorThem2;
+        const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
+        const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
         body.push(C(P + 5, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
         body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
-        body.push(T(P + 42, cy + 4, `${it.scorer}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`, 12, INK, { w: it.type === "goal" ? 700 : 400 }));
+        if (descriptive) body.push(T(P + 42, cy + 4, `${it.type === "goal" ? "GOAL  " : ""}${it.desc || it.scorer}`, 11.5, MUTE, { w: it.type === "goal" ? 700 : 400 }));
+        else body.push(T(P + 42, cy + 4, `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`, 12, INK, { w: it.type === "goal" ? 700 : 400 }));
         body.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 11, PITCH, { w: 700, a: "end" }));
       } else if (it.kind === "sub") {
         body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        body.push(T(P + 42, cy + 4, `${it.on} on for ${it.off}`, 11.5, MUTE, { w: 600 }));
+        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
+        body.push(T(P + 42, cy + 4, `▲ ${it.on}`, 11.5, "#1f7a4d", { w: 700 }));
+        body.push(T(P + 42 + (String(it.on).length + 2) * 6.4 + 8, cy + 4, `▼ ${it.off}`, 11.5, "#c0392b", { w: 700 }));
       } else {
         body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
+        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
         body.push(T(P + 42, cy + 4, it.text, 11.5, MUTE));
       }
       y += 21;
     });
+    const am = (m.halfMarks || []).find((x) => x.half === h && x.marker && x.added > 0);
+    if (am) {
+      body.push(C(P + 5, y + 7, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
+      body.push(T(P + 18, y + 11, `+${am.added} added`, 11, MUTE, { w: 600 }));
+      y += 21;
+    }
     y += 8;
   });
 
@@ -736,7 +755,7 @@ table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
   font-family:'Oswald'; font-size:11px; align-items:center; justify-content:center; margin-right:7px;}
 .mt-tl{position:relative;}
 .mt-tl:before{content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; background:var(--line); transform:translateX(-50%);}
-.mt-ev{position:relative; width:50%; margin-right:auto; box-sizing:border-box; padding:7px 16px 7px 0; font-size:14px; display:flex; gap:10px; align-items:baseline;}
+.mt-ev{position:relative; width:50%; margin-right:auto; box-sizing:border-box; padding:7px 16px 7px 0; font-family:'Oswald'; font-size:13.5px; display:flex; gap:10px; align-items:baseline;}
 .mt-ev:before{content:""; position:absolute; right:-6px; top:12px; width:11px; height:11px; border-radius:50%;
   background:var(--dot,#fff); border:2px solid var(--ring,var(--muted)); box-sizing:border-box;}
 .mt-ev.goal:before{width:16px; height:16px; right:-8px; top:11px; border-width:3px;}
@@ -1032,7 +1051,7 @@ function MatchTracker() {
       usName, themName, dateStr: matchDate ? fmtDate(matchDate) : "",
       totals, result, effMode, ht,
       leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
-      series: parsed.series, goalDots: parsed.goalDots, htLine: parsed.htLine,
+      series: parsed.series, goalDots: parsed.goalDots, htLine: parsed.htLine, halfMarks,
       usScorers, formationRows, starters, subs, missing, timeline,
       colorUs, colorUs2, colorThem, colorThem2,
     };
@@ -1255,7 +1274,7 @@ function MatchTracker() {
                   <thead><tr><th>Player</th><th>Goals</th><th>Points</th><th>Frees</th><th>Total</th></tr></thead>
                   <tbody>
                     {themScorers.map((s, i) => (
-                      <tr className="them" key={i}><td>{s.name}</td><td className="n">{s.g}</td><td className="n">{s.p}</td><td>{s.frees || "–"}</td><td className="n">{s.g}-{s.p}</td></tr>
+                      <tr className="them" key={i}><td>{s.name === "Opposition" ? themName : s.name}</td><td className="n">{s.g}</td><td className="n">{s.p}</td><td>{s.frees || "–"}</td><td className="n">{s.g}-{s.p}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -1278,13 +1297,14 @@ function MatchTracker() {
                     if (it.kind === "score") {
                       // a scorer we couldn't attribute is description, not a name: "GOAL long free"
                       const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
+                      const evName = it.scorer === "Opposition" ? themName : it.scorer;
                       return (
                         <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
                           <span className="m">{it.minute}'</span>
                           <span>
                             {descriptive
                               ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
-                              : <>{it.scorer}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : ""}</>}
+                              : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : ""}</>}
                           </span>
                           <span className="sc">{it.usScore} – {it.themScore}</span>
                         </div>
