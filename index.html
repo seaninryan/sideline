@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v7";
+const APP_VERSION = "v8";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -763,6 +763,8 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-jersey .j{width:26px; height:26px; border-radius:7px; background:#f5c518; color:#11241b; font-family:'Bebas Neue';
   font-size:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.3);}
 .mt-jersey .nm{font-family:'Oswald'; font-weight:500; font-size:14px; color:#eaf3ee; text-align:center; line-height:1.15; max-width:84px;}
+.mt-jersey .pts{font-family:'Oswald'; font-weight:600; font-size:11px; color:#f5c518; line-height:1;}
+.mt-bench .pts{font-family:'Oswald'; font-weight:600; font-size:11px;}
 .mt-bench{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
 .mt-bench .b{font-family:'Oswald'; font-size:12px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 11px;}
 .mt-bench .b.miss{opacity:.55; text-decoration:line-through;}
@@ -981,6 +983,12 @@ function MatchTracker() {
       {subbedOff.has(num) && <span style={{ color: "#ff6e63" }}>▼</span>}
     </span>
   );
+  // what a player scored, for the lineup: "1-2" in GAA, a ball per goal in soccer
+  const scoreFor = (num) => {
+    const sc = scorers.find((s) => s.side === "us" && s.num === num && (s.g || s.p));
+    if (!sc) return null;
+    return <span className="pts">{effMode === "goals" ? "⚽".repeat(sc.g) : fmtScore(sc.g, sc.p, effMode)}</span>;
+  };
   const chunk = (arr, n) => arr.reduce((a, _, i) => (i % n ? a : [...a, arr.slice(i, i + n)]), []);
   const formationRows = parsed.formationRows && parsed.formationRows.length
     ? parsed.formationRows
@@ -1267,6 +1275,7 @@ function MatchTracker() {
                       <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPitch({ num: n, name: p ? p.name : String(n) })}>
                         <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: subPick && subPick.role === "off" && subPick.num === n ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
                         <div className="nm">{p ? p.name : ""} {subArrows(n)}</div>
+                        {scoreFor(n)}
                       </div>
                     );
                   })}
@@ -1290,7 +1299,7 @@ function MatchTracker() {
               const used = subbedOn.has(p.num) || subbedOff.has(p.num); // used subs wear the team colours
               const st = picked ? { background: "#f5c518", borderColor: "#f5c518" }
                 : used ? { background: colorUs, color: contrastOn(colorUs), borderColor: colorUs2 } : {};
-              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapBench({ num: p.num, name: p.name })}>{p.num}. {p.name} {subArrows(p.num)}</span>;
+              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapBench({ num: p.num, name: p.name })}>{p.num}. {p.name} {subArrows(p.num)} {scoreFor(p.num)}</span>;
             })}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
           </>
