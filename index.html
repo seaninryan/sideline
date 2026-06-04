@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v22";
+const APP_VERSION = "v23";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -1561,7 +1561,13 @@ function MatchTracker() {
               <StatCard k="Lead changes" v={parsed.leadChanges} />
               <StatCard k="Times level" v={parsed.timesLevel} />
               <StatCard k={`Biggest lead${parsed.maxLeadSide ? " · " + (parsed.maxLeadSide === "us" ? usName : themName) : ""}`} v={parsed.maxLead} />
-              <StatCard k="Top scorer" v={usScorers[0] ? `${usScorers[0].name.split(" ")[0]} ${effMode === "goals" ? usScorers[0].g : `${usScorers[0].g}-${usScorers[0].p}`}` : "—"} />
+              <StatCard k={usScorers.length > 1 && gpTotal(usScorers[1].g, usScorers[1].p, effMode) === gpTotal(usScorers[0].g, usScorers[0].p, effMode) ? "Top scorers" : "Top scorer"} v={(() => {
+                if (!usScorers.length) return "—";
+                const top = gpTotal(usScorers[0].g, usScorers[0].p, effMode);
+                const ties = usScorers.filter((s) => gpTotal(s.g, s.p, effMode) === top);
+                const fmt = (s) => `${s.name.split(" ")[0]} ${effMode === "goals" ? s.g : `${s.g}-${s.p}`}`;
+                return ties.slice(0, 3).map(fmt).join(" · ") + (ties.length > 3 ? ` +${ties.length - 3}` : "");
+              })()} />
             </div>
 
             <p className="mt-h">Score progression</p>
