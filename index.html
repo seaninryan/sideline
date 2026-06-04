@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v19";
+const APP_VERSION = "v20";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -148,6 +148,9 @@ function gpTotal(g, p, mode) { return mode === "goals" ? g : g * 3 + p; }
 function fmtScore(g, p, mode) { return mode === "goals" ? String(g) : `${g}-${p}`; }
 function squash(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
 const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+// swatch palette for the colour picker (common kit colours)
+const PALETTE = ["#f5c518", "#1f7a4d", "#0c3b2a", "#7a1f1f", "#c0392b", "#2c5fa8", "#1b2a4a", "#7ec8e3",
+  "#ffffff", "#111111", "#e67e22", "#5e3a87", "#d4af37", "#888888", "#16a085", "#e91e63"];
 // readable text colour for a jersey/button of the given colour (dark kit => white numbers)
 const contrastOn = (hex) => {
   const h = (hex || "").replace("#", "");
@@ -927,6 +930,11 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-settings{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 16px; background:#fff;
   border-bottom:1px solid var(--line); font-family:'Oswald'; font-size:12px;}
 .mt-settings label{display:flex; align-items:center; gap:6px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+.mt-swatch{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.3); padding:0; cursor:pointer; flex:none;}
+.mt-swatch.big{width:30px; height:30px; border-radius:8px;}
+.mt-swatch.on{outline:2px solid #f5c518; outline-offset:2px;}
+/* touch devices: 16px+ inputs stop iOS zooming the page when a field is focused */
+@media (hover:none){.mt-settings input,.mt-settings select,.mt-live input,.mt-live select,.mt-sel{font-size:16px;}}
 .mt-settings input[type=text],.mt-settings input[type=datetime-local]{font-family:'Oswald'; font-size:12px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; width:120px;}
 .mt-settings input[type=datetime-local]{width:auto;}
 .mt-settings input[type=color]{width:26px; height:26px; border:1px solid var(--line); border-radius:6px; padding:0; background:none;}
@@ -966,6 +974,7 @@ function MatchTracker() {
   const [savedMsg, setSavedMsg] = useState("");
   const [authLost, setAuthLost] = useState(false);
   const [authSoon, setAuthSoon] = useState(false); // token near expiry, silent renew blocked
+  const [colorPick, setColorPick] = useState(null); // which swatch is open: "us"|"us2"|"them"|"them2"
   const [modal, setModal] = useState(null);
   const [exportText, setExportText] = useState("");
   const [importText, setImportText] = useState("");
@@ -991,6 +1000,19 @@ function MatchTracker() {
 
   const usName = myTeam || "My Team";
   const themName = header.opposition || "Opposition";
+
+  // colours used across saved matches, most common first (suggestions in the picker)
+  const usedColors = useMemo(() => {
+    const count = {};
+    for (const id of Object.keys(cache)) {
+      const d = cache[id] || {};
+      ["colorUs", "colorUs2", "colorThem", "colorThem2"].forEach((k) => {
+        const c = (d[k] || "").toLowerCase();
+        if (/^#[0-9a-f]{6}$/.test(c)) count[c] = (count[c] || 0) + 1;
+      });
+    }
+    return Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 12);
+  }, [saved]);
 
   // auto-switch handled in parser via score format; effMode = parsed.mode
 
@@ -1374,8 +1396,9 @@ function MatchTracker() {
 
       {/* settings */}
       <div className="mt-settings">
-        <label>Date <input type="datetime-local" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} /></label>
-        <label>My team <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <input type="color" title="Primary" value={colorUs} onChange={(e) => setColorUs(e.target.value)} /><input type="color" title="Secondary" value={colorUs2} onChange={(e) => setColorUs2(e.target.value)} /></label>
+        <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
+          <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
+        <label>My team <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
         <label>
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => setHeaderField("homeAway", e.target.value)}>
@@ -1384,7 +1407,7 @@ function MatchTracker() {
           </select>
         </label>
         <label>Opponent <input type="text" value={header.opposition || ""} placeholder="Opponent"
-          onChange={(e) => setHeaderField("opposition", e.target.value)} /> <input type="color" title="Primary" value={colorThem} onChange={(e) => setColorThem(e.target.value)} /><input type="color" title="Secondary" value={colorThem2} onChange={(e) => setColorThem2(e.target.value)} /></label>
+          onChange={(e) => setHeaderField("opposition", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorThem }} onClick={() => setColorPick(colorPick === "them" ? null : "them")} /><button className="mt-swatch" title="Secondary" style={{ background: colorThem2 }} onClick={() => setColorPick(colorPick === "them2" ? null : "them2")} /></label>
         <label>Scoring
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={autoMode ? "auto" : scoringMode}
@@ -1395,6 +1418,34 @@ function MatchTracker() {
           </select>
         </label>
       </div>
+
+      {colorPick && (() => {
+        const map = {
+          us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
+          them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
+        };
+        const [val, setVal, label] = map[colorPick];
+        const sw = (c) => (
+          <button key={c} className={"mt-swatch big" + (c === (val || "").toLowerCase() ? " on" : "")}
+            style={{ background: c }} onClick={() => setVal(c)} title={c} />
+        );
+        return (
+          <div className="mt-live" style={{ marginTop: 0 }}>
+            <div className="mt-row">
+              <span className="mt-h" style={{ margin: 0 }}>Colour — {label}</span>
+              <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setColorPick(null)}>Done</button>
+            </div>
+            {usedColors.length > 0 && <>
+              <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Used before</p>
+              <div className="mt-row">{usedColors.map(sw)}</div>
+            </>}
+            <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Palette</p>
+            <div className="mt-row">{PALETTE.filter((c) => !usedColors.includes(c)).map(sw)}</div>
+            <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Advanced — exact colour
+              <input type="color" value={val} onChange={(e) => setVal(e.target.value)} style={{ marginLeft: 8, verticalAlign: "middle" }} /></p>
+          </div>
+        );
+      })()}
 
       {/* scoreboard */}
       <div className="mt-board">
