@@ -160,6 +160,24 @@ Alfie 50?
   t("soccer infographic scorer in goals", svg.includes(">2</text>") && !svg.includes(">2-0"), true);
 }
 
+// ---- cards, corners, own goals ----
+{
+  const p = parseMatch("U13 Hurling @ Tribesmen\n10. Morty | 11. Rick\n18:21\n23 Morty yellow card\n25 T red\n27 corner\n29 T corner\n31 Rick own goal 0-0 1-0\n", { myTeam: "Racoons" });
+  const y = p.notes.find((n) => n.type === "card" && n.card === "yellow");
+  t("yellow card resolved to player", [y.side, y.num, y.who], ["us", 10, "Morty"]);
+  t("red card to them", p.notes.find((n) => n.type === "card" && n.card === "red").side, "them");
+  t("corner sides", p.notes.filter((n) => n.type === "corner").map((n) => n.side), ["us", "them"]);
+  t("own goal scores for them", [p.totals.us.str, p.totals.them.str], ["0-0", "1-0"]);
+  t("own goal credit label", p.scorers.find((s) => s.side === "them").name, "Own Goal (Rick)");
+  t("own goal carries ogNum for lineup", [p.scoring[0].og, p.scoring[0].ogNum, p.scoring[0].playerNum], [true, 11, null]);
+  t("cards/corners are not scores", p.scoring.length, 1);
+}
+{
+  // unattributed own goal via team name, keyword (live) mode, soccer
+  const p = parseMatch("Soccer @ Rovers\n19:02\n10 Racoons own goal\n12 T own goal\n", { myTeam: "Racoons", scoringMode: "goals" });
+  t("og by us -> them goal; og by them -> our goal", [p.totals.us.str, p.totals.them.str], ["1", "1"]);
+}
+
 // ---- roster edits (reshuffle / change number) ----
 {
   const RAW = "U13 Hurling @ Tribesmen\n10.Morty | 11. Rick\n  12. Summer | 13. Jerry\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-1 0-0\n";

@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v20";
+const APP_VERSION = "v21";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -151,6 +151,21 @@ const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 // swatch palette for the colour picker (common kit colours)
 const PALETTE = ["#f5c518", "#1f7a4d", "#0c3b2a", "#7a1f1f", "#c0392b", "#2c5fa8", "#1b2a4a", "#7ec8e3",
   "#ffffff", "#111111", "#e67e22", "#5e3a87", "#d4af37", "#888888", "#16a085", "#e91e63"];
+// live-entry event buttons ("gaa" ones hide in goals-only mode)
+const LIVE_EVENTS = [
+  { key: "goal", label: "Goal" },
+  { key: "point", label: "Point", gaa: true },
+  { key: "goalfree", label: "Goal · free" },
+  { key: "pointfree", label: "Point · free", gaa: true },
+  { key: "og", label: "Own goal" },
+  { key: "yellow", label: "Yellow card" },
+  { key: "red", label: "Red card" },
+  { key: "corner", label: "Corner" },
+  { key: "half", label: "Start half" },
+  { key: "ht", label: "HT" },
+  { key: "ft", label: "FT" },
+];
+const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "og", "yellow", "red"];
 // readable text colour for a jersey/button of the given colour (dark kit => white numbers)
 const contrastOn = (hex) => {
   const h = (hex || "").replace("#", "");
@@ -527,6 +542,23 @@ function parseMatch(raw, settings = {}) {
         continue;
       }
       const { text, scoreToks } = peelScore(restFull);
+      // cards: "23 Morty yellow card" / "70 T red" — a sided note, not a score
+      const cardM = scoreToks.length === 0 ? restFull.match(/\b(yellow|red)\b(?:\s*card)?/i) : null;
+      if (cardM) {
+        const who = restFull.replace(/\b(yellow|red)\b(?:\s*card)?/i, "").replace(/\?/g, "").trim();
+        const cp = matchPlayer(who);
+        const side = cp ? "us" : (/^t\d*$/i.test(squash(who)) || /^t\b/i.test(who)) ? "them"
+          : settings.myTeam && squash(who) && squash(who) === squash(settings.myTeam) ? "us" : who ? "them" : "us";
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "card", card: cardM[1].toLowerCase(), who: cp ? cp.name : who, side, num: cp ? cp.num : null, text: line });
+        continue;
+      }
+      // corners: "31 corner" (us) / "44 T corner" (them)
+      if (scoreToks.length === 0 && /\bcorner\b/i.test(restFull)) {
+        const who = restFull.replace(/\bcorner\b/i, "").trim();
+        const side = (/^t\d*$/i.test(squash(who)) || /^t\b/i.test(who)) ? "them" : "us";
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "corner", side, text: line });
+        continue;
+      }
       // a missed chance ("10 Jack miss pen", "wide", "saved") is a note, not a score
       if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short)\b/i.test(restFull)) {
         notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "note", text: restFull.trim() });
@@ -541,7 +573,8 @@ function parseMatch(raw, settings = {}) {
       }
       const isGoal = /goal/i.test(restFull);
       const isFree = /\bfree\b/i.test(restFull) || /\bf\b/i.test(restFull);
-      const scorerText = text.replace(/\b(goal|free|point|pts?|pen|penalty|45|65)\b/gi, "").replace(/\?/g, "").trim();
+      const isOg = /\bown goal\b|\bog\b/i.test(restFull);
+      const scorerText = text.replace(/\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
       // a bare minute on its own line marks the start of a half (e.g. "51" for the 2nd half)
       if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
         half += 1; startMin = minute; halfMarks.push({ half, startMin: minute }); continue;
@@ -555,8 +588,12 @@ function parseMatch(raw, settings = {}) {
       else if (scorerText) { side = "them"; scorer = scorerText; sure = false; } // a name we don't recognise — could be either side
       else { side = "them"; scorer = ""; sure = false; } // no scorer at all — deduce the team from the score change
 
+      if (isOg) { // an own goal scores for the other side; credit reads "Own goal (name)"
+        side = side === "us" ? "them" : "us"; sure = true;
+        scorer = `own goal${player ? ` (${player.name})` : ""}`;
+      }
       lastElapsed = elapsed;
-      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, scorer, desc: text, playerNum: player ? player.num : null, scoreToks });
+      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, scorer, desc: text, og: isOg, ogNum: isOg && player ? player.num : null, playerNum: !isOg && player ? player.num : null, scoreToks });
     } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
       halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed });
     } else if (/^\+\d{1,2}(\s+added)?$/i.test(line)) {
@@ -930,6 +967,13 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-settings{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 16px; background:#fff;
   border-bottom:1px solid var(--line); font-family:'Oswald'; font-size:12px;}
 .mt-settings label{display:flex; align-items:center; gap:6px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+.mt-grid{display:flex; flex-wrap:wrap; gap:8px;}
+.mt-big{flex:1 1 30%; min-width:92px; padding:13px 6px; font-family:'Oswald'; font-weight:600; font-size:14px;
+  text-transform:uppercase; letter-spacing:.5px; color:var(--ink); background:#fffdf6; border:1px solid var(--line);
+  border-radius:10px; cursor:pointer;}
+.mt-big.sm{flex:1 1 22%; min-width:76px; padding:10px 6px; font-size:12.5px; text-transform:none; font-weight:500;}
+.mt-big.on{outline:2px solid #f5c518; outline-offset:1px;}
+.mt-big:active{transform:translateY(1px);}
 .mt-swatch{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.3); padding:0; cursor:pointer; flex:none;}
 .mt-swatch.big{width:30px; height:30px; border-radius:8px;}
 .mt-swatch.on{outline:2px solid #f5c518; outline-offset:2px;}
@@ -987,15 +1031,14 @@ function MatchTracker() {
   const [renumTarget, setRenumTarget] = useState(null); // {num, name}
   const [newNum, setNewNum] = useState("");
 
-  // live entry form
+  // live entry form: team -> event -> (player) -> minute -> add
   const [lvTeam, setLvTeam] = useState("us");
-  const [lvScorer, setLvScorer] = useState("");
-  const [lvOpp, setLvOpp] = useState("");
-  const [lvType, setLvType] = useState("point");
+  const [lvEvent, setLvEvent] = useState(null);
+  const [lvPlayer, setLvPlayer] = useState(null); // roster player | "unknown" | null
   const [lvMin, setLvMin] = useState("");
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: autoMode ? undefined : scoringMode }), [raw, myTeam, scoringMode, autoMode]);
-  const { header, roster, totals, result, series, goalDots, scorers, notes, halfMarks, htLine } = parsed;
+  const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
 
   const usName = myTeam || "My Team";
@@ -1207,23 +1250,32 @@ function MatchTracker() {
     setSavedMsg(`${renumTarget.name || renumTarget.num} now wears ${newNum}`); setTimeout(() => setSavedMsg(""), 2500);
     resetLineupModes();
   };
-  const addScore = () => {
-    const min = lvMin.trim() || String(new Date().getMinutes());
-    let label;
-    if (lvTeam === "us") {
-      label = lvScorer || (myTeam || "Us"); // blank scorer = unattributed for my team
-    } else {
-      const t = lvOpp.trim();
-      label = t ? (/^\d+$/.test(t) ? `T${t}` : t) : "T"; // number -> T11, name kept, blank -> T
+  // live entry: build the notation line for the picked team/event/player/minute
+  const liveLine = () => {
+    const min = lvMin.replace(/\D/g, "") || String(new Date().getMinutes());
+    const who = lvTeam === "them" ? "T" : lvPlayer && lvPlayer !== "unknown" ? lvPlayer.name : (myTeam.trim() || "My Team");
+    switch (lvEvent) {
+      case "goal": return `${min} ${who} goal`;
+      case "point": return `${min} ${who}`;
+      case "goalfree": return `${min} ${who} goal free`;
+      case "pointfree": return `${min} ${who} free`;
+      case "og": return `${min} ${who} own goal`;
+      case "yellow": return `${min} ${who} yellow card`;
+      case "red": return `${min} ${who} red card`;
+      case "corner": return lvTeam === "them" ? `${min} T corner` : `${min} corner`;
+      case "ht": return `${min} HT`;
+      case "ft": return `${min} FT`;
+      case "half": return `${new Date().getHours()}:${pad2(parseInt(min, 10) % 60)}`;
+      default: return "";
     }
-    let line = `${min} ${label}`;
-    if (lvType === "goal") line += " goal";
-    else if (lvType === "free") line += " free";
-    append(line);
-    setLvMin(""); setLvOpp("");
   };
-  const addHalf = () => append(`\n${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}`);
-  const addMarker = (mk) => append(`${new Date().getMinutes()} ${mk}`);
+  const liveReady = lvEvent && (!LIVE_PLAYER_EVENTS.includes(lvEvent) || lvTeam === "them" || lvPlayer != null);
+  const doAddEvent = () => {
+    const l = liveLine();
+    if (!l) return;
+    append(l);
+    setLvEvent(null); setLvPlayer(null); setLvMin("");
+  };
 
   // merged timeline for display
   const timeline = useMemo(() => {
@@ -1249,6 +1301,18 @@ function MatchTracker() {
       {subbedOff.has(num) && <span style={{ color: "#ff6e63" }}>▼</span>}
     </span>
   );
+  // card / own-goal markers for the lineup
+  const playerMarks = (num) => {
+    const cards = notes.filter((n) => n.type === "card" && n.num === num);
+    const og = scoring.some((s) => s.og && s.ogNum === num);
+    if (!cards.length && !og) return null;
+    return (
+      <span style={{ marginLeft: 2, whiteSpace: "nowrap" }}>
+        {cards.map((c, i) => <span key={i} style={{ display: "inline-block", width: 7, height: 10, borderRadius: 1.5, background: c.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", marginLeft: 2, verticalAlign: "-1px" }} />)}
+        {og && <span style={{ color: "#ff6e63", fontSize: 9, fontWeight: 600, marginLeft: 2 }}>OG</span>}
+      </span>
+    );
+  };
   // what a player scored, for the lineup: "1-2" in GAA, a ball per goal in soccer
   const scoreFor = (num) => {
     const sc = scorers.find((s) => s.side === "us" && s.num === num && (s.g || s.p));
@@ -1564,6 +1628,21 @@ function MatchTracker() {
                         </div>
                       );
                     }
+                    if (it.kind === "card") {
+                      const whoTxt = it.side === "them" && (!it.who || /^t\d*$/i.test(it.who)) ? themName : (it.who || usName);
+                      return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
+                        <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
+                        <span><span style={{ display: "inline-block", width: 9, height: 12, borderRadius: 2, background: it.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", verticalAlign: "-2px", marginRight: 6 }} />{whoTxt}</span>
+                      </div>;
+                    }
+                    if (it.kind === "corner") {
+                      const nth = timeline.filter((x) => x.kind === "corner" && x.side === it.side && x.seq <= it.seq).length;
+                      const ord = nth === 1 ? "1st" : nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
+                      return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
+                        <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
+                        <span style={{ color: "#6f7d72" }}>⚑ {ord} corner — {it.side === "them" ? themName : usName}</span>
+                      </div>;
+                    }
                     if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
                     return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
                   })}
@@ -1585,7 +1664,7 @@ function MatchTracker() {
                     return (
                       <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch")}>
                         <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: (subPick && subPick.role === "off" && subPick.num === n) || (swapFirst && swapFirst.num === n) || (renumTarget && renumTarget.num === n) ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
-                        <div className="nm">{p ? p.name : ""} {subArrows(n)}</div>
+                        <div className="nm">{p ? p.name : ""} {subArrows(n)}{playerMarks(n)}</div>
                         {scoreFor(n)}
                       </div>
                     );
@@ -1640,7 +1719,7 @@ function MatchTracker() {
               const used = subbedOn.has(p.num) || subbedOff.has(p.num); // used subs wear the team colours
               const st = picked ? { background: "#f5c518", borderColor: "#f5c518" }
                 : used ? { background: colorUs, color: contrastOn(colorUs), borderColor: colorUs2 } : {};
-              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>{p.num}. {p.name} {subArrows(p.num)} {scoreFor(p.num)}</span>;
+              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>{p.num}. {p.name} {subArrows(p.num)}{playerMarks(p.num)} {scoreFor(p.num)}</span>;
             })}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
           </>
@@ -1650,40 +1729,44 @@ function MatchTracker() {
           <>
             <div className="mt-live">
               <p className="mt-h" style={{ marginBottom: 8 }}>Add as it happens</p>
-              <div className="mt-row" style={{ marginBottom: 10 }}>
-                <div className="mt-toggle">
-                  <button className={"tg" + (lvTeam === "us" ? " on" : "")} style={lvTeam === "us" ? { background: colorUs, color: contrastOn(colorUs) } : undefined} onClick={() => setLvTeam("us")}>{usName}</button>
-                  <button className={"tg" + (lvTeam === "them" ? " on" : "")} style={lvTeam === "them" ? { background: colorThem, color: contrastOn(colorThem) } : undefined} onClick={() => setLvTeam("them")}>{themName}</button>
+              <div className="mt-grid" style={{ marginBottom: 8 }}>
+                <button className={"mt-big" + (lvTeam === "us" ? " on" : "")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setLvTeam("us")}>{usName}</button>
+                <button className={"mt-big" + (lvTeam === "them" ? " on" : "")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setLvTeam("them")}>{themName}</button>
+              </div>
+              <div className="mt-grid">
+                {LIVE_EVENTS.filter((ev) => effMode !== "goals" || !ev.gaa).map((ev) => (
+                  <button key={ev.key} className={"mt-big ev" + (lvEvent === ev.key ? " on" : "")}
+                    onClick={() => { setLvEvent(lvEvent === ev.key ? null : ev.key); setLvPlayer(null); setLvMin(String(new Date().getMinutes())); }}>{ev.label}</button>
+                ))}
+              </div>
+              {lvEvent && LIVE_PLAYER_EVENTS.includes(lvEvent) && lvTeam === "us" && (
+                <>
+                  <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Who?</p>
+                  <div className="mt-grid">
+                    {roster.filter((p) => p.role !== "missing").map((p) => (
+                      <button key={p.num + p.name} className={"mt-big sm" + (lvPlayer && lvPlayer.num === p.num ? " on" : "")} onClick={() => setLvPlayer(p)}>{p.num}. {p.name}</button>
+                    ))}
+                    <button className={"mt-big sm" + (lvPlayer === "unknown" ? " on" : "")} onClick={() => setLvPlayer("unknown")}>Unknown</button>
+                  </div>
+                </>
+              )}
+              {liveReady && (
+                <div className="mt-row" style={{ marginTop: 10 }}>
+                  <span className="mt-h" style={{ margin: 0 }}>Min</span>
+                  <input style={{ width: 64 }} value={lvMin} onChange={(e) => setLvMin(e.target.value.replace(/\D/g, ""))} />
+                  <span className="mt-note" style={{ margin: 0, flex: 1 }}>→ “{liveLine()}”</span>
+                  <button className="mt-add" onClick={doAddEvent}>Add</button>
+                  <button className="mt-add alt" onClick={() => { setLvEvent(null); setLvPlayer(null); }}>Cancel</button>
                 </div>
-              </div>
-              <div className="mt-row">
-                <input style={{ width: 56 }} placeholder={`${new Date().getMinutes()}'`} value={lvMin} onChange={(e) => setLvMin(e.target.value)} />
-                {lvTeam === "us" ? (
-                  <select value={lvScorer} onChange={(e) => setLvScorer(e.target.value)}>
-                    <option value="">{usName} — unattributed</option>
-                    {roster.map((p) => <option key={p.num + p.name} value={p.name}>{p.num}. {p.name}</option>)}
-                  </select>
-                ) : (
-                  <input style={{ width: 150 }} placeholder="opp #/name (optional)" value={lvOpp} onChange={(e) => setLvOpp(e.target.value)} />
-                )}
-                <select value={lvType} onChange={(e) => setLvType(e.target.value)}>
-                  <option value="point">{effMode === "goals" ? "Goal" : "Point"}</option>
-                  {effMode !== "goals" && <option value="free">Free</option>}
-                  {effMode !== "goals" && <option value="goal">Goal</option>}
-                </select>
-                <button className="mt-add" onClick={addScore}>+ Score</button>
-                <button className="mt-add alt" onClick={addHalf}>Start half</button>
-                <button className="mt-add alt" onClick={() => addMarker("HT")}>HT</button>
-                <button className="mt-add alt" onClick={() => addMarker("FT")}>FT</button>
-              </div>
-              <p className="mt-note">Pick which side scored, then the scorer. Leave the minute blank to stamp the current minute ({new Date().getMinutes()}'). Everything updates live.</p>
+              )}
             </div>
             <p className="mt-h">Raw notation (edit freely — re-parses instantly)</p>
             <textarea className="mt-ta" value={raw} onChange={(e) => setRaw(e.target.value)} spellCheck={false} />
             <p className="mt-note" style={{ marginTop: 8 }}>
               Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Rick</code> ·
-              start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal]</code> ·
-              opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · notes anything else.
+              start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal|own goal]</code> ·
+              opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · cards <code>min who yellow|red card</code> ·
+              corners <code>min [T] corner</code> · added time <code>min HT +3</code> · notes anything else.
             </p>
           </>
         )}
