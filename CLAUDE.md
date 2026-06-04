@@ -34,11 +34,12 @@ Order of code inside the babel script: Drive store + auth preamble → `buildInf
 
 - GitHub Pages serves the static page; the "backend" is the user's own Google Drive. The page holds no data and no secrets.
 - **Auth:** GIS token client (`google.accounts.oauth2.initTokenClient`), scope `https://www.googleapis.com/auth/drive.appdata`. Token flow uses authorized JS origins — no redirect URIs. Access tokens last ~1 hour.
+- **Token lifecycle:** the GIS `callback`/`error_callback` just resolve the pending `requestToken()` promise — all flows (`signIn`, `reauth`) await that. The token + expiry (60s safety margin) is kept in `sessionStorage` (`sideline_tok`), so a refresh within the hour resumes without a sign-in click; tab close clears it. On a 401 during save, `saveWithRetry` calls `reauth()` (`prompt: ""`) and retries once; if that fails (e.g. popup blocked outside a user gesture) it fires `onAuthExpired`, which `MatchTracker` surfaces as a red "session expired — Reconnect & save" banner whose button (a real click, so the popup is allowed) re-auths and re-pushes `cache` via `driveSave`.
 - `CLIENT_ID` is public, not secret. Gotcha: it must end in a **single** `.apps.googleusercontent.com` — a doubled suffix (placeholder + pasted ID) once caused `Error 401: invalid_client`.
 - **"Only me" lock:** the OAuth consent screen ("Google Auth Platform" in the new console) stays in **External / Testing** with only the owner's account as a test user, so only that account can sign in. Expect the "Google hasn't verified this app" → Advanced → proceed screen.
 - **Storage:** one hidden file `sideline.json` in the Drive `appDataFolder`, holding `{ "<id>": <matchRecord>, ... }`. Kept in an in-memory `cache`; the whole object is rewritten to Drive on every change.
 - **`store` API** (same method shapes the original artifact's `window.storage` wrapper had): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool.
-- Drive REST via `dfetch` (fetch + `Authorization: Bearer`); a 401 throws an error with `.code = 401`.
+- Drive REST via `dfetch` (fetch + `Authorization: Bearer`); a 401 throws an error with `.code = 401`. `driveSave` also throws on any non-ok response (with `.code = status`) so `store.set`/`store.del` never report success for a failed write.
 - `App`/`SignIn` poll until GIS loads, init the token client, and only render `<MatchTracker/>` after a successful token + `driveLoad()`.
 
 ### Parser (`parseMatch`) — pure JS
@@ -70,6 +71,6 @@ Key decisions (preserve these when modifying):
 
 ## Known limitations / next steps
 
-- Access tokens expire after ~1h; a save after expiry fails quietly (`store.set` returns false). Planned fix: catch 401s, call `tokenClient.requestAccessToken()` to re-auth + retry, and surface a "session expired, reconnect" state.
-- The live sign-in + Drive read/write flow has not yet been verified end-to-end on the deployed page.
+- Sign-in is still needed after the token expires (~1h) or when the tab is closed — full multi-day persistence would need the authorization-code flow + a backend, which this app deliberately doesn't have.
+- The live sign-in + Drive read/write flow has not yet been verified end-to-end on the deployed page — including the new 401-retry/reconnect-banner and sessionStorage-resume paths.
 - Possible additions: visible "Signed in as / Sign out" affordance; PWA manifest + icon; service-worker offline cache.
