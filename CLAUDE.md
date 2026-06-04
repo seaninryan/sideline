@@ -69,7 +69,7 @@ Key decisions (preserve these when modifying):
 
 - `buildInfographicSVG(model)` builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.
 - `svgToPng` rasterizes via a **data-URL** image → canvas → `toDataURL`/`toBlob`. Keep the data-URL approach — blob URLs hit CSP/canvas-taint issues. The panel displays the PNG so long-press-to-save works on iOS; "Save / Share" uses Web Share when available, else downloads; SVG download is the fallback.
-- The infographic uses **Arial** (reliable rasterization); the app chrome uses Bebas Neue / Oswald / Newsreader via injected CSS.
+- The infographic uses **Arial** (reliable rasterization); the app uses Bebas Neue (display numbers) and Oswald (everything else) via injected CSS. **Oswald is the `.mt-root` base font** — don't add per-element serif fonts; bare elements inheriting the base is the intended behaviour.
 
 ### UI decisions worth keeping
 
