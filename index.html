@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v18";
+const APP_VERSION = "v19";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -813,6 +813,9 @@ const CSS = `
 .mt-btn:hover{background:rgba(255,255,255,.2);}
 .mt-btn.solid{background:#f5c518; color:#11241b; border-color:#f5c518; font-weight:600;}
 .mt-btn.solid:hover{background:#ffd530;}
+.mt-toast{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:60; pointer-events:none;
+  background:rgba(12,59,42,.95); color:#f4efe1; font-family:'Oswald'; font-size:12.5px; letter-spacing:.5px;
+  padding:6px 16px; border-radius:20px; box-shadow:0 4px 14px rgba(0,0,0,.35); white-space:nowrap;}
 .mt-authlost{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;
   padding:10px 16px; background:#c0392b; color:#fff; font-family:'Oswald',sans-serif; font-size:13px;}
 .mt-board{background:linear-gradient(160deg,var(--pitch) 0%,var(--pitch2) 100%); color:var(--paper);
@@ -1324,8 +1327,8 @@ function MatchTracker() {
         <button className="mt-btn" onClick={doResync}>Resync</button>
         {curId && <button className="mt-btn" onClick={doDuplicate}>Duplicate</button>}
         {curId && <button className="mt-btn" onClick={doDelete}>Delete</button>}
-        {savedMsg && <span style={{ fontFamily: "Oswald", fontSize: 12 }}>{savedMsg}</span>}
       </div>
+      {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
       {authLost && (
         <div className="mt-authlost">
