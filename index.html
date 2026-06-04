@@ -37,12 +37,13 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v16";
+const APP_VERSION = "v17";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
 const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
 let accessToken = null, fileId = null, cache = {}, tokenClient = null;
+let tokenExp = 0; // ms epoch when the current token dies (60s safety margin baked in)
 let tokenCallback = null; // resolver for the in-flight requestToken() call
 let onAuthExpired = null; // set by MatchTracker to surface the "session expired" banner
 
@@ -52,16 +53,24 @@ const TOK_KEY = "sideline_tok";
 function rememberToken(resp) {
   accessToken = resp.access_token;
   const ttl = Number(resp.expires_in) || 3600;
-  try { sessionStorage.setItem(TOK_KEY, JSON.stringify({ t: accessToken, exp: Date.now() + (ttl - 60) * 1000 })); } catch (e) {}
+  tokenExp = Date.now() + (ttl - 60) * 1000;
+  try { sessionStorage.setItem(TOK_KEY, JSON.stringify({ t: accessToken, exp: tokenExp })); } catch (e) {}
 }
 function recallToken() {
   try {
     const j = JSON.parse(sessionStorage.getItem(TOK_KEY));
-    if (j && j.t && j.exp > Date.now()) return j.t;
+    if (j && j.t && j.exp > Date.now()) { tokenExp = j.exp; return j.t; }
   } catch (e) {}
   return null;
 }
-function forgetToken() { accessToken = null; try { sessionStorage.removeItem(TOK_KEY); } catch (e) {} }
+function forgetToken() { accessToken = null; tokenExp = 0; try { sessionStorage.removeItem(TOK_KEY); } catch (e) {} }
+function tokenTimeLeft() { return accessToken ? tokenExp - Date.now() : 0; }
+// Roll the token before it dies. Best called from a user gesture (click) so the
+// GIS popup is allowed if Google needs one; with a live session it's invisible.
+async function ensureFreshToken(thresholdMs = 10 * 60 * 1000) {
+  if (!accessToken || tokenTimeLeft() > thresholdMs) return true;
+  return reauth();
+}
 
 // Wrap GIS's callback style in a promise: resolves with the token response,
 // or with the error object (no access_token) on failure/popup-block, or null.
@@ -953,6 +962,7 @@ function MatchTracker() {
   const [saved, setSaved] = useState([]);
   const [savedMsg, setSavedMsg] = useState("");
   const [authLost, setAuthLost] = useState(false);
+  const [authSoon, setAuthSoon] = useState(false); // token near expiry, silent renew blocked
   const [modal, setModal] = useState(null);
   const [exportText, setExportText] = useState("");
   const [importText, setImportText] = useState("");
@@ -1009,8 +1019,32 @@ function MatchTracker() {
     onAuthExpired = () => setAuthLost(true);
     return () => { onAuthExpired = null; };
   }, []);
+  // Keep-alive while the tab is open: when the token is close to dying, try a
+  // silent refresh (some browsers allow the popup-less roll); if the browser
+  // blocks it, surface the amber banner so one tap renews the session before
+  // anything fails.
+  useEffect(() => {
+    let autoTried = false;
+    const check = async () => {
+      if (document.hidden || !accessToken) return;
+      if (tokenTimeLeft() > 12 * 60 * 1000) { autoTried = false; setAuthSoon(false); return; }
+      if (!autoTried) {
+        autoTried = true;
+        if (await reauth()) { setAuthSoon(false); autoTried = false; return; }
+      }
+      setAuthSoon(true);
+    };
+    const iv = setInterval(check, 60 * 1000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", check); };
+  }, []);
+  const doStayConnected = async () => {
+    if (await reauth()) { setAuthSoon(false); setSavedMsg("Session renewed ✓"); setTimeout(() => setSavedMsg(""), 2000); }
+    else { setSavedMsg("Couldn't renew — try again"); setTimeout(() => setSavedMsg(""), 2500); }
+  };
 
   const doSave = async () => {
+    await ensureFreshToken(); // we're inside a click — roll the token now rather than 401 mid-save
     const id = curId || ("m" + Date.now());
     const ok = await store.set(id, { raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, colorUs, colorUs2, colorThem, colorThem2, savedAt: Date.now() });
     setCurId(id);
@@ -1258,6 +1292,12 @@ function MatchTracker() {
         <div className="mt-authlost">
           <span>Google session expired — your last change hasn't been saved to Drive.</span>
           <button className="mt-btn solid" onClick={doReconnect}>Reconnect &amp; save</button>
+        </div>
+      )}
+      {authSoon && !authLost && (
+        <div className="mt-authlost" style={{ background: "#9a7b0a" }}>
+          <span>Google session expires soon.</span>
+          <button className="mt-btn solid" onClick={doStayConnected}>Stay signed in</button>
         </div>
       )}
 
