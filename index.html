@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v12";
+const APP_VERSION = "v13";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -292,18 +292,18 @@ function buildInfographicSVG(m) {
         const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
         const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
         body.push(C(P + 5, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
-        body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
+        body.push(T(P + 18, cy + 4, `${it.mmin || it.minute}'`, 11, MUTE, { w: 700 }));
         if (descriptive) body.push(T(P + 42, cy + 4, `${it.type === "goal" ? "GOAL  " : ""}${it.desc || it.scorer}`, 11.5, MUTE, { w: it.type === "goal" ? 700 : 400 }));
         else body.push(T(P + 42, cy + 4, `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`, 12, INK, { w: it.type === "goal" ? 700 : 400 }));
         body.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 11, PITCH, { w: 700, a: "end" }));
       } else if (it.kind === "sub") {
         body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
+        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.mmin || it.minute}'`, 11, MUTE, { w: 700 }));
         body.push(T(P + 42, cy + 4, `▲ ${it.on}`, 11.5, "#1f7a4d", { w: 700 }));
         body.push(T(P + 42 + (String(it.on).length + 2) * 6.4 + 8, cy + 4, `▼ ${it.off}`, 11.5, "#c0392b", { w: 700 }));
       } else {
         body.push(C(P + 5, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.minute}'`, 11, MUTE, { w: 700 }));
+        if (it.minute != null) body.push(T(P + 18, cy + 4, `${it.mmin || it.minute}'`, 11, MUTE, { w: 700 }));
         body.push(T(P + 42, cy + 4, it.text, 11.5, MUTE));
       }
       y += 21;
@@ -474,14 +474,14 @@ function parseMatch(raw, settings = {}) {
       const { text, scoreToks } = peelScore(restFull);
       // a missed chance ("10 Jack miss pen", "wide", "saved") is a note, not a score
       if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short)\b/i.test(restFull)) {
-        notes.push({ seq: seq++, half: half || 1, minute, type: "note", text: restFull.trim() });
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "note", text: restFull.trim() });
         continue;
       }
       // "43 Rick for Morty" — a substitution with the minute in front
       if (scoreToks.length === 0 && /\bfor\b/i.test(restFull)) {
         const sm = restFull.match(/(.+?)\s+for\s+(.+)/i);
         const on = sm[1].trim(), off = sm[2].trim();
-        notes.push({ seq: seq++, half: half || 1, minute, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line });
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line });
         continue;
       }
       const isGoal = /goal/i.test(restFull);
@@ -565,6 +565,22 @@ function parseMatch(raw, settings = {}) {
   let ug = 0, up = 0, tg = 0, tp = 0;
   const h1max = Math.max(0, ...scoring.filter((s) => s.half === 1).map((s) => s.elapsed),
     ...halfMarks.filter((m) => m.half === 1 && m.elapsed != null).map((m) => m.elapsed));
+
+  // match-minute labels: elapsed within the game rather than wall clock; halves
+  // continue ("34'" in the 2nd half of 30-min halves) and stoppage shows as "30+2"
+  const htMark = halfMarks.find((x) => x.half === 1 && x.marker === "HT" && x.elapsed != null && x.minute != null);
+  const h1Len = htMark ? htMark.elapsed - (htMark.elapsed % 5) : Math.ceil(h1max / 5) * 5;
+  const matchMin = (it) => {
+    if (it.elapsed == null) return it.minute != null ? String(it.minute) : "";
+    const h = it.half || 1;
+    const base = h > 1 ? h1Len * (h - 1) : 0;
+    const em = halfMarks.find((x) => x.half === h && x.marker && x.elapsed != null && x.minute != null);
+    const hEnd = em ? em.elapsed - (em.elapsed % 5) : null;
+    return hEnd != null && it.elapsed > hEnd ? `${base + hEnd}+${it.elapsed - hEnd}` : String(base + Math.max(it.elapsed, 1));
+  };
+  scoring.forEach((s) => { s.mmin = matchMin(s); });
+  notes.forEach((n) => { if (n.minute != null) n.mmin = matchMin(n); });
+
   const GAP = 4;
   const xOf = (s) => (s.half === 1 ? s.elapsed : h1max + GAP + s.elapsed);
   const series = [{ x: 0, us: 0, them: 0, label: "Throw-in", half: 1 }];
@@ -1300,7 +1316,7 @@ function MatchTracker() {
                       const evName = it.scorer === "Opposition" ? themName : it.scorer;
                       return (
                         <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
-                          <span className="m">{it.minute}'</span>
+                          <span className="m">{it.mmin || it.minute}'</span>
                           <span>
                             {descriptive
                               ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
@@ -1310,8 +1326,8 @@ function MatchTracker() {
                         </div>
                       );
                     }
-                    if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
-                    return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
+                    if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
+                    return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
                   })}
                   {addedMk && <div className="mt-ev mid"><span className="chip">⏱ +{addedMk.added} added</span></div>}
                 </div>

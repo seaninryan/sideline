@@ -75,6 +75,18 @@ Alfie 50?
   t("score-bearing line with risky word still counts", [p.totals.us.str, p.totals.them.str], ["2", "2"]);
 }
 
+// ---- match-minute labels ----
+{
+  const p = parseMatch("19:02\n14 dkb 0-1\n23 long 1-1\n32 HT\n\n38\n42 long range 2-1\n01 dkb 2-2\n", { scoringMode: "goals" });
+  t("H1 match minutes", p.scoring.filter((s) => s.half === 1).map((s) => s.mmin), ["12", "21"]);
+  t("H2 continues from half length", p.scoring.filter((s) => s.half === 2).map((s) => s.mmin), ["34", "53"]);
+  const q = parseMatch("19:02\n34 dkb 0-1\n35 HT\n", { scoringMode: "goals" }); // 32' elapsed, 30-min half
+  t("stoppage shows base+N", q.scoring[0].mmin, "30+2");
+  const r = parseMatch("U13 Hurling @ Tribesmen\n10. Morty\n18:21\n21 Morty 0-1 0-0\n43 Rick for Morty\n", {});
+  t("opening-minute score shows 1'", r.scoring[0].mmin, "1");
+  t("sub gets a match minute", r.notes.find((n) => n.type === "sub").mmin, "22");
+}
+
 // ---- added time at HT/FT ----
 {
   const ht = (raw) => parseMatch(raw, { scoringMode: "goals" }).halfMarks.find((m) => m.marker);
