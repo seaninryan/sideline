@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -744,6 +744,14 @@ table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .mt-ev.them:before{right:auto; left:-6px;}
 .mt-ev.them.goal:before{right:auto; left:-8px;}
 .mt-ev.note:before{background:var(--paper); border-style:dashed; border-color:var(--muted);}
+.mt-ev.note{font-family:'Oswald'; font-size:13px;}
+.mt-ev.subev{font-family:'Oswald'; font-size:13px;}
+.mt-ev.subev:before{content:"⇄"; width:16px; height:16px; right:-8px; top:10px; background:var(--paper);
+  border:1px solid var(--muted); color:var(--muted); font-size:9.5px; line-height:14px; text-align:center;}
+.mt-ev.mid{width:100%; margin:0; padding:4px 0; justify-content:center;}
+.mt-ev.mid:before{display:none;}
+.mt-ev.mid .chip{font-family:'Oswald'; font-size:11.5px; color:var(--muted); background:var(--paper);
+  border:1px dashed var(--line); border-radius:20px; padding:2px 10px;}
 .mt-ev .m{font-family:'Oswald'; font-weight:600; color:var(--muted); font-size:12px; min-width:30px;}
 .mt-ev .sc{font-family:'Oswald'; font-weight:600; color:var(--pitch); margin-left:auto; font-size:13px;}
 .mt-ev.them{flex-direction:row-reverse;} /* opposition events mirror to the right */
@@ -1282,10 +1290,10 @@ function MatchTracker() {
                         </div>
                       );
                     }
-                    if (it.kind === "sub") return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.minute}'` : "↺"}</span><span>{it.on} <span className="mt-pill sub">on</span> for {it.off}</span></div>;
+                    if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
                     return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
                   })}
-                  {addedMk && <div className="mt-ev note"><span className="m">⏱</span><span style={{ color: "#6f7d72" }}>+{addedMk.added} added</span></div>}
+                  {addedMk && <div className="mt-ev mid"><span className="chip">⏱ +{addedMk.added} added</span></div>}
                 </div>
               );
             })}
