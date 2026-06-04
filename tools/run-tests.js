@@ -84,6 +84,12 @@ Alfie 50?
     const s = q.notes.find((n) => n.type === "sub");
     return [s && s.on, s && s.off];
   })(), ["12 Rick", "6 Morty"]);
+  t("sub on/off resolved to roster numbers", [sub && sub.onNum, sub && sub.offNum], [17, 10]);
+  t("numbered sub resolves by number", (() => {
+    const q = parseMatch("U13 Hurling @ Tribesmen\n10. Morty\nSubs\n12. Rick\n18:21\n43 12 Rick for 10 Morty\n", {});
+    const s = q.notes.find((n) => n.type === "sub");
+    return [s && s.onNum, s && s.offNum];
+  })(), [12, 10]);
   t("minute-less sub still works", (() => {
     const q = parseMatch("U13 Hurling @ Tribesmen\n10. Morty\n18:21\nRick for Morty\n", {});
     const s = q.notes.find((n) => n.type === "sub");

@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v6";
+const APP_VERSION = "v7";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -419,6 +419,15 @@ function parseMatch(raw, settings = {}) {
     return null;
   };
 
+  // resolve a sub line's "12 Rick" / "Rick" / "12" to a roster number (or null)
+  const subRef = (txt) => {
+    const t = (txt || "").trim();
+    const numOnly = t.match(/^(\d{1,2})$/);
+    if (numOnly) { const p = roster.find((r) => r.num === parseInt(numOnly[1], 10)); return p ? p.num : parseInt(numOnly[1], 10); }
+    const p = matchPlayer(t.replace(/^\d+\s*[.)]?\s*/, ""));
+    return p ? p.num : null;
+  };
+
   // --- walk events ---
   const scoring = [];
   const notes = [];
@@ -449,7 +458,8 @@ function parseMatch(raw, settings = {}) {
       // "43 Rick for Morty" — a substitution with the minute in front
       if (scoreToks.length === 0 && /\bfor\b/i.test(restFull)) {
         const sm = restFull.match(/(.+?)\s+for\s+(.+)/i);
-        notes.push({ seq: seq++, half: half || 1, minute, type: "sub", on: sm[1].trim(), off: sm[2].trim(), text: line });
+        const on = sm[1].trim(), off = sm[2].trim();
+        notes.push({ seq: seq++, half: half || 1, minute, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line });
         continue;
       }
       const isGoal = /goal/i.test(restFull);
@@ -474,7 +484,8 @@ function parseMatch(raw, settings = {}) {
       halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed });
     } else if (/\bfor\b/i.test(line)) {
       const m = line.match(/(.+?)\s+for\s+(.+)/i);
-      notes.push({ seq: seq++, half: half || 1, type: "sub", on: m ? m[1].trim() : "", off: m ? m[2].trim() : "", text: line });
+      const on = m ? m[1].trim() : "", off = m ? m[2].trim() : "";
+      notes.push({ seq: seq++, half: half || 1, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line });
     } else {
       notes.push({ seq: seq++, half: half || 1, type: "note", text: line });
     }
@@ -961,6 +972,15 @@ function MatchTracker() {
   const starters = roster.filter((p) => p.role === "starting");
   const subs = roster.filter((p) => p.role === "sub");
   const missing = roster.filter((p) => p.role === "missing");
+  // players involved in substitutions (by roster number), for lineup styling
+  const subbedOn = new Set(notes.filter((n) => n.type === "sub" && n.onNum != null).map((n) => n.onNum));
+  const subbedOff = new Set(notes.filter((n) => n.type === "sub" && n.offNum != null).map((n) => n.offNum));
+  const subArrows = (num) => (subbedOn.has(num) || subbedOff.has(num)) && (
+    <span style={{ fontSize: 10, letterSpacing: 1 }}>
+      {subbedOn.has(num) && <span style={{ color: "#2ecc71" }}>▲</span>}
+      {subbedOff.has(num) && <span style={{ color: "#ff6e63" }}>▼</span>}
+    </span>
+  );
   const chunk = (arr, n) => arr.reduce((a, _, i) => (i % n ? a : [...a, arr.slice(i, i + n)]), []);
   const formationRows = parsed.formationRows && parsed.formationRows.length
     ? parsed.formationRows
@@ -1246,7 +1266,7 @@ function MatchTracker() {
                     return (
                       <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPitch({ num: n, name: p ? p.name : String(n) })}>
                         <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: subPick && subPick.role === "off" && subPick.num === n ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
-                        <div className="nm">{p ? p.name : ""}</div>
+                        <div className="nm">{p ? p.name : ""} {subArrows(n)}</div>
                       </div>
                     );
                   })}
@@ -1265,7 +1285,13 @@ function MatchTracker() {
             ) : (
               <p className="mt-note">Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
             )}
-            {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => <span className="b" key={p.num} style={{ cursor: "pointer", background: subPick && subPick.role === "on" && subPick.num === p.num ? "#f5c518" : undefined, borderColor: subPick && subPick.role === "on" && subPick.num === p.num ? "#f5c518" : undefined }} onClick={() => tapBench({ num: p.num, name: p.name })}>{p.num}. {p.name}</span>)}</div></>}
+            {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => {
+              const picked = subPick && subPick.role === "on" && subPick.num === p.num;
+              const used = subbedOn.has(p.num) || subbedOff.has(p.num); // used subs wear the team colours
+              const st = picked ? { background: "#f5c518", borderColor: "#f5c518" }
+                : used ? { background: colorUs, color: contrastOn(colorUs), borderColor: colorUs2 } : {};
+              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapBench({ num: p.num, name: p.name })}>{p.num}. {p.name} {subArrows(p.num)}</span>;
+            })}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
           </>
         )}
