@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v21";
+const APP_VERSION = "v22";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -973,6 +973,7 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
   border-radius:10px; cursor:pointer;}
 .mt-big.sm{flex:1 1 22%; min-width:76px; padding:10px 6px; font-size:12.5px; text-transform:none; font-weight:500;}
 .mt-big.on{outline:2px solid #f5c518; outline-offset:1px;}
+.mt-big.off{filter:grayscale(.75); opacity:.4;} /* the unselected team fades right back */
 .mt-big:active{transform:translateY(1px);}
 .mt-swatch{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.3); padding:0; cursor:pointer; flex:none;}
 .mt-swatch.big{width:30px; height:30px; border-radius:8px;}
@@ -1730,8 +1731,8 @@ function MatchTracker() {
             <div className="mt-live">
               <p className="mt-h" style={{ marginBottom: 8 }}>Add as it happens</p>
               <div className="mt-grid" style={{ marginBottom: 8 }}>
-                <button className={"mt-big" + (lvTeam === "us" ? " on" : "")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setLvTeam("us")}>{usName}</button>
-                <button className={"mt-big" + (lvTeam === "them" ? " on" : "")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setLvTeam("them")}>{themName}</button>
+                <button className={"mt-big" + (lvTeam === "us" ? " on" : " off")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setLvTeam("us")}>{usName}</button>
+                <button className={"mt-big" + (lvTeam === "them" ? " on" : " off")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setLvTeam("them")}>{themName}</button>
               </div>
               <div className="mt-grid">
                 {LIVE_EVENTS.filter((ev) => effMode !== "goals" || !ev.gaa).map((ev) => (
