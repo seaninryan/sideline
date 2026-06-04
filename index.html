@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v5";
+const APP_VERSION = "v6";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -803,10 +803,8 @@ function MatchTracker() {
   const [exportText, setExportText] = useState("");
   const [importText, setImportText] = useState("");
 
-  // substitution panel (lineup tab): tap a player, pick the replacement
-  const [subOff, setSubOff] = useState(null); // {num, name}
-  const [subOn, setSubOn] = useState("");
-  const [subMin, setSubMin] = useState("");
+  // substitution (lineup tab): tap a pitch player and a sub, either order
+  const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
 
   // live entry form
   const [lvTeam, setLvTeam] = useState("us");
@@ -916,14 +914,19 @@ function MatchTracker() {
 
   // ---- live append helpers ----
   const append = (text) => setRaw((r) => r.replace(/\s*$/, "") + "\n" + text);
-  // substitution: tap a player on the lineup, then pick who comes on
-  const pickSubOff = (p) => { setSubOff(p); setSubOn(""); setSubMin(String(new Date().getMinutes())); };
-  const addSubLine = () => {
-    if (!subOff || !subOn) return;
-    const min = subMin.trim() || String(new Date().getMinutes());
-    append(`${min} ${subOn} for ${subOff.name}`);
-    setSubOff(null);
-    setSavedMsg(`Sub added — ${subOn} on`); setTimeout(() => setSavedMsg(""), 2500);
+  // substitution: tap the player going off (pitch) and the one coming on (subs), either order
+  const completeSub = (onName, offName) => {
+    append(`${new Date().getMinutes()} ${onName} for ${offName}`);
+    setSubPick(null);
+    setSavedMsg(`Sub added — ${onName} for ${offName}`); setTimeout(() => setSavedMsg(""), 2500);
+  };
+  const tapPitch = (p) => {
+    if (subPick && subPick.role === "on") return completeSub(subPick.name, p.name);
+    setSubPick(subPick && subPick.role === "off" && subPick.num === p.num ? null : { role: "off", ...p });
+  };
+  const tapBench = (p) => {
+    if (subPick && subPick.role === "off") return completeSub(p.name, subPick.name);
+    setSubPick(subPick && subPick.role === "on" && subPick.num === p.num ? null : { role: "on", ...p });
   };
   const addScore = () => {
     const min = lvMin.trim() || String(new Date().getMinutes());
@@ -1241,8 +1244,8 @@ function MatchTracker() {
                   {row.map((n) => {
                     const p = starters.find((x) => x.num === n);
                     return (
-                      <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => pickSubOff({ num: n, name: p ? p.name : String(n) })}>
-                        <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: subOff && subOff.num === n ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
+                      <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPitch({ num: n, name: p ? p.name : String(n) })}>
+                        <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: subPick && subPick.role === "off" && subPick.num === n ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
                         <div className="nm">{p ? p.name : ""}</div>
                       </div>
                     );
@@ -1250,24 +1253,19 @@ function MatchTracker() {
                 </div>
               ))}
             </div>
-            <p className="hint" style={{ marginTop: 8 }}>Tap a player to make a substitution.</p>
-            {subOff && (
-              <div className="mt-live" style={{ marginTop: 10 }}>
-                <p className="mt-h" style={{ marginBottom: 8 }}>Substitution — {subOff.num}. {subOff.name} off</p>
+            {subPick ? (
+              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
                 <div className="mt-row">
-                  <input style={{ width: 56 }} placeholder={`${new Date().getMinutes()}'`} value={subMin} onChange={(e) => setSubMin(e.target.value)} />
-                  <select value={subOn} onChange={(e) => setSubOn(e.target.value)}>
-                    <option value="">replacement…</option>
-                    {subs.filter((p) => p.name !== subOff.name).map((p) => <option key={"s" + p.num + p.name} value={p.name}>{p.num}. {p.name}</option>)}
-                    {starters.filter((p) => p.name !== subOff.name).map((p) => <option key={"x" + p.num + p.name} value={p.name}>{p.num}. {p.name} (on pitch)</option>)}
-                  </select>
-                  <button className="mt-add" disabled={!subOn} onClick={addSubLine}>Add sub</button>
-                  <button className="mt-add alt" onClick={() => setSubOff(null)}>Cancel</button>
+                  <span className="mt-h" style={{ margin: 0 }}>
+                    {subPick.role === "off" ? <>{subPick.num}. {subPick.name} off — now tap who comes on</> : <>{subPick.num}. {subPick.name} on — now tap who comes off</>}
+                  </span>
+                  <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setSubPick(null)}>Cancel</button>
                 </div>
-                <p className="hint">Adds “{subMin.trim() || String(new Date().getMinutes())} {subOn || "…"} for {subOff.name}” to the notation — edit it there any time.</p>
               </div>
+            ) : (
+              <p className="mt-note">Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
             )}
-            {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => <span className="b" key={p.num} style={{ cursor: "pointer" }} onClick={() => pickSubOff({ num: p.num, name: p.name })}>{p.num}. {p.name}</span>)}</div></>}
+            {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => <span className="b" key={p.num} style={{ cursor: "pointer", background: subPick && subPick.role === "on" && subPick.num === p.num ? "#f5c518" : undefined, borderColor: subPick && subPick.role === "on" && subPick.num === p.num ? "#f5c518" : undefined }} onClick={() => tapBench({ num: p.num, name: p.name })}>{p.num}. {p.name}</span>)}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
           </>
         )}
