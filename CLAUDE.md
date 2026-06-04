@@ -11,6 +11,7 @@ Sideline — a personal match tracker for GAA (hurling/football) and soccer that
 - **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + Google Identity Services loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
 - **`SETUP.md`** — end-user setup guide (Google Cloud OAuth + GitHub Pages).
 - **`icon-180.png`** — app icon (favicon + `apple-touch-icon`): flat soccer ball on pitch green. Don't edit by hand — regenerate with `python3 tools/make-icon.py` (needs PIL).
+- **`tools/`** — dev-only helpers, not served: `make-icon.py`, `parser-harness.js` (extracts the pure parser from `index.html` for node), `run-tests.js` (parser regression tests).
 
 The app was originally a Claude artifact (`match-tracker.jsx`, persisted via the chat's `window.storage`, charted with recharts) converted by a script into this standalone. Neither the jsx nor the script is in the repo — **`index.html` is the source of truth; edit it directly.**
 
@@ -23,7 +24,7 @@ sed -n '/<script type="text\/babel"/,/<\/script>/p' index.html | sed '1d;$d' > /
 npx esbuild /tmp/sideline-app.jsx --loader:.jsx=jsx --outfile=/dev/null
 ```
 
-To test the parser, extract the pure functions (`parseMatch` and helpers) into a node harness and run the canonical sample (the `SAMPLE` constant in the file) with `{myTeam: "Racoons"}`. Expected results: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings.
+Parser tests: `node tools/run-tests.js` (extracts the pure functions from `index.html` via `tools/parser-harness.js`). Run after any parser change. The canonical sample (`SAMPLE` with `{myTeam: "Racoons"}`) must give: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings.
 
 **Deploy:** push to `main`; GitHub Pages serves `index.html` at https://seaninryan.github.io/sideline/. Google sign-in only works from the authorized JS origin (`https://seaninryan.github.io`), so the Drive flow can only be exercised on the deployed page, not from a local server.
 
@@ -57,8 +58,10 @@ Input is plain text:
 
 Key decisions (preserve these when modifying):
 
-- **Sport detection:** GAA if any score token has an internal hyphen (`\d+-\d+`); else by sport keyword in the header; else goals-only.
-- **Written score is source of truth:** if ≥ half the scoring lines carry a written running score, totals/chart come from the written cumulative score. Goal vs point is inferred from the score jump (a 3-point jump with no "goal" word = a goal). A column-vote on "sure" rows (rostered name or `T`) decides which written column is "us" — this handles home/away order automatically. Without written scores (live entry) it falls back to keyword goal/point counting. A reconciliation warning fires only when a written score *drops* (likely typo).
+- **Sport detection:** explicit sport in the header wins (`soccer` → goals; `hurl/camog/gaelic/gaa/football` → GAA); then score shape — any line with **two** score tokens (`0-2 1-3`) is GAA, while hyphen scores that only appear **one per line** (`2-1` = whole scoreboard) are a soccer running score (unless `point`/`pt` appears); else any internal hyphen → GAA; else goals-only.
+- **Misses are notes:** a minute line with no written score and a miss keyword (`miss/missed/wide/saved/blocked/short`) is a note, not a score (`10 Jack miss pen`). With a written score attached, the written score still rules.
+- **Subs can carry a minute:** `43 Rick for Morty` (or `43 12 Rick for 6 Morty`) parses as a sub at 43', not a score. The lineup tab generates these (tap player → pick replacement).
+- **Written score is source of truth:** if ≥ half the scoring lines carry a written running score, totals/chart come from the written cumulative score. Two tokens = GAA (one per team); in goals mode a **single** `a-b` token is the whole home-away scoreboard (`writtenCols`). Goal vs point is inferred from the score jump (a 3-point jump with no "goal" word = a goal). A column-vote on "sure" rows (rostered name or `T`) decides which written column is "us" — this handles home/away order automatically. Without written scores (live entry) it falls back to keyword goal/point counting. A reconciliation warning fires only when a written score *drops* (likely typo).
 - **Stats computed:** leadChanges, timesLevel, maxLead/maxLeadSide, half-time score, chart series, goalDots, htLine.
 
 ### Share image
