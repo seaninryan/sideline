@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v3";
+const APP_VERSION = "v4";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -613,7 +613,7 @@ const CSS = `
 .mt-bar{display:flex; gap:8px; align-items:center; padding:12px 16px; background:var(--pitch);
   color:var(--paper); flex-wrap:wrap;}
 .mt-logo{font-family:'Bebas Neue'; font-size:26px; letter-spacing:1px; line-height:1; display:flex; align-items:center; gap:9px;}
-.mt-logo span{display:inline-block; width:13px; height:22px; background:repeating-linear-gradient(90deg,#f5c518 0 4px,#0c3b2a 4px 8px); border-radius:2px;}
+.mt-logo svg{flex:none;}
 .mt-ver{font-family:'Oswald'; font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
 .mt-bar .grow{flex:1;}
 .mt-sel,.mt-btn,.mt-inp{font-family:'Oswald',sans-serif; font-size:13px; border-radius:7px; border:1px solid rgba(255,255,255,.25);
@@ -976,7 +976,11 @@ function MatchTracker() {
 
       {/* top bar */}
       <div className="mt-bar">
-        <div className="mt-logo"><span></span>SIDELINE <i className="mt-ver">{APP_VERSION}</i></div>
+        <div className="mt-logo">
+          {/* same ball as icon-180.png (tools/make-icon.py geometry) */}
+          <svg width="22" height="22" viewBox="0 0 128 128" aria-hidden="true"><defs><clipPath id="bc"><circle cx="64" cy="64" r="56"/></clipPath></defs><circle cx="64" cy="64" r="56" fill="#f7f7f2"/><g clipPath="url(#bc)" fill="#1c1c1c"><polygon points="64.0,44.0 83.0,57.8 75.8,80.2 52.2,80.2 45.0,57.8"/><line x1="64.0" y1="44.0" x2="64.0" y2="15.8" stroke="#1c1c1c" strokeWidth="3"/><polygon points="64.0,20.4 46.9,8.0 53.4,-12.2 74.6,-12.2 81.1,8.0"/><line x1="83.0" y1="57.8" x2="109.8" y2="49.1" stroke="#1c1c1c" strokeWidth="3"/><polygon points="105.5,50.5 112.0,30.4 133.2,30.4 139.7,50.5 122.6,63.0"/><line x1="75.8" y1="80.2" x2="92.3" y2="103.0" stroke="#1c1c1c" strokeWidth="3"/><polygon points="89.6,99.3 110.8,99.3 117.3,119.4 100.2,131.8 83.1,119.4"/><line x1="52.2" y1="80.2" x2="35.7" y2="103.0" stroke="#1c1c1c" strokeWidth="3"/><polygon points="38.4,99.3 44.9,119.4 27.8,131.8 10.7,119.4 17.2,99.3"/><line x1="45.0" y1="57.8" x2="18.2" y2="49.1" stroke="#1c1c1c" strokeWidth="3"/><polygon points="22.5,50.5 5.4,63.0 -11.7,50.5 -5.2,30.4 16.0,30.4"/></g><circle cx="64" cy="64" r="56" fill="none" stroke="#1c1c1c" strokeWidth="2"/></svg>
+          SIDELINE <i className="mt-ver">{APP_VERSION}</i>
+        </div>
         <div className="grow" />
         <select className="mt-sel" value={curId || ""} onChange={(e) => e.target.value && doLoad(e.target.value)}>
           <option value="">{store.ok ? "Saved matches…" : "Storage off"}</option>
