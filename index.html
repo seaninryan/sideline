@@ -34,6 +34,9 @@
 
 const { useState, useMemo, useEffect, useRef } = React;
 
+// Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
+const APP_VERSION = "v2";
+
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
 const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
@@ -609,6 +612,7 @@ const CSS = `
   color:var(--paper); flex-wrap:wrap;}
 .mt-logo{font-family:'Bebas Neue'; font-size:26px; letter-spacing:1px; line-height:1; display:flex; align-items:center; gap:9px;}
 .mt-logo span{display:inline-block; width:13px; height:22px; background:repeating-linear-gradient(90deg,#f5c518 0 4px,#0c3b2a 4px 8px); border-radius:2px;}
+.mt-ver{font-family:'Oswald'; font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
 .mt-bar .grow{flex:1;}
 .mt-sel,.mt-btn,.mt-inp{font-family:'Oswald',sans-serif; font-size:13px; border-radius:7px; border:1px solid rgba(255,255,255,.25);
   background:rgba(255,255,255,.08); color:var(--paper); padding:6px 10px; cursor:pointer;}
@@ -970,7 +974,7 @@ function MatchTracker() {
 
       {/* top bar */}
       <div className="mt-bar">
-        <div className="mt-logo"><span></span>SIDELINE</div>
+        <div className="mt-logo"><span></span>SIDELINE <i className="mt-ver">{APP_VERSION}</i></div>
         <div className="grow" />
         <select className="mt-sel" value={curId || ""} onChange={(e) => e.target.value && doLoad(e.target.value)}>
           <option value="">{store.ok ? "Saved matches…" : "Storage off"}</option>

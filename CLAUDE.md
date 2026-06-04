@@ -26,6 +26,8 @@ To test the parser, extract the pure functions (`parseMatch` and helpers) into a
 
 **Deploy:** push to `main`; GitHub Pages serves `index.html` at https://seaninryan.github.io/sideline/. Google sign-in only works from the authorized JS origin (`https://seaninryan.github.io`), so the Drive flow can only be exercised on the deployed page, not from a local server.
 
+**Versioning:** `APP_VERSION` (top of the babel script) is shown beside the SIDELINE logo so the user can spot a stale cached page — Pages serves with `max-age=600`, so a deploy can take ~10 min + a hard refresh to appear. Bump it (v2 → v3 → …) in every change that will be deployed, and tell the user which version to look for.
+
 ## Architecture
 
 Order of code inside the babel script: Drive store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → `SAMPLE` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
