@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v28";
+const APP_VERSION = "v29";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -985,6 +985,7 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-big.on{outline:2px solid #f5c518; outline-offset:1px;}
 .mt-big.off{filter:grayscale(.75); opacity:.4;} /* the unselected team fades right back */
 .mt-big:active{transform:translateY(1px);}
+.mt-big:disabled{opacity:.3; filter:grayscale(.8); cursor:default; pointer-events:none;}
 .mt-swatch{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.3); padding:0; cursor:pointer; flex:none;}
 .mt-swatch.big{width:30px; height:30px; border-radius:8px;}
 .mt-swatch.on{outline:2px solid #f5c518; outline-offset:2px;}
@@ -1309,6 +1310,7 @@ function MatchTracker() {
     }
   };
   const addLive = (ev, player) => {
+    if (!evEnabled(ev)) return; // e.g. FT tapped while a "Who?" pick was pending
     const l = liveLine(ev, player);
     if (!l) return;
     append(l);
@@ -1382,6 +1384,14 @@ function MatchTracker() {
   const liveRows = formationRows.map((row) => row.map((n) => roster.find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length);
   const liveEvents = LIVE_EVENTS.filter((ev) => effMode !== "goals" || !ev.gaa)
     .filter((ev) => !(ev.key === "point65" && sportLabel === "Gaelic Football") && !(ev.key === "point45" && /hurling|camogie/i.test(sportLabel || "")));
+  // match phase gates the buttons: before throw-in or at half time only "Start half"
+  // works (anything else would land in the roster block / dead time), after FT nothing.
+  // Subs aren't gated — the lineup tab stays live for half-time changes.
+  const lastMark = halfMarks[halfMarks.length - 1];
+  const phase = halfMarks.some((m) => m.marker === "FT") ? "over"
+    : halfMarks.length === 0 ? "pre"
+    : lastMark && lastMark.marker === "HT" ? "ht" : "play";
+  const evEnabled = (k) => (phase === "play" ? k !== "half" : (phase === "pre" || phase === "ht") && k === "half");
 
   const doExport = () => {
     if (modal && modal.kind === "share") { setModal(null); return; }
@@ -1804,7 +1814,7 @@ function MatchTracker() {
               </div>
               <div className="mt-grid">
                 {liveEvents.map((ev) => (
-                  <button key={ev.key} className={"mt-big ev" + (lvEvent === ev.key ? " on" : "")}
+                  <button key={ev.key} className={"mt-big ev" + (lvEvent === ev.key ? " on" : "")} disabled={!evEnabled(ev.key)}
                     onClick={() => {
                       // our player events wait for a "Who?" tap; everything else lands straight in the notation
                       if (lvTeam === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setLvEvent(lvEvent === ev.key ? null : ev.key);
@@ -1812,7 +1822,12 @@ function MatchTracker() {
                     }}>{ev.label}</button>
                 ))}
               </div>
-              {lvEvent && lvTeam === "us" && (
+              {phase !== "play" && (
+                <p className="mt-note" style={{ marginTop: 8, marginBottom: 0 }}>
+                  {phase === "pre" ? "Tap Start half at throw-in to open scoring." : phase === "ht" ? "Half time — Start half opens the second half. Subs live in the Lineup tab." : "Full time — match closed. Undo the FT line to keep adding."}
+                </p>
+              )}
+              {lvEvent && lvTeam === "us" && phase === "play" && (
                 <>
                   <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Who? — tap to add</p>
                   {liveRows.map((row, ri) => (
