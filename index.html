@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v27";
+const APP_VERSION = "v28";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -844,7 +844,9 @@ const CSS = `
 .mt-root{ --ink:#11241b; --paper:#f4efe1; --pitch:#0c3b2a; --pitch2:#10543a; --line:#d8cfb8; --muted:#6f7d72;
   font-family:'Oswald',sans-serif; color:var(--ink); background:
   radial-gradient(140% 120% at 0% 0%, #faf6ea 0%, #efe8d4 60%, #e7dec6 100%);
-  border:1px solid var(--line); border-radius:14px; overflow:hidden; max-width:980px; margin:0 auto;
+  /* overflow:clip (not hidden) keeps the corner clipping without creating a scroll
+     container, so the scoreboard's position:sticky still works on mobile */
+  border:1px solid var(--line); border-radius:14px; overflow:clip; max-width:980px; margin:0 auto;
   box-shadow:0 24px 60px -28px rgba(12,59,42,.45); position:relative;}
 .mt-root *{box-sizing:border-box;}
 .mt-bar{display:flex; gap:8px; align-items:center; padding:12px 16px; background:var(--pitch);
@@ -988,6 +990,9 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-swatch.on{outline:2px solid #f5c518; outline-offset:2px;}
 /* touch devices: 16px+ inputs stop iOS zooming the page when a field is focused */
 @media (hover:none){.mt-settings input,.mt-settings select,.mt-live input,.mt-live select,.mt-sel{font-size:16px;}}
+/* touch devices: the scoreboard pins to the top while scrolling, so the score
+   stays in view during live entry (needs overflow:clip on .mt-root, not hidden) */
+@media (hover:none){.mt-board{position:sticky; top:0; z-index:25; box-shadow:0 10px 22px -14px rgba(12,59,42,.55);}}
 .mt-settings input[type=text],.mt-settings input[type=datetime-local]{font-family:'Oswald'; font-size:12px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; width:120px;}
 .mt-settings input[type=datetime-local]{width:auto;}
 .mt-settings input[type=color]{width:26px; height:26px; border:1px solid var(--line); border-radius:6px; padding:0; background:none;}
