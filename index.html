@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v29";
+const APP_VERSION = "v30";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -855,6 +855,10 @@ const CSS = `
 .mt-logo svg{flex:none;}
 .mt-ver{font-family:'Oswald'; font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
 .mt-bar .grow{flex:1;}
+.mt-bar.sub{padding-top:0; justify-content:flex-end; background:var(--pitch);} /* "⋯" overflow row */
+/* narrow screens: the match picker sizes to its longest label and would wrap the
+   bar anyway — give it a deliberate full-width row under logo · Save · Share · ⋯ */
+@media (max-width:600px){.mt-bar > select.mt-sel{order:9; flex:1 1 100%;}}
 .mt-sel,.mt-btn,.mt-inp{font-family:'Oswald',sans-serif; font-size:13px; border-radius:7px; border:1px solid rgba(255,255,255,.25);
   background:rgba(255,255,255,.08); color:var(--paper); padding:6px 10px; cursor:pointer;}
 .mt-sel option{color:#11241b;}
@@ -1052,6 +1056,7 @@ function MatchTracker() {
   const [authSoon, setAuthSoon] = useState(false); // token near expiry, silent renew blocked
   const [colorPick, setColorPick] = useState(null); // which swatch is open: "us"|"us2"|"them"|"them2"
   const [modal, setModal] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false); // "⋯" overflow menu in the top bar
   const [exportText, setExportText] = useState("");
   const [importText, setImportText] = useState("");
 
@@ -1475,14 +1480,21 @@ function MatchTracker() {
           <option value="">{store.ok ? (curId ? "Saved matches…" : "* new match — not saved") : "Storage off"}</option>
           {saved.map((m) => <option key={m.id} value={m.id}>{m.id === curId && dirty ? "* " + m.label : m.label}</option>)}
         </select>
-        <button className="mt-btn" onClick={doNew}>New</button>
         <button className="mt-btn solid" onClick={doSave}>Save{dirty ? " *" : ""}</button>
         <button className="mt-btn" onClick={doExport}>Share image</button>
-        <button className="mt-btn" onClick={openBackup}>Backup</button>
-        <button className="mt-btn" onClick={doResync}>Resync</button>
-        {curId && <button className="mt-btn" onClick={doDuplicate}>Duplicate</button>}
-        {curId && <button className="mt-btn" onClick={doDelete}>Delete</button>}
+        <button className={"mt-btn" + (menuOpen ? " solid" : "")} aria-label="More actions" onClick={() => setMenuOpen((o) => !o)}>⋯</button>
       </div>
+      {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
+          panels — fixed/absolute dropdowns miss taps in mobile webviews */}
+      {menuOpen && (
+        <div className="mt-bar sub">
+          <button className="mt-btn" onClick={() => { setMenuOpen(false); doNew(); }}>New</button>
+          {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
+          <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
+          <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
+          {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDelete(); }}>Delete</button>}
+        </div>
+      )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
       {authLost && (
