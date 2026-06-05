@@ -75,6 +75,25 @@ Alfie 50?
   t("score-bearing line with risky word still counts", [p.totals.us.str, p.totals.them.str], ["2", "2"]);
 }
 {
+  // "'65" / "'45" set-piece points: flagged, stripped from the scorer name,
+  // and the apostrophe form never collides with a written running score
+  const p = parseMatch("U13 Hurling @ Tribesmen\n10. Rick\n18:21\n5 Rick '65 0-1 0-0\n7 Rick free 0-2 0-0\n9 T '65 0-2 0-1\n", {});
+  t("'65 scorer clean", p.scoring[0].scorer, "Rick");
+  t("'65 flagged", p.scoring[0].setPiece, "65");
+  t("'65 not a free", p.scoring[0].fromFree, false);
+  t("free not flagged as set piece", p.scoring[1].setPiece, null);
+  t("'65 by them sided right", p.scoring[2].side, "them");
+  t("'65 written score intact", [p.totals.us.str, p.totals.them.str], ["0-2", "0-1"]);
+  t("'65 no warnings", p.warnings.length, 0);
+}
+{
+  // live-entry style (no written score), football's '45
+  const p = parseMatch("U13 Football @ Tribesmen\n10. Rick\n18:21\n5 Rick '45\n", {});
+  t("'45 flagged", p.scoring[0].setPiece, "45");
+  t("'45 scores a point", p.totals.us.str, "0-1");
+  t("'45 scorer clean", p.scoring[0].scorer, "Rick");
+}
+{
   // "NN Water Break" is a note, not an opposition score — a phantom point here
   // forced the next written score's points column down (fake "score drops" warning)
   // and credited "Water Break" in the scorers table

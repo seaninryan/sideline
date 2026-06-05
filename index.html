@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v26";
+const APP_VERSION = "v27";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -157,6 +157,8 @@ const LIVE_EVENTS = [
   { key: "point", label: "Point", gaa: true },
   { key: "goalfree", label: "Goal · free" },
   { key: "pointfree", label: "Point · free", gaa: true },
+  { key: "point65", label: "Point · '65", gaa: true },
+  { key: "point45", label: "Point · '45", gaa: true },
   { key: "og", label: "Own goal" },
   { key: "yellow", label: "Yellow card" },
   { key: "red", label: "Red card" },
@@ -165,7 +167,7 @@ const LIVE_EVENTS = [
   { key: "ht", label: "HT" },
   { key: "ft", label: "FT" },
 ];
-const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "og", "yellow", "red"];
+const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "point65", "point45", "og", "yellow", "red"];
 // readable text colour for a jersey/button of the given colour (dark kit => white numbers)
 const contrastOn = (hex) => {
   const h = (hex || "").replace("#", "");
@@ -351,7 +353,7 @@ function buildInfographicSVG(m) {
         const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
         const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
         const label = descriptive ? `${it.type === "goal" ? "GOAL  " : ""}${it.desc || it.scorer}`
-          : `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : ""}`;
+          : `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : it.setPiece ? `  ('${it.setPiece})` : ""}`;
         tlBody.push(C(railX, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
         if (us) {
           tlBody.push(T(railX - 13, cy + 4, `${mm}  ${label}`, 11.5, descriptive ? MUTE : INK, { w: it.type === "goal" ? 700 : 400, a: "end" }));
@@ -575,7 +577,10 @@ function parseMatch(raw, settings = {}) {
       const isGoal = /goal/i.test(restFull);
       const isFree = /\bfree\b/i.test(restFull) || /\bf\b/i.test(restFull);
       const isOg = /\bown goal\b|\bog\b/i.test(restFull);
-      const scorerText = text.replace(/\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
+      // a point from a placed ball: "'65" (hurling) / "'45" (football); bare "65" works
+      // mid-line too, but the apostrophe form can't be mistaken for a written score
+      const setPiece = ((text.match(/(?:^|\s)['’]?(45|65)(?=\s|$)/) || [])[1]) || null;
+      const scorerText = text.replace(/['’]?\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
       // a bare minute on its own line marks the start of a half (e.g. "51" for the 2nd half)
       if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
         half += 1; startMin = minute; halfMarks.push({ half, startMin: minute }); continue;
@@ -594,7 +599,7 @@ function parseMatch(raw, settings = {}) {
         scorer = `own goal${player ? ` (${player.name})` : ""}`;
       }
       lastElapsed = elapsed;
-      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, scorer, desc: text, og: isOg, ogNum: isOg && player ? player.num : null, playerNum: !isOg && player ? player.num : null, scoreToks });
+      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, setPiece, scorer, desc: text, og: isOg, ogNum: isOg && player ? player.num : null, playerNum: !isOg && player ? player.num : null, scoreToks });
     } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
       halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed });
     } else if (/^\+\d{1,2}(\s+added)?$/i.test(line)) {
@@ -728,7 +733,7 @@ function parseMatch(raw, settings = {}) {
     series.push({
       x, half: s.half, minute: s.minute, us: usT, them: themT,
       usScore: fmtScore(ug, up, mode), themScore: fmtScore(tg, tp, mode),
-      label: `${s.scorer}${dg > 0 ? " GOAL" : s.fromFree ? " (free)" : ""}`,
+      label: `${s.scorer}${dg > 0 ? " GOAL" : s.fromFree ? " (free)" : s.setPiece ? ` ('${s.setPiece})` : ""}`,
       side: aSide, type: s.type,
     });
     if (dg > 0) goalDots.push({ x, y: aSide === "us" ? usT : themT, side: aSide });
@@ -969,6 +974,8 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
   border-bottom:1px solid var(--line); font-family:'Oswald'; font-size:12px;}
 .mt-settings label{display:flex; align-items:center; gap:6px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
 .mt-grid{display:flex; flex-wrap:wrap; gap:8px;}
+.mt-frow{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:6px;} /* live "Who?" formation row */
+.mt-frow .mt-big{flex:0 1 auto; min-width:84px;}
 .mt-big{flex:1 1 30%; min-width:92px; padding:13px 6px; font-family:'Oswald'; font-weight:600; font-size:14px;
   text-transform:uppercase; letter-spacing:.5px; color:var(--ink); background:#fffdf6; border:1px solid var(--line);
   border-radius:10px; cursor:pointer;}
@@ -1050,11 +1057,9 @@ function MatchTracker() {
   const [renumTarget, setRenumTarget] = useState(null); // {num, name}
   const [newNum, setNewNum] = useState("");
 
-  // live entry form: team -> event -> (player) -> minute -> add
+  // live entry: team -> event -> (player); each tap that completes an event adds it straight away
   const [lvTeam, setLvTeam] = useState("us");
-  const [lvEvent, setLvEvent] = useState(null);
-  const [lvPlayer, setLvPlayer] = useState(null); // roster player | "unknown" | null
-  const [lvMin, setLvMin] = useState("");
+  const [lvEvent, setLvEvent] = useState(null); // pending player event awaiting a "Who?" tap
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
   const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
@@ -1276,15 +1281,18 @@ function MatchTracker() {
     setSavedMsg(`${renumTarget.name || renumTarget.num} now wears ${newNum}`); setTimeout(() => setSavedMsg(""), 2500);
     resetLineupModes();
   };
-  // live entry: build the notation line for the picked team/event/player/minute
-  const liveLine = () => {
-    const min = lvMin.replace(/\D/g, "") || String(new Date().getMinutes());
-    const who = lvTeam === "them" ? "T" : lvPlayer && lvPlayer !== "unknown" ? lvPlayer.name : (myTeam.trim() || "My Team");
-    switch (lvEvent) {
+  // live entry: build the notation line; the minute is always the wall clock now
+  // (wrong by a beat? fix it in the notation after — same as everything else)
+  const liveLine = (ev, player) => {
+    const min = String(new Date().getMinutes());
+    const who = lvTeam === "them" ? "T" : player && player !== "unknown" ? player.name : (myTeam.trim() || "My Team");
+    switch (ev) {
       case "goal": return `${min} ${who} goal`;
       case "point": return `${min} ${who}`;
       case "goalfree": return `${min} ${who} goal free`;
       case "pointfree": return `${min} ${who} free`;
+      case "point65": return `${min} ${who} '65`;
+      case "point45": return `${min} ${who} '45`;
       case "og": return `${min} ${who} own goal`;
       case "yellow": return `${min} ${who} yellow card`;
       case "red": return `${min} ${who} red card`;
@@ -1295,12 +1303,28 @@ function MatchTracker() {
       default: return "";
     }
   };
-  const liveReady = lvEvent && (!LIVE_PLAYER_EVENTS.includes(lvEvent) || lvTeam === "them" || lvPlayer != null);
-  const doAddEvent = () => {
-    const l = liveLine();
+  const addLive = (ev, player) => {
+    const l = liveLine(ev, player);
     if (!l) return;
     append(l);
-    setLvEvent(null); setLvPlayer(null); setLvMin("");
+    setLvEvent(null);
+    setSavedMsg(`Added “${l}”`); setTimeout(() => setSavedMsg(""), 1800);
+  };
+  // undo: the last non-empty event line — never the header/roster, so only
+  // lines after the first half-start clock line are up for removal
+  const undoTarget = useMemo(() => {
+    const lines = raw.split("\n");
+    const start = lines.findIndex((l) => /^\s*\d{1,2}:\d{2}\s*$/.test(l));
+    if (start < 0) return null;
+    for (let i = lines.length - 1; i > start; i--) if (lines[i].trim()) return { idx: i, text: lines[i].trim() };
+    return null;
+  }, [raw]);
+  const doUndo = () => {
+    if (!undoTarget) return;
+    const lines = raw.split("\n");
+    lines.splice(undoTarget.idx, 1);
+    setRaw(lines.join("\n").replace(/\s+$/, "") + "\n");
+    setSavedMsg(`Removed “${undoTarget.text}”`); setTimeout(() => setSavedMsg(""), 1800);
   };
 
   // merged timeline for display
@@ -1349,6 +1373,10 @@ function MatchTracker() {
   const formationRows = parsed.formationRows && parsed.formationRows.length
     ? parsed.formationRows
     : chunk(starters.map((p) => p.num), 3);
+  // live entry: "Who?" buttons laid out like the lineup pitch, plus the sport-relevant events
+  const liveRows = formationRows.map((row) => row.map((n) => roster.find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length);
+  const liveEvents = LIVE_EVENTS.filter((ev) => effMode !== "goals" || !ev.gaa)
+    .filter((ev) => !(ev.key === "point65" && sportLabel === "Gaelic Football") && !(ev.key === "point45" && /hurling|camogie/i.test(sportLabel || "")));
 
   const doExport = () => {
     if (modal && modal.kind === "share") { setModal(null); return; }
@@ -1655,7 +1683,7 @@ function MatchTracker() {
                           <span>
                             {descriptive
                               ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
-                              : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : ""}</>}
+                              : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">'{it.setPiece}</span> : ""}</>}
                           </span>
                           <span className="sc">{it.usScore} – {it.themScore}</span>
                         </div>
@@ -1761,43 +1789,48 @@ function MatchTracker() {
         {tab === "notation" && (
           <>
             <div className="mt-live">
-              <p className="mt-h" style={{ marginBottom: 8 }}>Add as it happens</p>
+              <div className="mt-row" style={{ marginBottom: 8 }}>
+                <p className="mt-h" style={{ margin: 0, flex: 1 }}>Add as it happens</p>
+                <button className="mt-add alt" disabled={!undoTarget} onClick={doUndo}>↩ Undo</button>
+              </div>
               <div className="mt-grid" style={{ marginBottom: 8 }}>
-                <button className={"mt-big" + (lvTeam === "us" ? " on" : " off")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setLvTeam("us")}>{usName}</button>
-                <button className={"mt-big" + (lvTeam === "them" ? " on" : " off")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setLvTeam("them")}>{themName}</button>
+                <button className={"mt-big" + (lvTeam === "us" ? " on" : " off")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => { setLvTeam("us"); setLvEvent(null); }}>{usName}</button>
+                <button className={"mt-big" + (lvTeam === "them" ? " on" : " off")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => { setLvTeam("them"); setLvEvent(null); }}>{themName}</button>
               </div>
               <div className="mt-grid">
-                {LIVE_EVENTS.filter((ev) => effMode !== "goals" || !ev.gaa).map((ev) => (
+                {liveEvents.map((ev) => (
                   <button key={ev.key} className={"mt-big ev" + (lvEvent === ev.key ? " on" : "")}
-                    onClick={() => { setLvEvent(lvEvent === ev.key ? null : ev.key); setLvPlayer(null); setLvMin(String(new Date().getMinutes())); }}>{ev.label}</button>
+                    onClick={() => {
+                      // our player events wait for a "Who?" tap; everything else lands straight in the notation
+                      if (lvTeam === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setLvEvent(lvEvent === ev.key ? null : ev.key);
+                      else addLive(ev.key, null);
+                    }}>{ev.label}</button>
                 ))}
               </div>
-              {lvEvent && LIVE_PLAYER_EVENTS.includes(lvEvent) && lvTeam === "us" && (
+              {lvEvent && lvTeam === "us" && (
                 <>
-                  <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Who?</p>
-                  <div className="mt-grid">
-                    {roster.filter((p) => p.role !== "missing").map((p) => (
-                      <button key={p.num + p.name} className={"mt-big sm" + (lvPlayer && lvPlayer.num === p.num ? " on" : "")} onClick={() => setLvPlayer(p)}>{p.num}. {p.name}</button>
-                    ))}
-                    <button className={"mt-big sm" + (lvPlayer === "unknown" ? " on" : "")} onClick={() => setLvPlayer("unknown")}>Unknown</button>
+                  <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Who? — tap to add</p>
+                  {liveRows.map((row, ri) => (
+                    <div key={ri} className="mt-frow">
+                      {row.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => addLive(lvEvent, p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
+                    </div>
+                  ))}
+                  {(subs.length > 0) && (
+                    <div className="mt-frow" style={{ borderTop: "1px dashed var(--line)", paddingTop: 8 }}>
+                      {subs.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => addLive(lvEvent, p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
+                    </div>
+                  )}
+                  <div className="mt-frow">
+                    <button className="mt-big sm" onClick={() => addLive(lvEvent, "unknown")}>Unknown</button>
                   </div>
                 </>
-              )}
-              {liveReady && (
-                <div className="mt-row" style={{ marginTop: 10 }}>
-                  <span className="mt-h" style={{ margin: 0 }}>Min</span>
-                  <input style={{ width: 64 }} value={lvMin} onChange={(e) => setLvMin(e.target.value.replace(/\D/g, ""))} />
-                  <span className="mt-note" style={{ margin: 0, flex: 1 }}>→ “{liveLine()}”</span>
-                  <button className="mt-add" onClick={doAddEvent}>Add</button>
-                  <button className="mt-add alt" onClick={() => { setLvEvent(null); setLvPlayer(null); }}>Cancel</button>
-                </div>
               )}
             </div>
             <p className="mt-h">Raw notation (edit freely — re-parses instantly)</p>
             <textarea className="mt-ta" value={raw} onChange={(e) => setRaw(e.target.value)} spellCheck={false} />
             <p className="mt-note" style={{ marginTop: 8 }}>
               Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Rick</code> ·
-              start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal|own goal]</code> ·
+              start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal|own goal|'65|'45]</code> ·
               opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · cards <code>min who yellow|red card</code> ·
               corners <code>min [T] corner</code> · added time <code>min HT +3</code> · notes anything else.
             </p>
