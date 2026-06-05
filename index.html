@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v30";
+const APP_VERSION = "v31";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -856,6 +856,7 @@ const CSS = `
 .mt-ver{font-family:'Oswald'; font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
 .mt-bar .grow{flex:1;}
 .mt-bar.sub{padding-top:0; justify-content:flex-end; background:var(--pitch);} /* "⋯" overflow row */
+.mt-btn.danger{background:#c0392b; border-color:#c0392b; color:#fff; font-weight:600;}
 /* narrow screens: the match picker sizes to its longest label and would wrap the
    bar anyway — give it a deliberate full-width row under logo · Save · Share · ⋯ */
 @media (max-width:600px){.mt-bar > select.mt-sel{order:9; flex:1 1 100%;}}
@@ -1057,6 +1058,7 @@ function MatchTracker() {
   const [colorPick, setColorPick] = useState(null); // which swatch is open: "us"|"us2"|"them"|"them2"
   const [modal, setModal] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false); // "⋯" overflow menu in the top bar
+  const [confirmDel, setConfirmDel] = useState(false); // Delete armed, waiting for the confirming second tap
   const [exportText, setExportText] = useState("");
   const [importText, setImportText] = useState("");
 
@@ -1482,7 +1484,7 @@ function MatchTracker() {
         </select>
         <button className="mt-btn solid" onClick={doSave}>Save{dirty ? " *" : ""}</button>
         <button className="mt-btn" onClick={doExport}>Share image</button>
-        <button className={"mt-btn" + (menuOpen ? " solid" : "")} aria-label="More actions" onClick={() => setMenuOpen((o) => !o)}>⋯</button>
+        <button className={"mt-btn" + (menuOpen ? " solid" : "")} aria-label="More actions" onClick={() => { setMenuOpen((o) => !o); setConfirmDel(false); }}>⋯</button>
       </div>
       {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
           panels — fixed/absolute dropdowns miss taps in mobile webviews */}
@@ -1492,7 +1494,10 @@ function MatchTracker() {
           {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
           <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
-          {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDelete(); }}>Delete</button>}
+          {curId && <button className={"mt-btn" + (confirmDel ? " danger" : "")} onClick={() => {
+            if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; } // arm, then auto-disarm
+            setConfirmDel(false); setMenuOpen(false); doDelete();
+          }}>{confirmDel ? "Tap again to delete" : "Delete"}</button>}
         </div>
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
