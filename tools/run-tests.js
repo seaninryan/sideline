@@ -243,6 +243,11 @@ Alfie 50?
      ["corner", "39 corner"], ["note", "legacy note no minute"]]);
   t("srcLine on halfMarks", p.halfMarks.map((m) => [m.marker || "start", lineOf(m)]),
     [["start", "18:21"], ["HT", "51 HT"], ["start", "18:55"], ["FT", "FT"]]);
+
+  // bare-minute half start (no clock line) also carries srcLine
+  const q = parseMatch("19:02\n14 dkb 0-1\n32 HT\n\n38\n42 long 2-1\n", { scoringMode: "goals" });
+  const qlines = "19:02\n14 dkb 0-1\n32 HT\n\n38\n42 long 2-1\n".split("\n");
+  t("srcLine on bare-minute half start", qlines[q.halfMarks.find((m) => m.startMin === 38).srcLine], "38");
 }
 
 // ---- roster edits (reshuffle / change number) ----
