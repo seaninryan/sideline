@@ -1197,6 +1197,9 @@ function MatchTracker() {
   // live entry: team -> event -> (player); each tap that completes an event adds it straight away
   const [lvTeam, setLvTeam] = useState("us");
   const [lvEvent, setLvEvent] = useState(null); // pending player event awaiting a "Who?" tap
+  // game mode: full-screen live entry — null when off, else {stage, team?, ev?, off?}
+  // stages: "team" → "event" → "who"; "subOff" → "subOn" for substitutions
+  const [gm, setGm] = useState(null);
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
   const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
@@ -1484,6 +1487,10 @@ function MatchTracker() {
     setSavedMsg(`Removed “${undoTarget.text}”`); setTimeout(() => setSavedMsg(""), 1800);
   };
 
+  // game mode entry closes every open editor/panel — same rule as other raw-mutation paths
+  const enterGame = () => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setModal(null); setColorPick(null); setMenuOpen(false); setGm({ stage: "team" }); };
+  const exitGame = () => setGm(null);
+
   // merged timeline for display
   const timeline = useMemo(() => {
     const items = [];
@@ -1700,11 +1707,14 @@ function MatchTracker() {
 
   const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
 
+  const view = gm ? "game" : tab; // game mode replaces the tab body
+
   return (
     <div className="mt-root">
       <style>{CSS}</style>
 
       {/* top bar */}
+      {!gm && (
       <div className="mt-bar">
         <div className="mt-logo">
           {/* same ball as icon-180.png (tools/make-icon.py geometry) */}
@@ -1720,9 +1730,10 @@ function MatchTracker() {
         <button className="mt-btn" onClick={doExport}>Share image</button>
         <button className={"mt-btn" + (menuOpen ? " solid" : "")} aria-label="More actions" onClick={() => { setMenuOpen((o) => !o); setConfirmDel(false); }}>⋯</button>
       </div>
+      )}
       {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
           panels — fixed/absolute dropdowns miss taps in mobile webviews */}
-      {menuOpen && (
+      {!gm && menuOpen && (
         <div className="mt-bar sub">
           <button className="mt-btn" onClick={() => { setMenuOpen(false); doNew(); }}>New</button>
           {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
@@ -1749,7 +1760,7 @@ function MatchTracker() {
         </div>
       )}
 
-      {modal && (
+      {!gm && modal && (
         <div className="mt-panel">
           {modal.kind === "share" && (
             <>
@@ -1779,6 +1790,7 @@ function MatchTracker() {
       )}
 
       {/* settings */}
+      {!gm && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -1803,8 +1815,9 @@ function MatchTracker() {
           </select>
         </label>
       </div>
+      )}
 
-      {colorPick && (() => {
+      {!gm && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -1857,14 +1870,16 @@ function MatchTracker() {
       </div>
 
       {/* tabs */}
+      {!gm && (
       <div className="mt-tabs">
         {tabs.map(([id, lbl]) => (
           <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
         ))}
       </div>
+      )}
 
       <div className="mt-body">
-        {tab === "overview" && (
+        {view === "overview" && (
           <>
             {parsed.warnings.length > 0 && (
               <div className="mt-warn">
@@ -1928,7 +1943,7 @@ function MatchTracker() {
           </>
         )}
 
-        {tab === "timeline" && (
+        {view === "timeline" && (
           <div className="mt-tl">
             {[1, 2].map((h) => {
               const items = timeline.filter((t) => t.half === h);
@@ -1981,7 +1996,7 @@ function MatchTracker() {
           </div>
         )}
 
-        {tab === "lineup" && (
+        {view === "lineup" && (
           <>
             <div className="mt-pitch" style={{ background: `linear-gradient(${colorUs2}22, #0c3b2a 60%)` }}>
               {formationRows.map((row, ri) => (
@@ -2052,11 +2067,12 @@ function MatchTracker() {
           </>
         )}
 
-        {tab === "notation" && (
+        {view === "notation" && (
           <>
             <div className="mt-live">
               <div className="mt-row" style={{ marginBottom: 8 }}>
                 <p className="mt-h" style={{ margin: 0, flex: 1 }}>Add as it happens</p>
+                <button className="mt-add" onClick={enterGame}>▶ Game mode</button>
                 <button className="mt-add alt" disabled={!undoTarget} onClick={doUndo}>↩ Undo</button>
               </div>
               <div className="mt-grid" style={{ marginBottom: 8 }}>
