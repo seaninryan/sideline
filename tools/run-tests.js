@@ -322,5 +322,31 @@ const BLK = [
   t("insert after half-start block", at(f, 10), "57 Morty 1-1 1-1");
 }
 
+// ---- replaceEventLine ----
+{
+  const at = (r, i) => r.split("\n")[i];
+  const a = replaceEventLine(BLK, 7, "25 T 0-1 0-1"); // 31' -> 25' (elapsed 4): moves before the 27' note
+  t("replace re-sorts on minute change", [at(a, 6), at(a, 7)], ["25 T 0-1 0-1", "27 Jack miss pen"]);
+  const b = replaceEventLine(BLK, 5, "23 Rick 0-1 0-0"); // text-only edit, same minute
+  t("replace same minute stays put", at(b, 5), "23 Rick 0-1 0-0");
+  const c = replaceEventLine(BLK, 8, "51 HT +3"); // marker: edited in place, never re-sorted
+  t("replace marker stays put", at(c, 8), "51 HT +3");
+  const d = replaceEventLine(BLK, 6, "27 Jack miss pen saved"); // still minuted, same minute
+  t("replace note same minute stays put", at(d, 6), "27 Jack miss pen saved");
+  t("replace out of range is a no-op", replaceEventLine(BLK, 99, "x"), BLK);
+}
+
+// ---- insertEventLine contract-pinning (Task-3 review) ----
+{
+  const at = (r, i) => r.split("\n")[i];
+  // extra time: a third half started by a bare minute line; insert respects its startMin
+  const ET = BLK + "\n70 FT\n75\n78 Rick 1-2 1-1";
+  const g = insertEventLine(ET, 14, "76 Morty 0-3 1-1"); // anchor = the bare "75" half start
+  t("insert into bare-minute extra-time half", at(g, 14), "76 Morty 0-3 1-1");
+  // anchoring past FT still keeps the line inside the half (before the FT marker)
+  const h = insertEventLine(BLK + "\n70 FT\nafter-match note", 13, "65 Morty 0-3 1-1");
+  t("insert with post-FT anchor lands before FT", at(h, 12), "65 Morty 0-3 1-1");
+}
+
 console.log(fail ? `\n${fail} FAILED` : "\nall passed");
 process.exit(fail ? 1 : 0);

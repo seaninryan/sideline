@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v32";
+const APP_VERSION = "v33";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -853,7 +853,24 @@ function insertEventLine(raw, afterIdx, line) {
   lines.splice(afterIdx + 1, 0, line); // minute-less line (or no parsable anchor): literally after the anchor
   return lines.join("\n");
 }
-function replaceEventLine(raw, idx, newLine) { return raw; } // Task 4
+function replaceEventLine(raw, idx, newLine) {
+  const lines = raw.split("\n");
+  if (idx < 0 || idx >= lines.length) return raw;
+  const oldMin = eventLineMinute(lines[idx]);
+  const newMin = eventLineMinute(newLine);
+  if (oldMin == null || newMin == null || oldMin === newMin) {
+    lines[idx] = newLine; // structure/minute-less lines edit in place; so do same-minute edits
+    return lines.join("\n");
+  }
+  const p = parseMatch(raw, {});
+  const hit = [...p.scoring, ...p.notes].find((e) => e.srcLine === idx);
+  if (!hit) { lines[idx] = newLine; return lines.join("\n"); }
+  const without = [...lines.slice(0, idx), ...lines.slice(idx + 1)].join("\n");
+  const placed = placeEventLineByMinute(without, hit.half, newLine);
+  if (placed != null) return placed;
+  lines[idx] = newLine;
+  return lines.join("\n");
+}
 
 /* ============================================================
    STORAGE  (window.storage, with graceful fallback)
