@@ -78,6 +78,13 @@ Key decisions (preserve these when modifying):
 - "+ Insert after" opens a type chooser (Score/Sub/Card/Corner/Note) → guided forms reusing the live-entry buttons (`buildEventLine`, `whoGrid`), with a live preview of the exact notation line. The anchor block picks the half and default minute; placement is by minute. The Note form warns when a minuted keyword-less note would parse as a score.
 - One editor open at a time: any raw mutation path (live append, undo, resync, match switch, view toggle) closes open block/insert/lineup editors to avoid stale line indices. Block delete needs a confirming second tap (auto-disarms after 3.5s).
 
+### Game mode (full-screen live entry, v34)
+
+- "▶ Game mode" in the Notation tab's live panel swaps the whole UI for scoreboard + a staged big-button wizard, one stage at a time: **Team → Event → Player** (subs: off → on; `completeSub`). `gm` state (`null` off, else `{stage, team?, ev?, off?}`); `view = gm ? "game" : tab` drives the body, and all chrome (top bar, menu, panels, settings, colour picker, tabs) is wrapped in `!gm`. It's a **conditional render inside `MatchTracker`, not a fixed overlay** (see UI decisions). Entering closes any open editors (the raw-mutation rule).
+- Everything reuses the live-entry machinery — `addLive`/`liveLine` took an optional `team` param (defaults to `lvTeam`, old panel unaffected); wall-clock minutes as ever. Phase gating: pre/HT show only Start half; in play, team buttons + Sub/HT/FT; after FT, an undo hint. Opposition events and our corners append straight from the event stage; our player events go to the who-grid.
+- The toast and auth banners stay rendered in game mode (matches outlast the ~1h token — the "Stay signed in" tap must work mid-match). A never-saved match shows an `mt-warn` row with its own Save button, because auto-save needs the first explicit Save and the top bar is hidden.
+- Bottom "last entry + ↩ Undo" row is `position:sticky; bottom:0` (`.gm-undo`) — the sticky pattern the scoreboard already proves out; `margin-top:auto` in the `.mt-game` flex column pins it when stage content is short.
+
 ### Share image
 
 - `buildInfographicSVG(model)` builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.

@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v34";
+const APP_VERSION = "v35";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -1898,6 +1898,13 @@ function MatchTracker() {
               </span>
               <button className="mt-add alt" onClick={exitGame}>✕ Exit</button>
             </div>
+            {/* a never-saved match doesn't auto-save, and the Save button is hidden in here */}
+            {!curId && (
+              <div className="mt-warn" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ flex: 1 }}><b>Not saved yet</b> — auto-save is off until the first save.</span>
+                <button className="mt-add" onClick={doSave}>Save to Drive</button>
+              </div>
+            )}
 
             {/* stage 1 — who? (+ phase-gated match controls) */}
             {gm.stage === "team" && (
