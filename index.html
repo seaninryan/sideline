@@ -1381,7 +1381,7 @@ function MatchTracker() {
   };
 
   // ---- live append helpers ----
-  const append = (text) => { setBlkEdit(null); setBlkIns(null); setRaw((r) => r.replace(/\s*$/, "") + "\n" + text); };
+  const append = (text) => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setRaw((r) => r.replace(/\s*$/, "") + "\n" + text); };
   // substitution: tap the player going off (pitch) and the one coming on (subs), either order
   const completeSub = (onName, offName) => {
     append(`${new Date().getMinutes()} ${onName} for ${offName}`);
@@ -1477,7 +1477,7 @@ function MatchTracker() {
   }, [raw]);
   const doUndo = () => {
     if (!undoTarget) return;
-    setBlkEdit(null); setBlkIns(null);
+    setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
     const lines = raw.split("\n");
     lines.splice(undoTarget.idx, 1);
     setRaw(lines.join("\n").replace(/\s+$/, "") + "\n");
