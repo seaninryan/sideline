@@ -1557,6 +1557,18 @@ function MatchTracker() {
     return m ? (m[2] != null ? parseInt(m[2], 10) : parseInt(m[1], 10)) % 60 : 0;
   };
   const openInsert = (b) => { setBlkEdit(null); setLineupEdit(null); setBlkIns({ afterIdx: b.idx, type: null, minute: anchorMinute(b.text), team: "us", ev: null, player: undefined, on: null, off: null, cardKind: "yellow", noteText: "", noteMin: false }); };
+  const openLineup = () => {
+    setBlkEdit(null); setBlkIns(null);
+    const lines = raw.split("\n");
+    setLineupEdit(lines.slice(0, rosterEnd(lines)).join("\n"));
+  };
+  const lineupOk = () => {
+    setRaw((r) => {
+      const lines = r.split("\n");
+      return [...lineupEdit.replace(/\n+$/, "").split("\n"), ...lines.slice(rosterEnd(lines))].join("\n");
+    });
+    setLineupEdit(null);
+  };
   const insLine = () => {
     const i = blkIns;
     if (!i || !i.type) return "";
@@ -2091,11 +2103,22 @@ function MatchTracker() {
               </>
             ) : (
               <div className="mt-blks">
-                <div className="mt-blk lineup">
-                  <span className="mt-bpill">Lineup</span>
-                  <span className="t">{starters.length} starting · {subs.length} subs{missing.length ? ` · ${missing.length} missing` : ""}</span>
-                  <span className="chev">tap to edit ▸</span>
-                </div>
+                {lineupEdit == null ? (
+                  <button className="mt-blk lineup" onClick={openLineup}>
+                    <span className="mt-bpill">Lineup</span>
+                    <span className="t">{starters.length} starting · {subs.length} subs{missing.length ? ` · ${missing.length} missing` : ""}</span>
+                    <span className="chev">tap to edit ▸</span>
+                  </button>
+                ) : (
+                  <div className="mt-blk editing">
+                    <p className="mt-h" style={{ margin: "0 0 6px" }}>Header & lineup</p>
+                    <textarea className="mt-blkta" style={{ minHeight: 140, resize: "vertical" }} value={lineupEdit} onChange={(e) => setLineupEdit(e.target.value)} spellCheck={false} />
+                    <div className="mt-blkrow">
+                      <button className="mt-add" onClick={lineupOk}>OK</button>
+                      <button className="mt-add alt" onClick={() => setLineupEdit(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
                 {blocks.list.map((b) => (
                   <React.Fragment key={b.idx}>
                     {blkEdit && blkEdit.idx === b.idx ? (
@@ -2173,6 +2196,7 @@ function MatchTracker() {
                               </>
                             )}
                             {insLine() && <p className="mt-note" style={{ margin: "8px 0 0", fontFamily: "ui-monospace,Menlo,monospace", border: "1px dashed var(--line)", borderRadius: 6, padding: "5px 8px" }}>{insLine()}</p>}
+                            {insLine() && <p className="mt-note" style={{ margin: "4px 0 0" }}>OK places it by minute within the half — it may land further down than where you tapped.</p>}
                             <div className="mt-blkrow">
                               <button className="mt-add" disabled={!insLine()} onClick={insOk}>OK</button>
                               <button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button>
