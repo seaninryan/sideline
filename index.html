@@ -1099,6 +1099,16 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-bpill.sub{background:#2c5fa8; color:#fff;}
 .mt-bpill.card-yellow{background:#f1c40f; color:#5a4500;}
 .mt-bpill.card-red{background:#e74c3c; color:#fff;}
+.mt-blk{font: inherit;}
+.mt-blk.editing{display:block; border:2px solid var(--pitch2); cursor:default;}
+.mt-blkrow{display:flex; gap:6px; margin-top:7px; flex-wrap:wrap; align-items:center;}
+.mt-blkrow .mt-add{padding:6px 12px;}
+.mt-blkrow .danger{background:#fff; color:#c0392b; border:1px solid #c0392b; margin-left:auto;}
+.mt-blkrow .danger.armed{background:#c0392b; color:#fff;}
+.mt-minstep{display:flex; gap:6px; align-items:center;}
+.mt-minstep button{width:36px; height:36px; font-size:17px; border-radius:8px; border:1px solid var(--line); background:#fff;}
+.mt-minstep input{width:52px; font-size:16px; text-align:center; padding:6px; border:1px solid var(--line); border-radius:6px; font-family:ui-monospace,Menlo,monospace;}
+.mt-blkta{width:100%; box-sizing:border-box; font-family:ui-monospace,Menlo,monospace; font-size:13px; padding:7px; border:1px solid var(--line); border-radius:6px; background:#fffdf6;}
 `;
 
 function StatCard({ k, v }) {
@@ -1134,6 +1144,18 @@ const sportEmoji = (sport, headerSport, mode) => {
   if (byLabel) return byLabel.emoji;
   return mode === "goals" ? SPORTS.soccer.emoji : "";
 };
+
+function MinuteStep({ val, onChange }) {
+  return (
+    <div className="mt-minstep">
+      <button onClick={() => onChange((val + 59) % 60)}>−</button>
+      <input inputMode="numeric" value={val}
+        onChange={(e) => { const n = parseInt(e.target.value, 10); onChange(isNaN(n) ? 0 : Math.min(59, Math.max(0, n))); }} />
+      <button onClick={() => onChange((val + 1) % 60)}>+</button>
+      <span style={{ fontSize: 11, color: "#9a8c66" }}>min</span>
+    </div>
+  );
+}
 
 function MatchTracker() {
   const [raw, setRaw] = useState(SAMPLE);
@@ -1292,6 +1314,7 @@ function MatchTracker() {
   // Pull the Drive copy (e.g. changes made on the phone) on demand.
   const doResync = async () => {
     if (dirty && curId && !window.confirm("This match has unsaved changes here — load the Drive copy over them?")) return;
+    setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
     setSavedMsg("Syncing…");
     try {
       await ensureFreshToken();
@@ -1358,7 +1381,7 @@ function MatchTracker() {
   };
 
   // ---- live append helpers ----
-  const append = (text) => setRaw((r) => r.replace(/\s*$/, "") + "\n" + text);
+  const append = (text) => { setBlkEdit(null); setBlkIns(null); setRaw((r) => r.replace(/\s*$/, "") + "\n" + text); };
   // substitution: tap the player going off (pitch) and the one coming on (subs), either order
   const completeSub = (onName, offName) => {
     append(`${new Date().getMinutes()} ${onName} for ${offName}`);
@@ -1437,6 +1460,7 @@ function MatchTracker() {
   }, [raw]);
   const doUndo = () => {
     if (!undoTarget) return;
+    setBlkEdit(null); setBlkIns(null);
     const lines = raw.split("\n");
     lines.splice(undoTarget.idx, 1);
     setRaw(lines.join("\n").replace(/\s+$/, "") + "\n");
@@ -1486,6 +1510,23 @@ function MatchTracker() {
     if (b.kind === "corner") return <span className="mt-bpill">corner</span>;
     if (b.kind === "added") return <span className="mt-bpill">+time</span>;
     return <span className="mt-bpill">note</span>;
+  };
+  const openBlk = (b) => {
+    setBlkIns(null); setLineupEdit(null);
+    const min = eventLineMinute(b.text);
+    setBlkEdit({ idx: b.idx, minute: min, rest: min == null ? b.text : b.text.replace(/^\s*\d{1,2}\b\s*/, ""), confirmDel: false });
+  };
+  const blkLineOf = (be) => (be.minute == null ? be.rest.trim() : `${be.minute} ${be.rest.trim()}`);
+  const blkOk = () => {
+    const line = blkLineOf(blkEdit);
+    if (!line) return;
+    setRaw((r) => replaceEventLine(r, blkEdit.idx, line));
+    setBlkEdit(null);
+  };
+  const blkDelete = () => {
+    if (!blkEdit.confirmDel) return setBlkEdit({ ...blkEdit, confirmDel: true });
+    setRaw((r) => deleteEventLine(r, blkEdit.idx));
+    setBlkEdit(null);
   };
 
   // players involved in substitutions (by roster number), for lineup styling
@@ -2018,11 +2059,26 @@ function MatchTracker() {
                   <span className="t">{starters.length} starting · {subs.length} subs{missing.length ? ` · ${missing.length} missing` : ""}</span>
                   <span className="chev">tap to edit ▸</span>
                 </div>
-                {blocks.list.map((b) => (
-                  <div className="mt-blk" key={b.idx}>
+                {blocks.list.map((b) => blkEdit && blkEdit.idx === b.idx ? (
+                  <div className="mt-blk editing" key={b.idx}>
+                    {blkEdit.minute != null && <MinuteStep val={blkEdit.minute} onChange={(m) => setBlkEdit({ ...blkEdit, minute: m, confirmDel: false })} />}
+                    <input className="mt-blkta" style={{ marginTop: blkEdit.minute != null ? 7 : 0 }} value={blkEdit.rest}
+                      onChange={(e) => setBlkEdit({ ...blkEdit, rest: e.target.value, confirmDel: false })} spellCheck={false} />
+                    <div className="mt-blkrow">
+                      <button className="mt-add" onClick={blkOk}>OK</button>
+                      <button className="mt-add alt" onClick={() => setBlkEdit(null)}>Cancel</button>
+                      <button className="mt-add alt" onClick={() => { /* Task 7: open insert */ }}>+ Insert after</button>
+                      <button className={"mt-add danger" + (blkEdit.confirmDel ? " armed" : "")} onClick={blkDelete}>
+                        {blkEdit.confirmDel ? "Tap again to delete" : "Delete"}
+                      </button>
+                    </div>
+                    {blkEdit.minute != null && <p className="mt-note" style={{ margin: "6px 0 0" }}>OK re-parses — changing the minute moves the line to its spot in the half.</p>}
+                  </div>
+                ) : (
+                  <button className="mt-blk" key={b.idx} onClick={() => openBlk(b)}>
                     {blkPill(b)}
                     <span className="t">{b.text}</span>
-                  </div>
+                  </button>
                 ))}
                 {blocks.list.length === 0 && <p className="mt-note">Nothing yet — tap Start half above at throw-in, or Edit as text.</p>}
               </div>
