@@ -231,6 +231,20 @@ Alfie 50?
   t("unambiguous first name still matches", [p.scoring[0].scorer, p.scoring[0].playerNum], ["Morty Smith", 10]);
 }
 
+// ---- srcLine: every event entry knows its raw line index ----
+{
+  const RAW = "U13 Hurling @ Tribesmen\n10. Morty | 11. Rick\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-1 0-0\n\n27 Jack miss pen\n31 Pencilvester for Morty\n35 Rick yellow card\n39 corner\n51 HT\n18:55\n58 T goal 0-1 1-1\nFT\n+2\nlegacy note no minute\n";
+  const lines = RAW.split("\n");
+  const p = parseMatch(RAW, {});
+  const lineOf = (e) => lines[e.srcLine];
+  t("srcLine on scoring", p.scoring.map(lineOf), ["23 Rick free 0-1 0-0", "58 T goal 0-1 1-1"]);
+  t("srcLine on notes", p.notes.map((n) => [n.type, lineOf(n)]),
+    [["note", "27 Jack miss pen"], ["sub", "31 Pencilvester for Morty"], ["card", "35 Rick yellow card"],
+     ["corner", "39 corner"], ["note", "legacy note no minute"]]);
+  t("srcLine on halfMarks", p.halfMarks.map((m) => [m.marker || "start", lineOf(m)]),
+    [["start", "18:21"], ["HT", "51 HT"], ["start", "18:55"], ["FT", "FT"]]);
+}
+
 // ---- roster edits (reshuffle / change number) ----
 {
   const RAW = "U13 Hurling @ Tribesmen\n10.Morty | 11. Rick\n  12. Summer | 13. Jerry\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-1 0-0\n";

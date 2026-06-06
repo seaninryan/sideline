@@ -529,11 +529,13 @@ function parseMatch(raw, settings = {}) {
   const halfMarks = [];
   const addedOverride = {}; // half -> added time written as a "+N" line (overrides the deduced value)
 
-  for (const rawLine of eventLines) {
+  for (let evIdx = 0; evIdx < eventLines.length; evIdx++) {
+    const rawLine = eventLines[evIdx];
+    const srcLine = firstTimeIdx + evIdx; // index into raw.split("\n")
     const line = rawLine.trim();
     if (line === "") continue;
     const tm = line.match(timeRe);
-    if (tm) { half += 1; startMin = parseInt(tm[2], 10); halfMarks.push({ half, clock: `${tm[1]}:${tm[2]}` }); continue; }
+    if (tm) { half += 1; startMin = parseInt(tm[2], 10); halfMarks.push({ half, clock: `${tm[1]}:${tm[2]}`, srcLine }); continue; }
 
     const lead = line.match(/^(\d{1,2})\b\s*(.*)$/);
     if (lead) {
@@ -541,7 +543,7 @@ function parseMatch(raw, settings = {}) {
       let elapsed = minute - startMin; if (elapsed < 0) elapsed += 60;
       const restFull = lead[2];
       if (/^(ht|ft|half ?time|full ?time|end)\b/i.test(restFull.trim())) {
-        halfMarks.push({ half, marker: /^f/i.test(restFull.trim()) ? "FT" : "HT", minute, elapsed });
+        halfMarks.push({ half, marker: /^f/i.test(restFull.trim()) ? "FT" : "HT", minute, elapsed, srcLine });
         const am = restFull.match(/\+(\d{1,2})/); // "32 HT +6" sets the added time directly
         if (am) addedOverride[half || 1] = parseInt(am[1], 10);
         continue;
@@ -554,27 +556,27 @@ function parseMatch(raw, settings = {}) {
         const cp = matchPlayer(who);
         const side = cp ? "us" : (/^t\d*$/i.test(squash(who)) || /^t\b/i.test(who)) ? "them"
           : settings.myTeam && squash(who) && squash(who) === squash(settings.myTeam) ? "us" : who ? "them" : "us";
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "card", card: cardM[1].toLowerCase(), who: cp ? cp.name : who, side, num: cp ? cp.num : null, text: line });
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "card", card: cardM[1].toLowerCase(), who: cp ? cp.name : who, side, num: cp ? cp.num : null, text: line, srcLine });
         continue;
       }
       // corners: "31 corner" (us) / "44 T corner" (them)
       if (scoreToks.length === 0 && /\bcorner\b/i.test(restFull)) {
         const who = restFull.replace(/\bcorner\b/i, "").trim();
         const side = (/^t\d*$/i.test(squash(who)) || /^t\b/i.test(who)) ? "them" : "us";
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "corner", side, text: line });
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "corner", side, text: line, srcLine });
         continue;
       }
       // a missed chance ("10 Jack miss pen", "wide", "saved") or a stoppage
       // ("46 Water Break") is a note, not a score
       if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short|water)\b/i.test(restFull)) {
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "note", text: restFull.trim() });
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "note", text: restFull.trim(), srcLine });
         continue;
       }
       // "43 Rick for Morty" — a substitution with the minute in front
       if (scoreToks.length === 0 && /\bfor\b/i.test(restFull)) {
         const sm = restFull.match(/(.+?)\s+for\s+(.+)/i);
         const on = sm[1].trim(), off = sm[2].trim();
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line });
+        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line, srcLine });
         continue;
       }
       const isGoal = /goal/i.test(restFull);
@@ -586,7 +588,7 @@ function parseMatch(raw, settings = {}) {
       const scorerText = text.replace(/['’]?\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
       // a bare minute on its own line marks the start of a half (e.g. "51" for the 2nd half)
       if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
-        half += 1; startMin = minute; halfMarks.push({ half, startMin: minute }); continue;
+        half += 1; startMin = minute; halfMarks.push({ half, startMin: minute, srcLine }); continue;
       }
 
       let side, scorer, player = null, sure = true;
@@ -602,17 +604,17 @@ function parseMatch(raw, settings = {}) {
         scorer = `own goal${player ? ` (${player.name})` : ""}`;
       }
       lastElapsed = elapsed;
-      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, setPiece, scorer, desc: text, og: isOg, ogNum: isOg && player ? player.num : null, playerNum: !isOg && player ? player.num : null, scoreToks });
+      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, setPiece, scorer, desc: text, og: isOg, ogNum: isOg && player ? player.num : null, playerNum: !isOg && player ? player.num : null, scoreToks, srcLine });
     } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
-      halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed });
+      halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed, srcLine });
     } else if (/^\+\d{1,2}(\s+added)?$/i.test(line)) {
       addedOverride[half || 1] = parseInt(line.slice(1), 10); // "+6" after a HT/FT line corrects the added time
     } else if (/\bfor\b/i.test(line)) {
       const m = line.match(/(.+?)\s+for\s+(.+)/i);
       const on = m ? m[1].trim() : "", off = m ? m[2].trim() : "";
-      notes.push({ seq: seq++, half: half || 1, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line });
+      notes.push({ seq: seq++, half: half || 1, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line, srcLine });
     } else {
-      notes.push({ seq: seq++, half: half || 1, type: "note", text: line });
+      notes.push({ seq: seq++, half: half || 1, type: "note", text: line, srcLine });
     }
   }
 
