@@ -1421,9 +1421,10 @@ function MatchTracker() {
   };
   // live entry: build the notation line; the minute is always the wall clock now
   // (wrong by a beat? fix it in the notation after — same as everything else)
-  const liveLine = (ev, player) => {
-    const min = String(new Date().getMinutes());
-    const who = lvTeam === "them" ? "T" : player && player !== "unknown" ? player.name : (myTeam.trim() || "My Team");
+  // build a notation line for an event; live entry passes the wall clock,
+  // the insert forms pass their stepper minute and their own team toggle
+  const buildEventLine = (ev, team, player, min) => {
+    const who = team === "them" ? "T" : player && player !== "unknown" ? player.name : (myTeam.trim() || "My Team");
     switch (ev) {
       case "goal": return `${min} ${who} goal`;
       case "point": return `${min} ${who}`;
@@ -1434,13 +1435,29 @@ function MatchTracker() {
       case "og": return `${min} ${who} own goal`;
       case "yellow": return `${min} ${who} yellow card`;
       case "red": return `${min} ${who} red card`;
-      case "corner": return lvTeam === "them" ? `${min} T corner` : `${min} corner`;
+      case "corner": return team === "them" ? `${min} T corner` : `${min} corner`;
       case "ht": return `${min} HT`;
       case "ft": return `${min} FT`;
       case "half": return `${new Date().getHours()}:${pad2(parseInt(min, 10) % 60)}`;
       default: return "";
     }
   };
+  const liveLine = (ev, player) => buildEventLine(ev, lvTeam, player, String(new Date().getMinutes()));
+  const whoGrid = (onPick) => (
+    <>
+      {liveRows.map((row, ri) => (
+        <div key={ri} className="mt-frow">
+          {row.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => onPick(p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
+        </div>
+      ))}
+      {subs.length > 0 && (
+        <div className="mt-frow" style={{ borderTop: "1px dashed var(--line)", paddingTop: 8 }}>
+          {subs.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => onPick(p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
+        </div>
+      )}
+      <div className="mt-frow"><button className="mt-big sm" onClick={() => onPick("unknown")}>Unknown</button></div>
+    </>
+  );
   const addLive = (ev, player) => {
     if (!evEnabled(ev)) return; // e.g. FT tapped while a "Who?" pick was pending
     const l = liveLine(ev, player);
@@ -1524,10 +1541,42 @@ function MatchTracker() {
     setBlkEdit(null);
   };
   const blkDelete = () => {
-    if (!blkEdit.confirmDel) return setBlkEdit({ ...blkEdit, confirmDel: true });
+    if (!blkEdit.confirmDel) {
+      const idxAtArm = blkEdit.idx;
+      setBlkEdit({ ...blkEdit, confirmDel: true });
+      setTimeout(() => setBlkEdit((be) => be && be.idx === idxAtArm ? { ...be, confirmDel: false } : be), 3500);
+      return;
+    }
     setRaw((r) => deleteEventLine(r, blkEdit.idx));
     setBlkEdit(null);
   };
+
+  // "+ Insert after": anchor block decides the half and the default minute
+  const anchorMinute = (text) => {
+    const m = (text || "").match(/^(\d{1,2})[:.]?(\d{2})?/);
+    return m ? (m[2] != null ? parseInt(m[2], 10) : parseInt(m[1], 10)) % 60 : 0;
+  };
+  const openInsert = (b) => { setBlkEdit(null); setLineupEdit(null); setBlkIns({ afterIdx: b.idx, type: null, minute: anchorMinute(b.text), team: "us", ev: null, player: undefined, on: null, off: null, cardKind: "yellow", noteText: "", noteMin: false }); };
+  const insLine = () => {
+    const i = blkIns;
+    if (!i || !i.type) return "";
+    if (i.type === "score") return i.ev && (i.team === "them" || i.player !== undefined) ? buildEventLine(i.ev, i.team, i.player, i.minute) : "";
+    if (i.type === "card") return i.team === "them" || i.player !== undefined ? buildEventLine(i.cardKind, i.team, i.player, i.minute) : "";
+    if (i.type === "corner") return buildEventLine("corner", i.team, null, i.minute);
+    if (i.type === "sub") return i.on && i.off ? `${i.minute} ${i.on.name} for ${i.off.name}` : "";
+    if (i.type === "note") return i.noteText.trim() ? (i.noteMin ? `${i.minute} ${i.noteText.trim()}` : i.noteText.trim()) : "";
+    return "";
+  };
+  const insOk = () => {
+    const line = insLine();
+    if (!line) return;
+    setRaw((r) => insertEventLine(r, blkIns.afterIdx, line));
+    setBlkIns(null);
+    setSavedMsg(`Added "${line}"`); setTimeout(() => setSavedMsg(""), 1800);
+  };
+  // a minuted free-text note with none of the parser's note keywords would read as a score
+  const notePhantom = blkIns && blkIns.type === "note" && blkIns.noteMin && blkIns.noteText.trim()
+    && !/\b(miss(ed|es)?|wide|saved|blocked|short|water|corner|yellow|red|for)\b/i.test(blkIns.noteText);
 
   // players involved in substitutions (by roster number), for lineup styling
   const subbedOn = new Set(notes.filter((n) => n.type === "sub" && n.onNum != null).map((n) => n.onNum));
@@ -2020,19 +2069,7 @@ function MatchTracker() {
               {lvEvent && lvTeam === "us" && phase === "play" && (
                 <>
                   <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Who? — tap to add</p>
-                  {liveRows.map((row, ri) => (
-                    <div key={ri} className="mt-frow">
-                      {row.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => addLive(lvEvent, p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
-                    </div>
-                  ))}
-                  {(subs.length > 0) && (
-                    <div className="mt-frow" style={{ borderTop: "1px dashed var(--line)", paddingTop: 8 }}>
-                      {subs.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => addLive(lvEvent, p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
-                    </div>
-                  )}
-                  <div className="mt-frow">
-                    <button className="mt-big sm" onClick={() => addLive(lvEvent, "unknown")}>Unknown</button>
-                  </div>
+                  {whoGrid((p) => addLive(lvEvent, p))}
                 </>
               )}
             </div>
@@ -2059,26 +2096,92 @@ function MatchTracker() {
                   <span className="t">{starters.length} starting · {subs.length} subs{missing.length ? ` · ${missing.length} missing` : ""}</span>
                   <span className="chev">tap to edit ▸</span>
                 </div>
-                {blocks.list.map((b) => blkEdit && blkEdit.idx === b.idx ? (
-                  <div className="mt-blk editing" key={b.idx}>
-                    {blkEdit.minute != null && <MinuteStep val={blkEdit.minute} onChange={(m) => setBlkEdit({ ...blkEdit, minute: m, confirmDel: false })} />}
-                    <input className="mt-blkta" style={{ marginTop: blkEdit.minute != null ? 7 : 0 }} value={blkEdit.rest}
-                      onChange={(e) => setBlkEdit({ ...blkEdit, rest: e.target.value, confirmDel: false })} spellCheck={false} />
-                    <div className="mt-blkrow">
-                      <button className="mt-add" onClick={blkOk}>OK</button>
-                      <button className="mt-add alt" onClick={() => setBlkEdit(null)}>Cancel</button>
-                      <button className="mt-add alt" onClick={() => { /* Task 7: open insert */ }}>+ Insert after</button>
-                      <button className={"mt-add danger" + (blkEdit.confirmDel ? " armed" : "")} onClick={blkDelete}>
-                        {blkEdit.confirmDel ? "Tap again to delete" : "Delete"}
+                {blocks.list.map((b) => (
+                  <React.Fragment key={b.idx}>
+                    {blkEdit && blkEdit.idx === b.idx ? (
+                      <div className="mt-blk editing">
+                        {blkEdit.minute != null && <MinuteStep val={blkEdit.minute} onChange={(m) => setBlkEdit({ ...blkEdit, minute: m, confirmDel: false })} />}
+                        <input className="mt-blkta" style={{ marginTop: blkEdit.minute != null ? 7 : 0 }} value={blkEdit.rest}
+                          onChange={(e) => setBlkEdit({ ...blkEdit, rest: e.target.value, confirmDel: false })} spellCheck={false} />
+                        <div className="mt-blkrow">
+                          <button className="mt-add" onClick={blkOk}>OK</button>
+                          <button className="mt-add alt" onClick={() => setBlkEdit(null)}>Cancel</button>
+                          <button className="mt-add alt" onClick={() => openInsert(b)}>+ Insert after</button>
+                          <button className={"mt-add danger" + (blkEdit.confirmDel ? " armed" : "")} onClick={blkDelete}>
+                            {blkEdit.confirmDel ? "Tap again to delete" : "Delete"}
+                          </button>
+                        </div>
+                        {blkEdit.minute != null && <p className="mt-note" style={{ margin: "6px 0 0" }}>OK re-parses — changing the minute moves the line to its spot in the half.</p>}
+                      </div>
+                    ) : (
+                      <button className="mt-blk" onClick={() => openBlk(b)}>
+                        {blkPill(b)}
+                        <span className="t">{b.text}</span>
                       </button>
-                    </div>
-                    {blkEdit.minute != null && <p className="mt-note" style={{ margin: "6px 0 0" }}>OK re-parses — changing the minute moves the line to its spot in the half.</p>}
-                  </div>
-                ) : (
-                  <button className="mt-blk" key={b.idx} onClick={() => openBlk(b)}>
-                    {blkPill(b)}
-                    <span className="t">{b.text}</span>
-                  </button>
+                    )}
+                    {blkIns && blkIns.afterIdx === b.idx && (
+                      <div className="mt-blk editing">
+                        {!blkIns.type ? (
+                          <>
+                            <p className="mt-h" style={{ margin: "0 0 6px" }}>Insert after "{b.text.slice(0, 24)}…" — what kind?</p>
+                            <div className="mt-grid">
+                              {["score", "sub", "card", "corner", "note"].map((k) => (
+                                <button key={k} className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, type: k })}>{k[0].toUpperCase() + k.slice(1)}</button>
+                              ))}
+                            </div>
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button></div>
+                          </>
+                        ) : (
+                          <>
+                            {(blkIns.type !== "note" || blkIns.noteMin) && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
+                            {(blkIns.type === "score" || blkIns.type === "card" || blkIns.type === "corner") && (
+                              <div className="mt-grid" style={{ marginTop: 7 }}>
+                                <button className={"mt-big sm" + (blkIns.team === "us" ? " on" : "")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setBlkIns({ ...blkIns, team: "us" })}>{usName}</button>
+                                <button className={"mt-big sm" + (blkIns.team === "them" ? " on" : "")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setBlkIns({ ...blkIns, team: "them", player: undefined })}>{themName}</button>
+                              </div>
+                            )}
+                            {blkIns.type === "score" && (
+                              <div className="mt-grid" style={{ marginTop: 7 }}>
+                                {liveEvents.filter((ev) => LIVE_PLAYER_EVENTS.includes(ev.key) && !["yellow", "red"].includes(ev.key)).map((ev) => (
+                                  <button key={ev.key} className={"mt-big sm" + (blkIns.ev === ev.key ? " on" : "")} onClick={() => setBlkIns({ ...blkIns, ev: ev.key })}>{ev.label}</button>
+                                ))}
+                              </div>
+                            )}
+                            {blkIns.type === "card" && (
+                              <div className="mt-grid" style={{ marginTop: 7 }}>
+                                {["yellow", "red"].map((c) => <button key={c} className={"mt-big sm" + (blkIns.cardKind === c ? " on" : "")} onClick={() => setBlkIns({ ...blkIns, cardKind: c })}>{c}</button>)}
+                              </div>
+                            )}
+                            {((blkIns.type === "score" && blkIns.ev) || blkIns.type === "card") && blkIns.team === "us" && (
+                              <div style={{ marginTop: 7 }}>{whoGrid((p) => setBlkIns({ ...blkIns, player: p }))}</div>
+                            )}
+                            {blkIns.type === "sub" && (
+                              <>
+                                <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who came on?{blkIns.on ? ` — ${blkIns.on.name}` : ""}</p>
+                                {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, on: p }))}
+                                <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who went off?{blkIns.off ? ` — ${blkIns.off.name}` : ""}</p>
+                                {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, off: p }))}
+                              </>
+                            )}
+                            {blkIns.type === "note" && (
+                              <>
+                                <input className="mt-blkta" style={{ marginTop: 7 }} placeholder="note text" value={blkIns.noteText} onChange={(e) => setBlkIns({ ...blkIns, noteText: e.target.value })} />
+                                <label className="mt-note" style={{ display: "block", marginTop: 6 }}>
+                                  <input type="checkbox" checked={blkIns.noteMin} onChange={(e) => setBlkIns({ ...blkIns, noteMin: e.target.checked })} /> attach a minute
+                                </label>
+                                {notePhantom && <p className="mt-note" style={{ color: "#c0392b", margin: "4px 0 0" }}>Careful — a minuted line with no note keyword reads as a score. Leave the minute off for a plain note.</p>}
+                              </>
+                            )}
+                            {insLine() && <p className="mt-note" style={{ margin: "8px 0 0", fontFamily: "ui-monospace,Menlo,monospace", border: "1px dashed var(--line)", borderRadius: 6, padding: "5px 8px" }}>{insLine()}</p>}
+                            <div className="mt-blkrow">
+                              <button className="mt-add" disabled={!insLine()} onClick={insOk}>OK</button>
+                              <button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </React.Fragment>
                 ))}
                 {blocks.list.length === 0 && <p className="mt-note">Nothing yet — tap Start half above at throw-in, or Edit as text.</p>}
               </div>
