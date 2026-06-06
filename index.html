@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v33";
+const APP_VERSION = "v34";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -1079,6 +1079,17 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-swatch{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.3); padding:0; cursor:pointer; flex:none;}
 .mt-swatch.big{width:30px; height:30px; border-radius:8px;}
 .mt-swatch.on{outline:2px solid #f5c518; outline-offset:2px;}
+/* game mode: big-button takeover — one wizard stage fills the screen */
+.mt-game{display:flex; flex-direction:column; min-height:calc(100vh - 230px);}
+.mt-game .mt-grid{align-items:stretch;}
+.mt-game .mt-big{min-height:62px; font-size:16px;}
+.mt-game .mt-big.sm{min-height:54px; font-size:14.5px;}
+.mt-game .gm-team{min-height:96px; font-size:21px; letter-spacing:1px;}
+.mt-game .mt-add{padding:10px 16px;}
+/* last entry + undo ride the bottom of the screen (sticky, like the scoreboard at the top) */
+.mt-game .gm-undo{position:sticky; bottom:0; margin-top:auto; display:flex; align-items:center; gap:10px;
+  background:var(--paper); border-top:1px solid var(--line); padding:10px 2px; z-index:5;}
+.mt-game .gm-undo .t{flex:1; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12px; color:#333; word-break:break-word;}
 /* touch devices: 16px+ inputs stop iOS zooming the page when a field is focused */
 @media (hover:none){.mt-settings input,.mt-settings select,.mt-live input,.mt-live select,.mt-sel{font-size:16px;}}
 /* touch devices: the scoreboard pins to the top while scrolling, so the score
