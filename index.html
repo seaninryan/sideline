@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v31";
+const APP_VERSION = "v32";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -502,10 +502,13 @@ function parseMatch(raw, settings = {}) {
   const matchPlayer = (txt) => {
     const c = squash(txt);
     if (!c) return null;
+    // exact full-name match beats any fuzzy match anywhere in the roster —
+    // with "Cathal" and "Cathal N" both rostered, "Cathal" must not resolve
+    // to "Cathal N" just because he appears first
+    for (const p of roster) if (squash(p.name) === c) return p;
     for (const p of roster) {
-      const full = squash(p.name);
       const first = squash(p.name.split(" ")[0]);
-      if (full === c || first === c || full === squash(txt.split(" ")[0])) return p;
+      if (first === c || squash(p.name) === squash(txt.split(" ")[0])) return p;
     }
     return null;
   };

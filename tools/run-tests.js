@@ -208,6 +208,29 @@ Alfie 50?
   t("og by us -> them goal; og by them -> our goal", [p.totals.us.str, p.totals.them.str], ["1", "1"]);
 }
 
+// ---- name matching with shared first names ("Cathal" and "Cathal N") ----
+{
+  // exact full-name match must beat an earlier fuzzy first-name match
+  const RAW = "U13 Hurling @ Tribesmen\n5. Cathal N | 12. Cathal\nSubs\n17. Pencilvester\n18:21\n7 Cathal N 0-1 0-0\n9 Cathal 0-2 0-0\n43 Pencilvester for Cathal\n23 Cathal yellow card\n";
+  const p = parseMatch(RAW, {});
+  const sub = p.notes.find((n) => n.type === "sub");
+  t("sub off exact name, not first-name twin", sub.offNum, 12);
+  t("scorer Cathal N keeps his number", p.scoring[0].playerNum, 5);
+  t("scorer Cathal keeps his number", p.scoring[1].playerNum, 12);
+  t("card lands on exact-name player", p.notes.find((n) => n.type === "card").num, 12);
+  t("scorers not merged", p.scorers.filter((s) => s.side === "us").map((s) => s.name).sort(), ["Cathal", "Cathal N"]);
+}
+{
+  // reverse roster order: full name "Cathal N" must not resolve to "Cathal"
+  const p = parseMatch("U13 Hurling @ Tribesmen\n5. Cathal | 12. Cathal N\n18:21\n7 Cathal N 0-1 0-0\n", {});
+  t("reverse order scorer", [p.scoring[0].scorer, p.scoring[0].playerNum], ["Cathal N", 12]);
+}
+{
+  // first-name shorthand still works when it's unambiguous
+  const p = parseMatch("U13 Hurling @ Tribesmen\n10. Morty Smith\n18:21\n7 Morty 0-1 0-0\n", {});
+  t("unambiguous first name still matches", [p.scoring[0].scorer, p.scoring[0].playerNum], ["Morty Smith", 10]);
+}
+
 // ---- roster edits (reshuffle / change number) ----
 {
   const RAW = "U13 Hurling @ Tribesmen\n10.Morty | 11. Rick\n  12. Summer | 13. Jerry\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-1 0-0\n";
