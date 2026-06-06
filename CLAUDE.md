@@ -11,7 +11,7 @@ Sideline — a personal match tracker for GAA (hurling/football) and soccer that
 - **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + Google Identity Services loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
 - **`SETUP.md`** — end-user setup guide (Google Cloud OAuth + GitHub Pages).
 - **`icon-180.png`** / **`icon-touch-180.png`** — app icons: a green-pattern soccer ball, transparent for the favicon and on a pitch-green tile for `apple-touch-icon` (iOS blackens transparency). Don't edit by hand — regenerate both with `python3 tools/make-icon.py` (needs PIL). The top-bar logo SVG uses the same geometry/colours.
-- **`tools/`** — dev-only helpers, not served: `make-icon.py`, `parser-harness.js` (extracts the pure parser from `index.html` for node), `run-tests.js` (parser regression tests).
+- **`tools/`** — dev-only helpers, not served: `make-icon.py`, `parser-harness.js` (extracts the pure parser + raw-edit helpers from `index.html` for node), `run-tests.js` (regression tests for both).
 
 The app was originally a Claude artifact (`match-tracker.jsx`, persisted via the chat's `window.storage`, charted with recharts) converted by a script into this standalone. Neither the jsx nor the script is in the repo — **`index.html` is the source of truth; edit it directly.**
 
@@ -32,7 +32,7 @@ Parser tests: `node tools/run-tests.js` (extracts the pure functions from `index
 
 ## Architecture
 
-Order of code inside the babel script: Drive store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → `SAMPLE` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
+Order of code inside the babel script: Drive store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → pure raw-edit helpers (roster + event-line) → `SAMPLE` → CSS → `MinuteStep` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
 
 ### Auth + storage (no server)
 
@@ -61,6 +61,7 @@ Input is plain text:
 Key decisions (preserve these when modifying):
 
 - **Sport detection:** explicit sport in the header wins (`soccer` → goals; `hurl/camog/gaelic/gaa/football` → GAA); then score shape — any line with **two** score tokens (`0-2 1-3`) is GAA, while hyphen scores that only appear **one per line** (`2-1` = whole scoreboard) are a soccer running score (unless `point`/`pt` appears); else any internal hyphen → GAA; else goals-only.
+- **Name matching — exact beats fuzzy:** `matchPlayer` scans the whole roster for an exact (squashed) full-name match before trying first-name shorthand or first-word matching — with "Cathal" and "Cathal N" both rostered, each reference resolves to its own entry regardless of roster order (affects subs, scorer credit, cards, own goals). First-name shorthand still works when unambiguous; two players sharing a first name need the initial or shirt number to disambiguate.
 - **Misses & stoppages are notes:** a minute line with no written score and a miss/stoppage keyword (`miss/missed/wide/saved/blocked/short/water`) is a note, not a score (`10 Jack miss pen`, `46 Water Break`). With a written score attached, the written score still rules.
 - **Set-piece points:** `'65` (hurling) / `'45` (football) on a scoring line sets `setPiece` — a pill in the timeline, `('65)` in chart/infographic labels, not counted as a free. The apostrophe form is canonical (a bare trailing `65` peels as a written-score token); bare `45`/`65` still flags mid-line.
 - **Subs can carry a minute:** `43 Rick for Morty` (or `43 12 Rick for 6 Morty`) parses as a sub at 43', not a score. The lineup tab generates these (tap player → pick replacement). Sub notes resolve `onNum`/`offNum` against the roster for lineup styling.
@@ -91,5 +92,5 @@ Key decisions (preserve these when modifying):
 ## Known limitations / next steps
 
 - Sign-in is still needed after the token expires (~1h) or when the tab is closed — full multi-day persistence would need the authorization-code flow + a backend, which this app deliberately doesn't have.
-- The live sign-in + Drive read/write flow has not yet been verified end-to-end on the deployed page — including the new 401-retry/reconnect-banner and sessionStorage-resume paths.
+- Sign-in + Drive save/load is in regular real-game use and works; the rarer recovery paths (401 retry on save, the red "Reconnect & save" banner, sessionStorage resume) are hard to exercise deliberately and remain only opportunistically tested.
 - Possible additions: visible "Signed in as / Sign out" affordance; PWA manifest + icon; service-worker offline cache.

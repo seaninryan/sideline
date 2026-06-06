@@ -38,11 +38,12 @@ Sleepy Gary for zeep
 
 - **Scoring line:** `min scorer [free|goal] [written running score]`. `T`/`T11` = opposition scorer; roster names = your players; team name (e.g. `Racoons`) = your team, unattributed.
 - **Subs:** `X for Y`. Anything else non-numeric is a note.
+- Also understood: cards (`23 Morty yellow card`, `70 T red`), corners (`31 corner`, `44 T corner`), own goals (`30 Rick own goal`), set-piece points (`'65` hurling / `'45` football), misses & stoppages as notes (`10 Jack miss pen`, `46 Water Break`), and added time (`32 HT +6`, or a standalone `+6` after the marker).
 - If most scoring lines carry a written running score, it's treated as the source of truth (goal vs point inferred from the score jump). Without written scores (live entry) it counts goal/point keywords.
 
 ## Features
 
-- Tabs: **Overview** (scoreboard, stat cards, score-progression chart, top scorers), **Timeline**, **Lineup** (formation pitch), **Notation / Live** (raw text + quick-add buttons for live entry).
+- Tabs: **Overview** (scoreboard, stat cards, score-progression chart, top scorers), **Timeline**, **Lineup** (formation pitch), **Notation / Live** (quick-add buttons for live entry, plus the notation as tappable blocks — edit a line with a minute stepper and it re-sorts into place, delete with a confirming second tap, insert a score/sub/card/corner/note after any line via guided forms; the raw text stays one tap away behind "Edit as text").
 - Per-match settings: date, team names, club colours, home/away, scoring mode (Auto/GAA/Goals-only).
 - Saved matches (Drive-backed), with New / Save / Duplicate / Delete.
 - **Backup / Import** as JSON.
