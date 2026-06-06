@@ -70,6 +70,13 @@ Key decisions (preserve these when modifying):
 - **Written score is source of truth:** if ≥ half the scoring lines carry a written running score, totals/chart come from the written cumulative score. Two tokens = GAA (one per team); in goals mode a **single** `a-b` token is the whole home-away scoreboard (`writtenCols`). Goal vs point is inferred from the score jump (a 3-point jump with no "goal" word = a goal). A column-vote on "sure" rows (rostered name or `T`) decides which written column is "us" — this handles home/away order automatically. Without written scores (live entry) it falls back to keyword goal/point counting. A reconciliation warning fires only when a written score *drops* (likely typo).
 - **Stats computed:** leadChanges, timesLevel, maxLead/maxLeadSide, half-time score, chart series, goalDots, htLine.
 
+### Notation blocks (Notation tab)
+
+- The Notation tab renders the raw text as tappable blocks (one per event line; the preamble — header + roster — is a single Lineup block that expands to a mini textarea). Blocks are a **view over `raw`** — no block model is stored; the old textarea lives behind the "Edit as text" toggle.
+- Edits go through pure helpers beside the roster-edit helpers: `replaceEventLine` / `deleteEventLine` / `insertEventLine` (+ shared `placeEventLineByMinute`). A line whose leading minute changes is re-placed within its own half ordered by elapsed minute (wall-clock wrap, ties land last, never crossing the half's HT/FT marker). Structure lines (clock, bare minute, HT/FT, `+N`) never move. `parseMatch` stamps `srcLine` (index into `raw.split("\n")`) on scoring/notes/halfMarks to classify blocks.
+- "+ Insert after" opens a type chooser (Score/Sub/Card/Corner/Note) → guided forms reusing the live-entry buttons (`buildEventLine`, `whoGrid`), with a live preview of the exact notation line. The anchor block picks the half and default minute; placement is by minute. The Note form warns when a minuted keyword-less note would parse as a score.
+- One editor open at a time: any raw mutation path (live append, undo, resync, match switch, view toggle) closes open block/insert/lineup editors to avoid stale line indices. Block delete needs a confirming second tap (auto-disarms after 3.5s).
+
 ### Share image
 
 - `buildInfographicSVG(model)` builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.
