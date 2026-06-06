@@ -792,6 +792,30 @@ function renumRoster(raw, num, newNum) {
   return lines.join("\n");
 }
 
+/* ---- event-line edits on the raw notation (notation blocks) ---- */
+// Lines that are structure, not events: half-start clocks, bare minutes,
+// HT/FT markers (bare or minuted, mirroring the parser's two regexes) and
+// "+N" added-time overrides. They never re-sort.
+const isStructureLine = (l) => {
+  const s = (l || "").trim();
+  return /^\d{1,2}:\d{2}$/.test(s) || /^\d{1,2}$/.test(s) || /^\+\d{1,2}(\s+added)?$/i.test(s)
+    || /^(ht|ft|half ?time|full ?time)$/i.test(s) || /^\d{1,2}\b\s*(ht|ft|half ?time|full ?time|end)\b/i.test(s);
+};
+// the leading minute of an ordinary event line, else null
+function eventLineMinute(line) {
+  if (isStructureLine(line)) return null;
+  const m = (line || "").match(/^\s*(\d{1,2})\b\s*\S/);
+  return m ? parseInt(m[1], 10) : null;
+}
+function deleteEventLine(raw, idx) {
+  const lines = raw.split("\n");
+  if (idx < 0 || idx >= lines.length) return raw;
+  lines.splice(idx, 1);
+  return lines.join("\n");
+}
+function insertEventLine(raw, afterIdx, line) { return raw; } // Task 3
+function replaceEventLine(raw, idx, newLine) { return raw; } // Task 4
+
 /* ============================================================
    STORAGE  (window.storage, with graceful fallback)
    ============================================================ */

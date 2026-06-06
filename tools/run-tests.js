@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Parser regression tests. Run: node tools/run-tests.js  (needs Node 18+)
-const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG, swapRosterNums, renumRoster } = require("./parser-harness");
+const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG, swapRosterNums, renumRoster, eventLineMinute, deleteEventLine, insertEventLine, replaceEventLine } = require("./parser-harness");
 
 let fail = 0;
 const t = (name, got, want) => {
@@ -273,6 +273,22 @@ Alfie 50?
 // ---- placeholder labels ----
 t("placeholder set", ["New Match", " My Team ", "Match", "", undefined].map(isPlaceholderLabel), [true, true, true, true, true]);
 t("real labels not placeholders", ["Racoons", "U14 League"].map(isPlaceholderLabel), [false, false]);
+
+// ---- notation-block helpers ----
+{
+  t("eventLineMinute ordinary line", eventLineMinute("23 Rick free 0-1 0-0"), 23);
+  t("eventLineMinute clock line", eventLineMinute("18:21"), null);
+  t("eventLineMinute bare minute", eventLineMinute("38"), null);
+  t("eventLineMinute bare HT", eventLineMinute("HT"), null);
+  t("eventLineMinute minuted FT", eventLineMinute("51 FT"), null);
+  t("eventLineMinute +N", eventLineMinute("+6"), null);
+  t("eventLineMinute minute-less note", eventLineMinute("Rick for Morty"), null);
+}
+{
+  const RAW = "a\nb\nc";
+  t("deleteEventLine", deleteEventLine(RAW, 1), "a\nc");
+  t("deleteEventLine out of range", deleteEventLine(RAW, 9), RAW);
+}
 
 console.log(fail ? `\n${fail} FAILED` : "\nall passed");
 process.exit(fail ? 1 : 0);
