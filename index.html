@@ -1445,7 +1445,7 @@ function MatchTracker() {
       default: return "";
     }
   };
-  const liveLine = (ev, player) => buildEventLine(ev, lvTeam, player, String(new Date().getMinutes()));
+  const liveLine = (ev, player, team = lvTeam) => buildEventLine(ev, team, player, String(new Date().getMinutes()));
   const whoGrid = (onPick) => (
     <>
       {liveRows.map((row, ri) => (
@@ -1461,9 +1461,9 @@ function MatchTracker() {
       <div className="mt-frow"><button className="mt-big sm" onClick={() => onPick("unknown")}>Unknown</button></div>
     </>
   );
-  const addLive = (ev, player) => {
+  const addLive = (ev, player, team = lvTeam) => {
     if (!evEnabled(ev)) return; // e.g. FT tapped while a "Who?" pick was pending
-    const l = liveLine(ev, player);
+    const l = liveLine(ev, player, team);
     if (!l) return;
     append(l);
     setLvEvent(null);
@@ -1879,6 +1879,90 @@ function MatchTracker() {
       )}
 
       <div className="mt-body">
+        {view === "game" && (
+          <div className="mt-game">
+            <div className="mt-row" style={{ marginBottom: 12 }}>
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>
+                {phase === "pre" ? "Before throw-in" : phase === "ht" ? "Half time" : phase === "over" ? "Full time" : `Half ${halfMarks.filter((m) => !m.marker).length} — in play`}
+              </span>
+              <button className="mt-add alt" onClick={exitGame}>✕ Exit</button>
+            </div>
+
+            {/* stage 1 — who? (+ phase-gated match controls) */}
+            {gm.stage === "team" && (
+              <>
+                <div className="mt-grid">
+                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setGm({ stage: "event", team: "us" })}>{usName}</button>
+                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setGm({ stage: "event", team: "them" })}>{themName}</button>
+                </div>
+                {(phase === "pre" || phase === "ht") && (
+                  <div className="mt-grid" style={{ marginTop: 10 }}>
+                    <button className="mt-big gm-team" onClick={() => addLive("half", null)}>Start half</button>
+                  </div>
+                )}
+                {phase === "play" && (
+                  <div className="mt-grid" style={{ marginTop: 10 }}>
+                    <button className="mt-big" onClick={() => setGm({ stage: "subOff" })}>Sub</button>
+                    <button className="mt-big" onClick={() => addLive("ht", null)}>HT</button>
+                    <button className="mt-big" onClick={() => addLive("ft", null)}>FT</button>
+                  </div>
+                )}
+                <p className="mt-note" style={{ marginTop: 10, marginBottom: 0 }}>
+                  {phase === "pre" ? "Tap Start half at throw-in to open scoring." : phase === "ht" ? "Half time — Start half opens the second half." : phase === "over" ? "Full time — match closed. Undo the FT line to keep adding." : "Tap the team the next event belongs to."}
+                </p>
+              </>
+            )}
+
+            {/* stage 2 — what happened? */}
+            {gm.stage === "event" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gm.team === "us" ? usName : themName} — what happened?</p>
+                <div className="mt-grid">
+                  {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
+                    <button key={ev.key} className="mt-big ev" onClick={() => {
+                      // our player events wait for a "Who?" tap; everything else lands straight in the notation
+                      if (gm.team === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setGm({ ...gm, stage: "who", ev: ev.key });
+                      else { addLive(ev.key, null, gm.team); setGm({ stage: "team" }); }
+                    }}>{ev.label}</button>
+                  ))}
+                </div>
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "team" })}>← Back</button>
+              </>
+            )}
+
+            {/* stage 3 — which player? */}
+            {gm.stage === "who" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{liveEvents.find((ev) => ev.key === gm.ev).label} — who?</p>
+                {whoGrid((p) => { addLive(gm.ev, p, gm.team); setGm({ stage: "team" }); })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "event", team: gm.team })}>← Back</button>
+              </>
+            )}
+
+            {/* sub flow — off then on, same line shape as the Lineup tab */}
+            {gm.stage === "subOff" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Substitution — who goes off?</p>
+                {whoGrid((p) => p !== "unknown" && setGm({ stage: "subOn", off: p }))}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "team" })}>← Back</button>
+              </>
+            )}
+            {gm.stage === "subOn" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gm.off.name} off — who comes on?</p>
+                {whoGrid((p) => { if (p === "unknown") return; completeSub(p.name, gm.off.name); setGm({ stage: "team" }); })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "subOff" })}>← Back</button>
+              </>
+            )}
+
+            {/* pinned bottom: last entry + undo */}
+            <div className="gm-undo">
+              <span className="t">{undoTarget ? `Last: ${undoTarget.text}` : "Nothing added yet"}</span>
+              <button className="mt-add alt" disabled={!undoTarget} onClick={doUndo}>↩ Undo</button>
+            </div>
+          </div>
+        )}
+
         {view === "overview" && (
           <>
             {parsed.warnings.length > 0 && (
