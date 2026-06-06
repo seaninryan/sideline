@@ -283,11 +283,43 @@ t("real labels not placeholders", ["Racoons", "U14 League"].map(isPlaceholderLab
   t("eventLineMinute minuted FT", eventLineMinute("51 FT"), null);
   t("eventLineMinute +N", eventLineMinute("+6"), null);
   t("eventLineMinute minute-less note", eventLineMinute("Rick for Morty"), null);
+  t("eventLineMinute numbered sub", eventLineMinute("43 12 Rick for 6 Morty"), 43);
 }
 {
   const RAW = "a\nb\nc";
   t("deleteEventLine", deleteEventLine(RAW, 1), "a\nc");
   t("deleteEventLine out of range", deleteEventLine(RAW, 9), RAW);
+}
+
+// ---- insertEventLine: anchor picks the half, minute places the line ----
+const BLK = [
+  "U13 Hurling @ Tribesmen",            // 0
+  "10. Morty | 11. Rick",               // 1
+  "Subs",                               // 2
+  "17. Pencilvester",                   // 3
+  "18:21",                              // 4  half 1 start (startMin 21)
+  "23 Rick free 0-1 0-0",               // 5  elapsed 2
+  "27 Jack miss pen",                   // 6  elapsed 6 (note)
+  "31 T 0-1 0-1",                       // 7  elapsed 10
+  "51 HT",                              // 8
+  "18:55",                              // 9  half 2 start (startMin 55)
+  "58 T goal 0-1 1-1",                  // 10 elapsed 3
+  "2 Rick 0-2 1-1",                     // 11 elapsed 7 (wrapped past the hour)
+].join("\n");
+{
+  const at = (r, i) => r.split("\n")[i];
+  const a = insertEventLine(BLK, 5, "29 Morty 0-2 0-1");
+  t("insert places by minute", at(a, 7), "29 Morty 0-2 0-1"); // between the 27' and 31' lines
+  const b = insertEventLine(BLK, 5, "27 Morty 0-2 0-1");
+  t("insert tie lands after existing", at(b, 7), "27 Morty 0-2 0-1"); // after the existing 27' line
+  const c = insertEventLine(BLK, 5, "49 Morty 0-2 0-1");
+  t("insert never crosses HT", [at(c, 8), at(c, 9)], ["49 Morty 0-2 0-1", "51 HT"]);
+  const d = insertEventLine(BLK, 10, "5 Morty 1-1 1-1"); // half 2, elapsed 10 — wraps
+  t("insert wraps past the hour", at(d, 12), "5 Morty 1-1 1-1"); // after the 2' line
+  const e = insertEventLine(BLK, 7, "switched Rick to midfield");
+  t("insert minute-less goes right after anchor", at(e, 8), "switched Rick to midfield");
+  const f = insertEventLine(BLK, 9, "57 Morty 1-1 1-1"); // anchor = half-2 clock line, elapsed 2
+  t("insert after half-start block", at(f, 10), "57 Morty 1-1 1-1");
 }
 
 console.log(fail ? `\n${fail} FAILED` : "\nall passed");

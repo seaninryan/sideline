@@ -813,7 +813,46 @@ function deleteEventLine(raw, idx) {
   lines.splice(idx, 1);
   return lines.join("\n");
 }
-function insertEventLine(raw, afterIdx, line) { return raw; } // Task 3
+// shared placement core: put `line` inside half `half`, ordered by elapsed
+// minute. Returns null when by-minute placement doesn't apply (no minute on
+// the line, or the half has no start mark) — callers fall back to a splice.
+function placeEventLineByMinute(raw, half, line) {
+  const newMin = eventLineMinute(line);
+  if (newMin == null) return null;
+  const lines = raw.split("\n");
+  const p = parseMatch(raw, {});
+  const start = p.halfMarks.find((m) => !m.marker && m.half === half);
+  if (!start) return null;
+  const startMin = start.startMin != null ? start.startMin : parseInt(start.clock.split(":")[1], 10);
+  let newElapsed = newMin - startMin; if (newElapsed < 0) newElapsed += 60; // same wrap as the parser
+  const endMark = p.halfMarks.find((m) => m.marker && m.half === half && m.srcLine > start.srcLine);
+  const nextStart = p.halfMarks.find((m) => !m.marker && m.half === half + 1);
+  let at = endMark ? endMark.srcLine : nextStart ? nextStart.srcLine : lines.length;
+  while (at > start.srcLine + 1 && !(lines[at - 1] || "").trim()) at--; // don't strand it past trailing blanks
+  const entries = [...p.scoring, ...p.notes]
+    .filter((e) => e.half === half && e.srcLine != null && e.srcLine > start.srcLine && e.srcLine < at)
+    .sort((x, y) => x.srcLine - y.srcLine);
+  for (const e of entries) {
+    if (e.elapsed != null && e.elapsed > newElapsed) { at = e.srcLine; break; } // minute-less notes stick to their predecessor
+  }
+  lines.splice(at, 0, line);
+  return lines.join("\n");
+}
+function insertEventLine(raw, afterIdx, line) {
+  const p = parseMatch(raw, {});
+  // the anchor decides the half: its own entry, or the nearest entry above it
+  let half = null;
+  const all = [...p.scoring, ...p.notes, ...p.halfMarks];
+  for (let i = afterIdx; i >= 0 && half == null; i--) {
+    const hit = all.find((e) => e.srcLine === i);
+    if (hit) half = hit.half;
+  }
+  const placed = half != null ? placeEventLineByMinute(raw, half, line) : null;
+  if (placed != null) return placed;
+  const lines = raw.split("\n");
+  lines.splice(afterIdx + 1, 0, line); // minute-less line (or no parsable anchor): literally after the anchor
+  return lines.join("\n");
+}
 function replaceEventLine(raw, idx, newLine) { return raw; } // Task 4
 
 /* ============================================================
