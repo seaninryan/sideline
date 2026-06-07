@@ -28,6 +28,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -42,6 +43,12 @@ const APP_VERSION = "v36";
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
 const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
+
+const SUPABASE_URL = "https://uobatagvcxbqynajojrt.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_5Bthln94hLtsYlgNXIzWSA_UGuhAze7";
+// The page holds only the public anon key; per-user isolation is enforced by RLS on `matches`.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 let accessToken = null, fileId = null, cache = {}, tokenClient = null;
 let tokenExp = 0; // ms epoch when the current token dies (60s safety margin baked in)
 let tokenCallback = null; // resolver for the in-flight requestToken() call
