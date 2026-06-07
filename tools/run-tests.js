@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Parser regression tests. Run: node tools/run-tests.js  (needs Node 18+)
-const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG, swapRosterNums, renumRoster, eventLineMinute, deleteEventLine, insertEventLine, replaceEventLine } = require("./parser-harness");
+const { parseMatch, SAMPLE, isPlaceholderLabel, buildInfographicSVG, swapRosterNums, renumRoster, eventLineMinute, deleteEventLine, insertEventLine, replaceEventLine, mkId, remapImport } = require("./parser-harness");
 
 let fail = 0;
 const t = (name, got, want) => {
@@ -346,6 +346,24 @@ const BLK = [
   // anchoring past FT still keeps the line inside the half (before the FT marker)
   const h = insertEventLine(BLK + "\n70 FT\nafter-match note", 13, "65 Morty 0-3 1-1");
   t("insert with post-FT anchor lands before FT", at(h, 12), "65 Morty 0-3 1-1");
+}
+
+// ---- import remap: fresh UUIDs, incoming ids dropped, records preserved ----
+{
+  let seq = 0;
+  const gen = () => "uuid-" + (++seq);
+  const exp = { v: 1, matches: [
+    { id: "m1718000000001", raw: "A @ B", myTeam: "A" },
+    { id: "m1718000000002", raw: "C @ D", myTeam: "C" },
+  ] };
+  const out = remapImport(exp, gen);
+  t("remap count", out.length, 2);
+  t("remap fresh ids", out.map((x) => x.id), ["uuid-1", "uuid-2"]);
+  t("remap drops old id", out[0].rec.id, undefined);
+  t("remap keeps record", [out[0].rec.raw, out[0].rec.myTeam], ["A @ B", "A"]);
+  t("remap bare array", remapImport([{ id: "x", raw: "E @ F" }], gen).length, 1);
+  t("remap empty/garbage", remapImport(null, gen).length, 0);
+  t("mkId is uuid-shaped", /^[0-9a-f-]{36}$/.test(mkId()), true);
 }
 
 console.log(fail ? `\n${fail} FAILED` : "\nall passed");

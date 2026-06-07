@@ -145,6 +145,16 @@ const store = {
 };
 
 function gpTotal(g, p, mode) { return mode === "goals" ? g : g * 3 + p; }
+// crypto.randomUUID() — available in modern browsers and Node 18+ (the test harness).
+function mkId() { return crypto.randomUUID(); }
+// Normalise a Backup export ({matches:[{id,...rec}]} or a bare array) into [{id, rec}]
+// with FRESH uuids, dropping any incoming id so old non-uuid ids never reach Postgres.
+// `gen` is injectable for deterministic tests.
+function remapImport(obj, gen) {
+  gen = gen || mkId;
+  const arr = (obj && obj.matches) || (Array.isArray(obj) ? obj : []);
+  return arr.map((mm) => { const { id: _drop, ...rec } = mm; return { id: gen(), rec }; });
+}
 function fmtScore(g, p, mode) { return mode === "goals" ? String(g) : `${g}-${p}`; }
 function squash(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
 const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1337,7 +1347,7 @@ function MatchTracker() {
 
   const doSave = async () => {
     await ensureFreshToken(); // we're inside a click — roll the token now rather than 401 mid-save
-    const id = curId || ("m" + Date.now());
+    const id = curId || mkId();
     const ok = await store.set(id, { ...recordPayload(), savedAt: Date.now() });
     setCurId(id);
     await refreshList();
@@ -1553,7 +1563,7 @@ function MatchTracker() {
       setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
       setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
       setMatchDate(nw.date); setNw(null); setTab("notation");
-      const id = "m" + Date.now();
+      const id = mkId();
       await ensureFreshToken();
       const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
       if (ok) { setCurId(id); await refreshList(); setSavedMsg("Match created ✓"); setTimeout(() => setSavedMsg(""), 2000); }
@@ -1765,13 +1775,9 @@ function MatchTracker() {
   const doImport = async () => {
     try {
       const obj = JSON.parse(importText.trim());
-      const arr = obj.matches || (Array.isArray(obj) ? obj : []);
+      const items = remapImport(obj);
       let n = 0;
-      for (const mm of arr) {
-        const id = mm.id || ("m" + Date.now() + Math.floor(Math.random() * 1000));
-        const { id: _drop, ...rec } = mm;
-        if (await store.set(id, rec)) n++;
-      }
+      for (const { id, rec } of items) { if (await store.set(id, rec)) n++; }
       await refreshList();
       setModal(null); setSavedMsg(`Imported ${n} match${n === 1 ? "" : "es"} ✓`); setTimeout(() => setSavedMsg(""), 2500);
     } catch (e) { setSavedMsg("Import failed — check the text"); setTimeout(() => setSavedMsg(""), 2500); }
