@@ -29,7 +29,6 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <div id="root"></div>
@@ -40,115 +39,51 @@ const { useState, useMemo, useEffect, useRef } = React;
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
 const APP_VERSION = "v36";
 
-const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
-
-const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
-
 const SUPABASE_URL = "https://uobatagvcxbqynajojrt.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5Bthln94hLtsYlgNXIzWSA_UGuhAze7";
 // The page holds only the public anon key; per-user isolation is enforced by RLS on `matches`.
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let accessToken = null, fileId = null, cache = {}, tokenClient = null;
-let tokenExp = 0; // ms epoch when the current token dies (60s safety margin baked in)
-let tokenCallback = null; // resolver for the in-flight requestToken() call
-let onAuthExpired = null; // set by MatchTracker to surface the "session expired" banner
+let cache = {}; // { id: record } — in-memory mirror; same shape MatchTracker has always read.
 
-// Tokens last ~1h; keep them across refreshes within that window (sessionStorage only —
-// cleared when the tab closes, never written to disk beyond the browser session).
-const TOK_KEY = "sideline_tok";
-function rememberToken(resp) {
-  accessToken = resp.access_token;
-  const ttl = Number(resp.expires_in) || 3600;
-  tokenExp = Date.now() + (ttl - 60) * 1000;
-  try { sessionStorage.setItem(TOK_KEY, JSON.stringify({ t: accessToken, exp: tokenExp })); } catch (e) {}
-}
-function recallToken() {
-  try {
-    const j = JSON.parse(sessionStorage.getItem(TOK_KEY));
-    if (j && j.t && j.exp > Date.now()) { tokenExp = j.exp; return j.t; }
-  } catch (e) {}
-  return null;
-}
-function forgetToken() { accessToken = null; tokenExp = 0; try { sessionStorage.removeItem(TOK_KEY); } catch (e) {} }
-function tokenTimeLeft() { return accessToken ? tokenExp - Date.now() : 0; }
-// Roll the token before it dies. Best called from a user gesture (click) so the
-// GIS popup is allowed if Google needs one; with a live session it's invisible.
-async function ensureFreshToken(thresholdMs = 10 * 60 * 1000) {
-  if (!accessToken || tokenTimeLeft() > thresholdMs) return true;
-  return reauth();
+// Pull every match the signed-in user owns into `cache`. RLS scopes the query to auth.uid().
+async function loadAll() {
+  const { data, error } = await sb.from("matches").select("id,data");
+  if (error) throw error;
+  cache = {};
+  (data || []).forEach((r) => { if (r && r.id) cache[r.id] = r.data; });
 }
 
-// Wrap GIS's callback style in a promise: resolves with the token response,
-// or with the error object (no access_token) on failure/popup-block, or null.
-function requestToken(opts) {
-  return new Promise((resolve) => {
-    if (!tokenClient) return resolve(null);
-    tokenCallback = resolve;
-    try { tokenClient.requestAccessToken(opts || {}); } catch (e) { tokenCallback = null; resolve(null); }
-  });
-}
-// Re-auth after a 401. prompt:"" skips the consent screen for a returning user,
-// but the popup can still be blocked outside a click — callers handle false.
-async function reauth() {
-  const resp = await requestToken({ prompt: "" });
-  if (resp && resp.access_token) { rememberToken(resp); return true; }
-  forgetToken();
-  return false;
+// Derive the promoted columns from a record. `data` (jsonb) stays the source of truth;
+// opponent isn't stored in the record, so parse it from the header.
+function matchCols(data) {
+  let opp = null;
+  try { opp = (parseMatch(data.raw, { myTeam: data.myTeam }).opp) || null; } catch (e) {}
+  return {
+    match_date: data.matchDate || data.date || null,
+    my_team: data.myTeam || null,
+    opponent: opp,
+    sport: data.sport || null,
+  };
 }
 
-async function dfetch(url, opts) {
-  opts = opts || {};
-  const headers = Object.assign({ Authorization: "Bearer " + accessToken }, opts.headers || {});
-  const res = await fetch(url, Object.assign({}, opts, { headers }));
-  if (res.status === 401) { const er = new Error("auth"); er.code = 401; throw er; }
-  return res;
-}
-async function ensureFile() {
-  if (fileId) return fileId;
-  const q = encodeURIComponent("name='sideline.json'");
-  const r = await dfetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=" + q);
-  const j = await r.json();
-  if (j.files && j.files.length) { fileId = j.files[0].id; return fileId; }
-  const cr = await dfetch("https://www.googleapis.com/drive/v3/files", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: "sideline.json", parents: ["appDataFolder"] }),
-  });
-  const cj = await cr.json(); fileId = cj.id; return fileId;
-}
-async function driveLoad() {
-  await ensureFile();
-  const r = await dfetch("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
-  if (r.ok) { try { cache = await r.json(); } catch (e) { cache = {}; } } else { cache = {}; }
-  if (!cache || typeof cache !== "object") cache = {};
-}
-async function driveSave() {
-  await ensureFile();
-  const r = await dfetch("https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media", {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cache),
-  });
-  if (!r.ok) { const er = new Error("save failed"); er.code = r.status; throw er; }
-}
-// Save; on a 401 (token expired) silently re-auth once and retry. If that fails too,
-// tell the UI so it can show a persistent reconnect banner instead of failing quietly.
-async function saveWithRetry() {
-  try { await driveSave(); return true; }
-  catch (e) {
-    if (e.code === 401) {
-      if (await reauth()) {
-        try { await driveSave(); return true; } catch (e2) { e = e2; }
-      }
-      if (e.code === 401 && onAuthExpired) onAuthExpired();
-    }
-    return false;
-  }
-}
 const store = {
   ok: true,
   async list() { return Object.keys(cache).map((id) => "match:" + id); },
   async get(id) { return cache[id] || null; },
-  async set(id, data) { cache[id] = data; return saveWithRetry(); },
-  async del(id) { delete cache[id]; return saveWithRetry(); },
+  async set(id, data) { // single-row upsert; owner defaults to auth.uid() on insert (RLS-checked)
+    cache[id] = data;
+    const { error } = await sb.from("matches").upsert(Object.assign(
+      { id, data, updated_at: new Date().toISOString() }, matchCols(data),
+    ));
+    if (error) console.warn("save failed", error.message);
+    return !error;
+  },
+  async del(id) {
+    delete cache[id];
+    const { error } = await sb.from("matches").delete().eq("id", id);
+    return !error;
+  },
 };
 
 function gpTotal(g, p, mode) { return mode === "goals" ? g : g * 3 + p; }
@@ -1205,8 +1140,7 @@ function MatchTracker() {
   const [curId, setCurId] = useState(null);
   const [saved, setSaved] = useState([]);
   const [savedMsg, setSavedMsg] = useState("");
-  const [authLost, setAuthLost] = useState(false);
-  const [authSoon, setAuthSoon] = useState(false); // token near expiry, silent renew blocked
+  const [userEmail, setUserEmail] = useState("");
   const [colorPick, setColorPick] = useState(null); // which swatch is open: "us"|"us2"|"them"|"them2"
   const [modal, setModal] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false); // "⋯" overflow menu in the top bar
@@ -1218,6 +1152,7 @@ function MatchTracker() {
   const [blkIns, setBlkIns] = useState(null);         // insert flow state (Task 7)
   const [lineupEdit, setLineupEdit] = useState(null); // preamble text while editing (Task 8)
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); }, [curId]);
+  useEffect(() => { sb.auth.getUser().then(({ data }) => setUserEmail((data && data.user && data.user.email) || "")); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
@@ -1312,34 +1247,6 @@ function MatchTracker() {
       if (items.length && !curId) doLoad(items[0].id); // open the most recent match by default
     })(); /* eslint-disable-next-line */
   }, []);
-  useEffect(() => {
-    onAuthExpired = () => setAuthLost(true);
-    return () => { onAuthExpired = null; };
-  }, []);
-  // Keep-alive while the tab is open: when the token is close to dying, try a
-  // silent refresh (some browsers allow the popup-less roll); if the browser
-  // blocks it, surface the amber banner so one tap renews the session before
-  // anything fails.
-  useEffect(() => {
-    let autoTried = false;
-    const check = async () => {
-      if (document.hidden || !accessToken) return;
-      if (tokenTimeLeft() > 12 * 60 * 1000) { autoTried = false; setAuthSoon(false); return; }
-      if (!autoTried) {
-        autoTried = true;
-        if (await reauth()) { setAuthSoon(false); autoTried = false; return; }
-      }
-      setAuthSoon(true);
-    };
-    const iv = setInterval(check, 60 * 1000);
-    document.addEventListener("visibilitychange", check);
-    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", check); };
-  }, []);
-  const doStayConnected = async () => {
-    if (await reauth()) { setAuthSoon(false); setSavedMsg("Session renewed ✓"); setTimeout(() => setSavedMsg(""), 2000); }
-    else { setSavedMsg("Couldn't renew — try again"); setTimeout(() => setSavedMsg(""), 2500); }
-  };
-
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
   const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2 });
   // unsaved changes? compare editor state against the cached Drive record
@@ -1353,12 +1260,11 @@ function MatchTracker() {
   }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, saved]);
 
   const doSave = async () => {
-    await ensureFreshToken(); // we're inside a click — roll the token now rather than 401 mid-save
     const id = curId || mkId();
     const ok = await store.set(id, { ...recordPayload(), savedAt: Date.now() });
     setCurId(id);
     await refreshList();
-    setSavedMsg(ok ? "Saved ✓" : "NOT saved to Drive!");
+    setSavedMsg(ok ? "Saved ✓" : "NOT saved — check connection");
     setTimeout(() => setSavedMsg(""), ok ? 2000 : 6000);
   };
   // Auto-save matches that already live in Drive, a beat after the last change.
@@ -1368,34 +1274,24 @@ function MatchTracker() {
     const t = setTimeout(async () => {
       const ok = await store.set(curId, { ...recordPayload(), savedAt: Date.now() });
       if (ok) { setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
-      else { setSavedMsg("NOT saved to Drive!"); setTimeout(() => setSavedMsg(""), 6000); }
+      else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
       await refreshList();
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
   }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2]);
-  // Pull the Drive copy (e.g. changes made on the phone) on demand.
+  // Re-pull the server copy (e.g. edits made on another device) on demand.
   const doResync = async () => {
-    if (dirty && curId && !window.confirm("This match has unsaved changes here — load the Drive copy over them?")) return;
+    if (dirty && curId && !window.confirm("This match has unsaved changes here — load the server copy over them?")) return;
     setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
     setSavedMsg("Syncing…");
     try {
-      await ensureFreshToken();
-      try { await driveLoad(); }
-      catch (e) { if (e.code === 401 && (await reauth())) await driveLoad(); else throw e; }
+      await loadAll();
       await refreshList();
       if (curId && cache[curId]) doLoad(curId);
       else if (curId) setCurId(null); // deleted on the other device
       setSavedMsg("Synced ✓"); setTimeout(() => setSavedMsg(""), 2000);
     } catch (e) { setSavedMsg("Sync failed — try again"); setTimeout(() => setSavedMsg(""), 4000); }
-  };
-  // The banner's button click is a user gesture, so the re-auth popup won't be blocked.
-  // Everything is still in `cache`, so one driveSave pushes the pending change.
-  const doReconnect = async () => {
-    if (!(await reauth())) { setSavedMsg("Reconnect failed — try again"); setTimeout(() => setSavedMsg(""), 2500); return; }
-    try { await driveSave(); setAuthLost(false); setSavedMsg("Reconnected — saved ✓"); }
-    catch (e) { setSavedMsg("Reconnected, but the save failed — hit Save again"); setAuthLost(false); }
-    setTimeout(() => setSavedMsg(""), 2500);
   };
   const doLoad = async (key) => {
     const id = key.replace(/^match:/, "");
@@ -1571,10 +1467,9 @@ function MatchTracker() {
       setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
       setMatchDate(nw.date); setNw(null); setTab("notation");
       const id = mkId();
-      await ensureFreshToken();
       const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
       if (ok) { setCurId(id); await refreshList(); setSavedMsg("Match created ✓"); setTimeout(() => setSavedMsg(""), 2000); }
-      else { setCurId(null); setSavedMsg("NOT saved to Drive!"); setTimeout(() => setSavedMsg(""), 6000); }
+      else { setCurId(null); setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
     } finally {
       creatingRef.current = false;
     }
@@ -1824,6 +1719,7 @@ function MatchTracker() {
           {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
           <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
+          <button className="mt-btn" onClick={() => { setMenuOpen(false); sb.auth.signOut(); }}>{userEmail ? "Sign out (" + userEmail + ")" : "Sign out"}</button>
           {curId && <button className={"mt-btn" + (confirmDel ? " danger" : "")} onClick={() => {
             if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; } // arm, then auto-disarm
             setConfirmDel(false); setMenuOpen(false); doDelete();
@@ -1831,19 +1727,6 @@ function MatchTracker() {
         </div>
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
-
-      {authLost && (
-        <div className="mt-authlost">
-          <span>Google session expired — your last change hasn't been saved to Drive.</span>
-          <button className="mt-btn solid" onClick={doReconnect}>Reconnect &amp; save</button>
-        </div>
-      )}
-      {authSoon && !authLost && (
-        <div className="mt-authlost" style={{ background: "#9a7b0a" }}>
-          <span>Google session expires soon.</span>
-          <button className="mt-btn solid" onClick={doStayConnected}>Stay signed in</button>
-        </div>
-      )}
 
       {!(gm || nw) && modal && (
         <div className="mt-panel">
@@ -2523,14 +2406,14 @@ function ScoreChart({ series, goalDots, htLine, colorUs, colorThem }) {
   );
 }
 
-/* ---- sign-in + Google Drive bootstrap ---- */
+/* ---- sign-in + Supabase bootstrap ---- */
 function SignIn({ phase, err, onSignIn }) {
   const busy = phase === "wait" || phase === "load";
-  const label = phase === "load" ? "Loading your matches…" : phase === "wait" ? "Starting…" : "Sign in with Google";
+  const label = phase === "load" ? "Loading your matches…" : "Sign in with Google";
   return (
     <div className="si-wrap"><div className="si-card">
       <h1>SIDELINE</h1>
-      <p>Match data is saved privately in your own Google Drive and synced across your devices.</p>
+      <p>Match data is saved privately to your account and synced across your devices.</p>
       <button className="si-btn" onClick={onSignIn} disabled={busy}>{label}</button>
       <div className="si-status">{err || (phase === "load" ? "Syncing…" : "")}</div>
     </div></div>
@@ -2540,42 +2423,24 @@ function App() {
   const [phase, setPhase] = useState("wait");
   const [err, setErr] = useState("");
   useEffect(() => {
-    let tries = 0;
-    const iv = setInterval(() => {
-      tries++;
-      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-        clearInterval(iv);
-        try {
-          tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID, scope: SCOPES,
-            // Both callbacks just resolve the pending requestToken() promise;
-            // callers decide what a missing access_token means.
-            callback: (resp) => { const cb = tokenCallback; tokenCallback = null; if (cb) cb(resp); },
-            error_callback: (e) => { const cb = tokenCallback; tokenCallback = null; if (cb) cb(e); },
-          });
-          // Refresh within the token's ~1h window: resume without a sign-in click.
-          const saved = recallToken();
-          if (saved) {
-            accessToken = saved;
-            setPhase("load");
-            driveLoad().then(() => setPhase("ready"))
-              .catch(() => { forgetToken(); setPhase("out"); });
-          } else { setPhase("out"); }
-        } catch (e) { setErr("Google sign-in failed to initialise."); setPhase("out"); }
-      } else if (tries > 100) { clearInterval(iv); setErr("Google sign-in didn't load — check your connection."); setPhase("out"); }
-    }, 100);
-    return () => clearInterval(iv);
+    // getSession() also resolves the OAuth redirect return: supabase-js parses the URL
+    // hash and persists the session before this promise settles.
+    sb.auth.getSession().then(async ({ data }) => {
+      if (data && data.session) {
+        setPhase("load");
+        try { await loadAll(); setPhase("ready"); }
+        catch (e) { setErr("Couldn't load your matches — check the Supabase config and that the matches table exists."); setPhase("out"); }
+      } else { setPhase("out"); }
+    });
+    // Reflect later sign-out (here or on another tab) back to the sign-in screen.
+    const { data: listener } = sb.auth.onAuthStateChange((_event, session) => { if (!session) setPhase("out"); });
+    return () => { if (listener && listener.subscription) listener.subscription.unsubscribe(); };
   }, []);
   const signIn = async () => {
     setErr("");
-    if (!tokenClient) { setErr("Still starting up — try again in a second."); return; }
-    const resp = await requestToken();
-    if (resp && resp.access_token) {
-      rememberToken(resp);
-      setPhase("load");
-      try { await driveLoad(); setPhase("ready"); }
-      catch (e) { setErr("Couldn't read Drive. Check the Client ID, that the Drive API is enabled, and that you're a test user."); setPhase("out"); }
-    } else if (resp && resp.type) { setErr("Sign-in failed (" + resp.type + ")."); }
+    const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.href } });
+    if (error) setErr("Sign-in failed: " + error.message);
+    // on success the browser redirects to Google; nothing more to do here.
   };
   if (phase === "ready") return <MatchTracker />;
   return <SignIn phase={phase} err={err} onSignIn={signIn} />;
