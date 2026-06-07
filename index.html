@@ -37,7 +37,7 @@
 const { useState, useMemo, useEffect, useRef } = React;
 
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v35";
+const APP_VERSION = "v36";
 
 const CLIENT_ID = "1082152886862-ls2qdqu246emgs93q6hvrcqq4ipi1iur.apps.googleusercontent.com";
 
@@ -1090,6 +1090,11 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-game .gm-undo{position:sticky; bottom:0; margin-top:auto; display:flex; align-items:center; gap:10px;
   background:var(--paper); border-top:1px solid var(--line); padding:10px 2px; z-index:5;}
 .mt-game .gm-undo .t{flex:1; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12px; color:#333; word-break:break-word;}
+/* new-match wizard: shares the .mt-game sizing; team buttons wear their kit */
+.mt-game .nw-team{border-width:3px; font-size:17px;}
+.mt-game .nw-team .sub{font-weight:400; opacity:.85; text-transform:none;}
+.mt-game .nw-date input{font-size:18px; padding:12px 10px; border:1px solid var(--line); border-radius:10px; font-family:'Oswald'; background:#fffdf6;}
+.mt-game .nw-in{flex:1 1 140px; font-size:16px; padding:11px 10px; border:1px solid var(--line); border-radius:10px; font-family:'Oswald'; background:#fffdf6;}
 /* touch devices: 16px+ inputs stop iOS zooming the page when a field is focused */
 @media (hover:none){.mt-settings input,.mt-settings select,.mt-live input,.mt-live select,.mt-sel{font-size:16px;}}
 /* touch devices: the scoreboard pins to the top while scrolling, so the score
