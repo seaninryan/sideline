@@ -1386,8 +1386,9 @@ function MatchTracker() {
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
   const doNew = () => {
-    setRaw(`${myTeam.trim() || "My Team"} @ Opponent\n1 \n\n${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}\n`);
-    setMatchDate(toLocalInput(new Date())); setCurId(null); setTab("notation");
+    // header + roster stub only — the half starts when Start half is tapped at throw-in
+    setRaw(`${myTeam.trim() || "My Team"} @ Opponent\n1 \n`);
+    setMatchDate(toLocalInput(new Date())); setCurId(null); setNw(null); setTab("notation");
   };
   const doDuplicate = () => {
     setCurId(null);
@@ -1530,6 +1531,25 @@ function MatchTracker() {
 
   // the wizard touches nothing until its final step, so Cancel is just setNw(null)
   const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
+  // build + save the wizard's match directly — recordPayload() would read pre-update state.
+  // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
+  const finishNew = async (opp, oppColors, oppSport) => {
+    const team = nw.team.trim() || "My Team";
+    const label = nw.label.trim() || team;
+    const newRaw = `${label} ${nw.homeAway === "home" ? "v" : "@"} ${opp.trim()}\n1 \n`;
+    const newSport = nw.sport || oppSport || sport || "";
+    const cu = nw.colors ? nw.colors[0] : colorUs, cu2 = nw.colors ? nw.colors[1] : colorUs2;
+    const ct = oppColors ? oppColors[0] : colorThem, ct2 = oppColors ? oppColors[1] : colorThem2;
+    const mode = SPORTS[newSport] ? SPORTS[newSport].mode : effMode;
+    setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
+    setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
+    setMatchDate(nw.date); setNw(null); setTab("notation");
+    const id = "m" + Date.now();
+    await ensureFreshToken();
+    const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
+    if (ok) { setCurId(id); await refreshList(); setSavedMsg("Match created ✓"); setTimeout(() => setSavedMsg(""), 2000); }
+    else { setCurId(null); setSavedMsg("NOT saved to Drive!"); setTimeout(() => setSavedMsg(""), 6000); }
+  };
 
   // merged timeline for display
   const timeline = useMemo(() => {
@@ -1921,6 +1941,76 @@ function MatchTracker() {
       )}
 
       <div className="mt-body">
+        {view === "new" && (
+          <div className="mt-game">
+            <div className="mt-row" style={{ marginBottom: 12 }}>
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>New match{nw.stage === "us" ? " — your team" : nw.stage === "opp" ? " — opposition" : ""}</span>
+              <button className="mt-add alt" onClick={() => setNw(null)}>✕ Cancel</button>
+            </div>
+
+            {/* stage 1 — when? */}
+            {nw.stage === "date" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>When? — defaults to now</p>
+                <div className="mt-row nw-date">
+                  <input type="date" value={nw.date.slice(0, 10)} onChange={(e) => e.target.value && setNw({ ...nw, date: `${e.target.value}T${nw.date.slice(11, 16)}` })} />
+                  <input type="time" value={nw.date.slice(11, 16)} onChange={(e) => e.target.value && setNw({ ...nw, date: `${nw.date.slice(0, 10)}T${e.target.value}` })} />
+                </div>
+                <div className="mt-grid" style={{ marginTop: 12 }}>
+                  <button className="mt-big gm-team" onClick={() => setNw({ ...nw, stage: "us" })}>Next →</button>
+                </div>
+                <button className="mt-add alt" style={{ marginTop: 14 }} onClick={doNew}>Skip — blank match</button>
+              </>
+            )}
+
+            {/* stage 2 — your team? */}
+            {nw.stage === "us" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Your team? — picking applies name, colours and sport</p>
+                <div className="mt-grid">
+                  {prevTeams.us.map((t) => (
+                    <button key={t.team + "|" + t.label} className="mt-big nw-team" style={{ background: t.colorUs || "#f5c518", color: contrastOn(t.colorUs || "#f5c518"), borderColor: t.colorUs2 || "var(--line)" }}
+                      onClick={() => setNw({ ...nw, stage: "opp", team: t.team, label: t.label || t.team, sport: t.sport || null, colors: [t.colorUs || colorUs, t.colorUs2 || colorUs2] })}>
+                      {SPORTS[t.sport] ? SPORTS[t.sport].emoji + " " : ""}{t.team}{t.label && squash(t.label) !== squash(t.team) ? <span className="sub"> · {t.label}</span> : null}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-note" style={{ margin: "12px 0 4px" }}>…or a new team</p>
+                <div className="mt-row">
+                  <input className="nw-in" placeholder="team name" value={nw.team} onChange={(e) => setNw({ ...nw, team: e.target.value })} />
+                  <input className="nw-in" placeholder="grade/label (optional)" value={nw.label} onChange={(e) => setNw({ ...nw, label: e.target.value })} />
+                  <button className="mt-add" disabled={!nw.team.trim()} onClick={() => setNw({ ...nw, stage: "opp", sport: null, colors: null })}>Next →</button>
+                </div>
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
+              </>
+            )}
+
+            {/* stage 3 — against? (picking an opponent finishes the wizard) */}
+            {nw.stage === "opp" && (
+              <>
+                <div className="mt-grid" style={{ marginBottom: 10 }}>
+                  <button className={"mt-big" + (nw.homeAway === "home" ? " on" : " off")} onClick={() => setNw({ ...nw, homeAway: "home" })}>Home v</button>
+                  <button className={"mt-big" + (nw.homeAway === "away" ? " on" : " off")} onClick={() => setNw({ ...nw, homeAway: "away" })}>Away @</button>
+                </div>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Against? — picking applies their colours</p>
+                <div className="mt-grid">
+                  {prevTeams.opps.map((o) => (
+                    <button key={o.name} className="mt-big nw-team" style={{ background: o.colorThem || "#c0392b", color: contrastOn(o.colorThem || "#c0392b"), borderColor: o.colorThem2 || "var(--line)" }}
+                      onClick={() => finishNew(o.name, [o.colorThem || colorThem, o.colorThem2 || colorThem2], o.sport || null)}>
+                      {o.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-note" style={{ margin: "12px 0 4px" }}>…or a new opponent</p>
+                <div className="mt-row">
+                  <input className="nw-in" placeholder="opponent" value={nw.oppName} onChange={(e) => setNw({ ...nw, oppName: e.target.value })} />
+                  <button className="mt-add" disabled={!nw.oppName.trim()} onClick={() => finishNew(nw.oppName, null, null)}>Create →</button>
+                </div>
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "us" })}>← Back</button>
+              </>
+            )}
+          </div>
+        )}
         {view === "game" && (
           <div className="mt-game">
             <div className="mt-row" style={{ marginBottom: 12 }}>
