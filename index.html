@@ -1212,6 +1212,10 @@ function MatchTracker() {
   // stages: "team" → "event" → "who"; "subOff" → "subOn" for substitutions
   const [gm, setGm] = useState(null);
 
+  // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
+  // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
+  const [nw, setNw] = useState(null);
+
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
   const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
@@ -1231,6 +1235,28 @@ function MatchTracker() {
       });
     }
     return Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 12);
+  }, [saved]);
+
+  // previous teams for the new-match wizard, most recent fixture first.
+  // Parsing just the header line is cheap and reuses the canonical header logic.
+  const prevTeams = useMemo(() => {
+    const recs = Object.keys(cache).map((id) => cache[id] || {})
+      .sort((a, b) => dateKey(b.date, b.savedAt || 0) - dateKey(a.date, a.savedAt || 0));
+    const us = [], opps = [], usSeen = new Set(), oppSeen = new Set();
+    for (const d of recs) {
+      let h = {};
+      try { h = parseMatch((d.raw || "").split("\n")[0], {}).header; } catch (e) {}
+      const team = (d.myTeam || "").trim();
+      const label = isPlaceholderLabel(h.label) ? "" : (h.label || "").trim();
+      const uk = squash(team) + "|" + squash(label);
+      if (team && !usSeen.has(uk)) { usSeen.add(uk); us.push({ team, label, colorUs: d.colorUs, colorUs2: d.colorUs2, sport: d.sport || "" }); }
+      const opp = (h.opposition || "").trim();
+      if (opp && !isPlaceholderLabel(opp) && opp.toLowerCase() !== "opponent" && !oppSeen.has(squash(opp))) {
+        oppSeen.add(squash(opp));
+        opps.push({ name: opp, colorThem: d.colorThem, colorThem2: d.colorThem2, sport: d.sport || "" });
+      }
+    }
+    return { us, opps };
   }, [saved]);
 
   // auto-switch handled in parser via score format; effMode = parsed.mode
@@ -1502,6 +1528,9 @@ function MatchTracker() {
   const enterGame = () => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setModal(null); setColorPick(null); setMenuOpen(false); setGm({ stage: "team" }); };
   const exitGame = () => setGm(null);
 
+  // the wizard touches nothing until its final step, so Cancel is just setNw(null)
+  const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
+
   // merged timeline for display
   const timeline = useMemo(() => {
     const items = [];
@@ -1718,14 +1747,14 @@ function MatchTracker() {
 
   const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
 
-  const view = gm ? "game" : tab; // game mode replaces the tab body
+  const view = gm ? "game" : nw ? "new" : tab; // game mode / new-match wizard replace the tab body
 
   return (
     <div className="mt-root">
       <style>{CSS}</style>
 
       {/* top bar */}
-      {!gm && (
+      {!(gm || nw) && (
       <div className="mt-bar">
         <div className="mt-logo">
           {/* same ball as icon-180.png (tools/make-icon.py geometry) */}
@@ -1744,9 +1773,9 @@ function MatchTracker() {
       )}
       {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
           panels — fixed/absolute dropdowns miss taps in mobile webviews */}
-      {!gm && menuOpen && (
+      {!(gm || nw) && menuOpen && (
         <div className="mt-bar sub">
-          <button className="mt-btn" onClick={() => { setMenuOpen(false); doNew(); }}>New</button>
+          <button className="mt-btn" onClick={enterNew}>New</button>
           {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
           <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
@@ -1771,7 +1800,7 @@ function MatchTracker() {
         </div>
       )}
 
-      {!gm && modal && (
+      {!(gm || nw) && modal && (
         <div className="mt-panel">
           {modal.kind === "share" && (
             <>
@@ -1801,7 +1830,7 @@ function MatchTracker() {
       )}
 
       {/* settings */}
-      {!gm && (
+      {!(gm || nw) && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -1828,7 +1857,7 @@ function MatchTracker() {
       </div>
       )}
 
-      {!gm && colorPick && (() => {
+      {!(gm || nw) && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -1857,6 +1886,7 @@ function MatchTracker() {
       })()}
 
       {/* scoreboard */}
+      {!nw && (
       <div className="mt-board">
         <div className="mt-meta">{sportLabel || "Match"} · {header.homeAway === "away" ? "Away" : header.homeAway === "home" ? "Home" : ""} {header.label ? "· " + header.label : ""}{matchDate ? " · " + fmtDate(matchDate) : ""}</div>
         <div className="mt-score">
@@ -1879,9 +1909,10 @@ function MatchTracker() {
           </span>
         </div>
       </div>
+      )}
 
       {/* tabs */}
-      {!gm && (
+      {!(gm || nw) && (
       <div className="mt-tabs">
         {tabs.map(([id, lbl]) => (
           <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
