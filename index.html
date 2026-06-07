@@ -1549,7 +1549,7 @@ function MatchTracker() {
       const newSport = nw.sport || oppSport || sport || "";
       const cu = nw.colors ? nw.colors[0] : colorUs, cu2 = nw.colors ? nw.colors[1] : colorUs2;
       const ct = oppColors ? oppColors[0] : colorThem, ct2 = oppColors ? oppColors[1] : colorThem2;
-      const mode = SPORTS[newSport] ? SPORTS[newSport].mode : effMode;
+      const mode = SPORTS[newSport] ? SPORTS[newSport].mode : parseMatch(newRaw, { myTeam: team }).mode;
       setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
       setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
       setMatchDate(nw.date); setNw(null); setTab("notation");
