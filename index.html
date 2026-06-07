@@ -1215,6 +1215,7 @@ function MatchTracker() {
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
+  const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
   const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
@@ -1534,21 +1535,27 @@ function MatchTracker() {
   // build + save the wizard's match directly — recordPayload() would read pre-update state.
   // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
   const finishNew = async (opp, oppColors, oppSport) => {
-    const team = nw.team.trim() || "My Team";
-    const label = nw.label.trim() || team;
-    const newRaw = `${label} ${nw.homeAway === "home" ? "v" : "@"} ${opp.trim()}\n1 \n`;
-    const newSport = nw.sport || oppSport || sport || "";
-    const cu = nw.colors ? nw.colors[0] : colorUs, cu2 = nw.colors ? nw.colors[1] : colorUs2;
-    const ct = oppColors ? oppColors[0] : colorThem, ct2 = oppColors ? oppColors[1] : colorThem2;
-    const mode = SPORTS[newSport] ? SPORTS[newSport].mode : effMode;
-    setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
-    setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
-    setMatchDate(nw.date); setNw(null); setTab("notation");
-    const id = "m" + Date.now();
-    await ensureFreshToken();
-    const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
-    if (ok) { setCurId(id); await refreshList(); setSavedMsg("Match created ✓"); setTimeout(() => setSavedMsg(""), 2000); }
-    else { setCurId(null); setSavedMsg("NOT saved to Drive!"); setTimeout(() => setSavedMsg(""), 6000); }
+    if (creatingRef.current) return; // double-tap guard — one tap, one match
+    creatingRef.current = true;
+    try {
+      const team = nw.team.trim() || "My Team";
+      const label = nw.label.trim() || team;
+      const newRaw = `${label} ${nw.homeAway === "home" ? "v" : "@"} ${opp.trim()}\n1 \n`;
+      const newSport = nw.sport || oppSport || sport || "";
+      const cu = nw.colors ? nw.colors[0] : colorUs, cu2 = nw.colors ? nw.colors[1] : colorUs2;
+      const ct = oppColors ? oppColors[0] : colorThem, ct2 = oppColors ? oppColors[1] : colorThem2;
+      const mode = SPORTS[newSport] ? SPORTS[newSport].mode : effMode;
+      setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
+      setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
+      setMatchDate(nw.date); setNw(null); setTab("notation");
+      const id = "m" + Date.now();
+      await ensureFreshToken();
+      const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
+      if (ok) { setCurId(id); await refreshList(); setSavedMsg("Match created ✓"); setTimeout(() => setSavedMsg(""), 2000); }
+      else { setCurId(null); setSavedMsg("NOT saved to Drive!"); setTimeout(() => setSavedMsg(""), 6000); }
+    } finally {
+      creatingRef.current = false;
+    }
   };
 
   // merged timeline for display
