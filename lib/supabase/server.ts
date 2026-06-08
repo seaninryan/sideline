@@ -12,7 +12,7 @@ export async function createClient() {
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-          } catch { /* called from a Server Component; middleware refreshes instead */ }
+          } catch { /* called from a Server Component, which can't set cookies; the /auth/callback route handler writes the session cookies instead */ }
         },
       },
     },
