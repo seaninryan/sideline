@@ -1,0 +1,52 @@
+import { parseMatch } from "@/lib/parser";
+import { fmtScore, fmtDate, gpTotal } from "@/lib/util";
+import { SPORTS } from "@/lib/constants";
+import type { MatchRecord, Model } from "@/lib/types";
+
+export function buildModel(record: MatchRecord): Model {
+  const r = record;
+  const sportKey = r.sport || "";
+  const sp = (SPORTS as Record<string, { label: string; mode: string }>)[sportKey];
+  const settings = {
+    myTeam: r.myTeam,
+    scoringMode: (sp ? sp.mode : (r.autoMode ? undefined : r.scoringMode)) as "gaa" | "goals" | undefined,
+  };
+  const parsed = parseMatch(r.raw, settings);
+  const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
+  const effMode = parsed.mode;
+  const sportLabel = sp ? sp.label : header.sport;
+  const usName = r.myTeam || "My Team";
+  const themName = header.opposition || "Opposition";
+
+  const timeline: any[] = [];
+  scoring.forEach((s: any) => timeline.push({ kind: "score", ...s }));
+  notes.forEach((n: any) => timeline.push({ kind: n.type, ...n }));
+  timeline.sort((a, b) => (a.half - b.half) || (a.seq - b.seq));
+
+  const usScorers = scorers
+    .filter((s: any) => s.side === "us")
+    .sort((a: any, b: any) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const starters = roster.filter((p: any) => p.role === "starting");
+  const subs = roster.filter((p: any) => p.role === "sub");
+  const missing = roster.filter((p: any) => p.role === "missing");
+  const formationRows = parsed.formationRows && parsed.formationRows.length ? parsed.formationRows : [];
+
+  const h1 = series.filter((p: any) => p.half === 1 && p.usScore);
+  const ht = h1.length
+    ? `${h1[h1.length - 1].usScore} – ${h1[h1.length - 1].themScore}`
+    : `${fmtScore(0, 0, effMode)} – ${fmtScore(0, 0, effMode)}`;
+
+  return {
+    grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
+    usName, themName, dateStr: r.matchDate ? fmtDate(r.matchDate) : "",
+    totals, result, effMode, ht,
+    leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
+    maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
+    series, goalDots, htLine, halfMarks,
+    usScorers, formationRows, starters, subs, missing, timeline,
+    colorUs: r.colorUs || "#f5c518", colorUs2: r.colorUs2 || "#1f7a4d",
+    colorThem: r.colorThem || "#c0392b", colorThem2: r.colorThem2 || "#2c5fa8",
+    nameDisplay: r.nameDisplay || "full",
+    parsed,
+  };
+}
