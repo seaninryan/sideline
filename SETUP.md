@@ -1,8 +1,8 @@
-# Sideline — standalone app setup (Supabase + GitHub Pages)
+# Sideline — setup guide (Supabase + Google OAuth + Vercel)
 
-You'll do three things: create a Supabase project with the right schema and Google OAuth, paste the connection details into the app, and host the file on GitHub Pages. ~25 minutes, all free tiers.
+You'll do three things: create a Supabase project with the right schema and Google OAuth, deploy to Vercel, and wire the connection details together. ~25 minutes, all free tiers.
 
-**How it works:** the page is a static file with no server. All match data lives in a Supabase Postgres database behind your Google login, protected by Row-Level Security — only your account can read or write your rows. The anon key embedded in the file is intentionally public; RLS is the security boundary.
+**How it works:** the app runs on Vercel (Next.js). All match data lives in a Supabase Postgres database behind your Google login, protected by Row-Level Security — only your account can read or write your rows. The anon key embedded in the app is intentionally public; RLS is the security boundary.
 
 ---
 
@@ -14,16 +14,16 @@ You'll do three things: create a Supabase project with the right schema and Goog
 
 ```sql
 create table matches (
-  id          uuid primary key,
-  owner       uuid not null default auth.uid(),
-  is_public   bool not null default false,
-  hide_names  bool not null default false,
-  match_date  timestamptz,
-  my_team     text,
-  opponent    text,
-  sport       text,
-  data        jsonb not null,
-  updated_at  timestamptz not null default now()
+  id           uuid primary key,
+  owner        uuid not null default auth.uid(),
+  is_public    bool not null default false,
+  name_display text not null default 'full',
+  match_date   timestamptz,
+  my_team      text,
+  opponent     text,
+  sport        text,
+  data         jsonb not null,
+  updated_at   timestamptz not null default now()
 );
 
 alter table matches enable row level security;
@@ -38,6 +38,9 @@ create policy public_read on matches
   using (is_public = true);
 ```
 
+> **`name_display`** controls how player names appear on the public read-only page:
+> `'full'` (default) — show names as written; `'initials'` — first initial of each word; `'none'` — shirt number only. The app sets this through the Share wizard.
+
 ## B. Google OAuth (~10 min)
 
 3. **Create a Google OAuth client:** go to **console.cloud.google.com**, create (or reuse) a project, and navigate to *APIs & Services → Credentials → Create credentials → OAuth client ID*.
@@ -50,38 +53,56 @@ create policy public_read on matches
 4. **Wire it into Supabase:** in your Supabase project go to *Authentication → Providers → Google*. Enable it, paste the Client ID and Client Secret from step 3, and save.
 
 5. **Set redirect URLs:** in Supabase *Authentication → URL Configuration*:
-   - **Site URL:** `https://YOURUSERNAME.github.io/REPONAME/`
-   - **Redirect URLs:** add both:
-     - `https://YOURUSERNAME.github.io/REPONAME/`
-     - `http://localhost:8000/` (for local testing)
+   - **Site URL:** your Vercel production URL (e.g. `https://your-app.vercel.app`)
+   - **Redirect URLs:** add all the URLs you'll sign in from:
+     - `https://your-app.vercel.app/auth/callback`
+     - `http://localhost:3000/auth/callback` (for local development)
 
-## C. Paste the connection details into the app
+   The redirect URL must end with `/auth/callback` — this is the route handler that exchanges the OAuth code for a session.
 
-6. Open **index.html** in any text editor. Near the top of the `<script type="text/babel">` block find:
+## C. Deploy to Vercel (~5 min)
 
-```js
-const SUPABASE_URL  = "...";
-const SUPABASE_ANON_KEY = "...";
+6. Push the repository to GitHub (or fork it). Make it public or private — your match data is in Supabase regardless.
+
+7. Go to **vercel.com**, create a new project, and import the repository. Vercel detects Next.js automatically; `vercel.json` in the repo pins `framework: nextjs` to prevent mis-detection.
+
+8. In the Vercel project settings under **Environment Variables**, add:
+
+   | Name | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase Project URL (from step 1) |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon public key (from step 1) |
+
+9. Deploy. Vercel gives you a URL like `https://your-app.vercel.app`.
+
+10. Go back to step 5 and make sure this URL (with `/auth/callback`) is in Supabase's Redirect URLs list.
+
+## D. Local development
+
+11. Clone the repo and create `.env.local` in the project root:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Replace the placeholders with your Project URL and anon public key from step 1. Save.
+12. Run:
 
-## D. Host it on GitHub Pages (~5 min)
+```bash
+nvm use 20
+npm install
+npm run dev   # → http://localhost:3000
+```
 
-7. Create a new GitHub repository. **Make it public** — free GitHub Pages only serves public repos. Your match data is protected by Supabase RLS regardless of whether the source file is visible.
-8. Add **index.html** (and the icon files) to the repo (web UI: *Add file → Upload files*, or `git push`).
-9. Repo **Settings → Pages** → Source: *Deploy from a branch* → Branch **main**, folder **/ (root)** → Save. After a minute it shows your URL: `https://YOURUSERNAME.github.io/REPONAME/`.
+Ensure `http://localhost:3000/auth/callback` is in Supabase's Redirect URLs (step 5). The full sign-in flow works locally with the same credentials.
 
 ## E. Use it
 
-10. Open your Pages URL. Tap **Sign in with Google** and choose your account. You'll be redirected to Google and back — the session persists in the browser and auto-refreshes, so you won't need to sign in again until you explicitly sign out.
-11. Sign in on your phone at the **same URL with the same account** and your matches are already there. Add it to your home screen for a full-screen app:
+13. Open the app URL. Tap **Sign in with Google** and choose your account. You'll be redirected to Google and back — the session is stored in a cookie and the browser client auto-refreshes it, so you won't need to sign in again until you explicitly sign out.
+
+14. Sign in on your phone at the **same URL with the same Google account** and your matches are already there. Add it to your home screen for a full-screen experience:
     - iPhone/Safari: Share → **Add to Home Screen**.
     - Android/Chrome: ⋮ → **Add to Home screen**.
-
-## Local testing
-
-Open a terminal in the repo folder and run `python3 -m http.server 8000`, then visit `http://localhost:8000/`. Google OAuth redirects back to `localhost:8000` which is in the allowlist from step 5, so the full sign-in flow works locally.
 
 ## Bringing your existing matches over
 
@@ -89,6 +110,6 @@ If you have matches from an older version of the app, use Backup export/import: 
 
 ## Good to know
 
-- Want it truly private at the hosting level too? Private GitHub Pages needs a paid GitHub plan; with a free public repo, the *code* is visible but your *data* never is (Supabase RLS).
-- If sign-in throws a redirect-mismatch error, check that the redirect URL in step 5 exactly matches your Pages URL (https, correct username and repo name, trailing slash).
-- The app version is shown beside the SIDELINE logo. Pages serves with `max-age=600`, so a new deploy can take ~10 min + a hard refresh to appear.
+- If sign-in throws a redirect-mismatch error, check that the redirect URL in Supabase (step 5) exactly matches the URL being used, including `/auth/callback` and the correct scheme (`https` vs `http`).
+- The app version is shown beside the SIDELINE logo. A new Vercel deploy is usually live within a minute or two; hard-refresh if the version number doesn't update.
+- The public share link (`/m/<id>`) is only accessible when you've published a match through the Share wizard. Unpublished matches are always private (RLS).

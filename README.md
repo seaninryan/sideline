@@ -2,15 +2,15 @@
 
 A personal match tracker for GAA (hurling/football) and soccer. Type match notes in a simple handwritten-style notation and get a scoreboard, running-score chart, scorers table, timeline, lineup pitch, and a shareable infographic image.
 
-**Live app:** https://seaninryan.github.io/sideline/
+**Live app:** https://sideline-theta.vercel.app/
 
 ## How it works
 
-- **No server.** The whole app is one static file (`index.html`) served by GitHub Pages: React 18 + Babel standalone loaded from CDN, all app code in a single `<script type="text/babel">` block.
-- **Your data lives in your own Google Drive**, in a hidden app-data file (`sideline.json` in the Drive `appDataFolder`). The page itself contains no data and no secrets, so it's fine that it's public.
-- **Sign-in** uses Google Identity Services with the `drive.appdata` scope — the app can only touch its own hidden folder, never the rest of your Drive. The OAuth consent screen is kept in Testing mode with named test users, so only those accounts can sign in.
+- **Next.js 14 App Router + TypeScript**, deployed on Vercel.
+- **Your data lives in your own Supabase project** — a Postgres table (`matches`) protected by Row-Level Security. Only your account can read or write your rows. The public anon key in the app is the intended security boundary; RLS enforces it.
+- **Sign-in** uses Google OAuth via Supabase Auth. Any Google account can sign in; there is no allow-list.
 
-See [SETUP.md](SETUP.md) for the full Google Cloud + GitHub Pages setup (~20 minutes).
+See [SETUP.md](SETUP.md) for the Supabase + Google OAuth + Vercel setup (~25 minutes).
 
 ## Notation format
 
@@ -45,6 +45,42 @@ Sleepy Gary for zeep
 
 - Tabs: **Overview** (scoreboard, stat cards, score-progression chart, top scorers), **Timeline**, **Lineup** (formation pitch), **Notation / Live** (quick-add buttons for live entry, plus the notation as tappable blocks — edit a line with a minute stepper and it re-sorts into place, delete with a confirming second tap, insert a score/sub/card/corner/note after any line via guided forms; the raw text stays one tap away behind "Edit as text").
 - Per-match settings: date, team names, club colours, home/away, scoring mode (Auto/GAA/Goals-only).
-- Saved matches (Drive-backed), with New / Save / Duplicate / Delete.
+- Saved matches (Supabase-backed), with New / Save / Duplicate / Delete.
 - **Backup / Import** as JSON.
-- **Share image**: a portrait infographic PNG (Web Share on mobile, download elsewhere).
+- **Share match**: publish a read-only public link (`/m/<id>`) with an OG score-card preview image. Choose full names, initials, or no names (for youth matches).
+- **Game mode**: full-screen live entry wizard — tap to record scores, subs, and cards without typing.
+
+## Local development
+
+```bash
+nvm use 20
+npm install
+```
+
+Copy `.env.local.example` to `.env.local` (or create it) and fill in your Supabase credentials:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Then:
+
+```bash
+npm run dev    # → http://localhost:3000
+npm test       # Vitest (143 tests)
+npm run build  # production build check
+```
+
+Add `http://localhost:3000/auth/callback` to your Supabase project's redirect URL allowlist so the Google OAuth flow works locally (see SETUP.md step 5).
+
+## Repo structure
+
+```
+app/          Next.js routes and layouts
+lib/          Pure typed logic: parser, raw-edit, infographic, store, …
+components/   React components (MatchTracker, ScoreChart, ShareWizard, …)
+test/         Vitest suites
+assets/       LiberationSans fonts (for server-side OG image rendering)
+tools/        make-icon.py (icon regeneration only)
+```

@@ -8,43 +8,79 @@ Sideline — a personal match tracker for GAA (hurling/football) and soccer that
 
 ## Repository layout
 
-- **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + supabase-js v2 loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
-- **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + GitHub Pages).
-- **`icon-180.png`** / **`icon-touch-180.png`** — app icons: a green-pattern soccer ball, transparent for the favicon and on a pitch-green tile for `apple-touch-icon` (iOS blackens transparency). Don't edit by hand — regenerate both with `python3 tools/make-icon.py` (needs PIL). The top-bar logo SVG uses the same geometry/colours.
-- **`tools/`** — dev-only helpers, not served: `make-icon.py`, `parser-harness.js` (extracts the pure parser + raw-edit helpers from `index.html` for node), `run-tests.js` (regression tests for both).
-
-The app was originally a Claude artifact (`match-tracker.jsx`, persisted via the chat's `window.storage`, charted with recharts) converted by a script into this standalone. Neither the jsx nor the script is in the repo — **`index.html` is the source of truth; edit it directly.**
+- **`app/`** — Next.js 14 App Router pages and route handlers:
+  - `layout.tsx` — root layout; loads Oswald + Bebas Neue via `next/font`, applies CSS variables `--font-oswald` / `--font-bebas`.
+  - `page.tsx` — `/` server component: reads Supabase session via `getUser()`, renders `<SignInGate>` or `<EditorApp>`.
+  - `globals.css` — all app styles (ported from the old single-file `<style>` block; fonts use `var(--font-oswald)` / `var(--font-bebas)`).
+  - `auth/callback/route.ts` — OAuth code-exchange handler; exchanges the code for a session cookie and redirects to `/`.
+  - `m/[id]/page.tsx` — public read-only match page (SSR); fetches only `is_public=true` rows, applies `applyNameDisplay`.
+  - `m/[id]/opengraph-image.tsx` — OG score-card PNG (1200×630) rendered server-side via `@resvg/resvg-js` + `buildScoreCardSVG`.
+- **`lib/`** — pure, typed, unit-tested logic:
+  - `parser.ts` — `parseMatch` (the full parser).
+  - `raw-edit.ts` — roster + event-line helpers (`replaceEventLine`, `deleteEventLine`, `insertEventLine`, `placeEventLineByMinute`).
+  - `infographic.ts` — `buildInfographicSVG` (full portrait poster) + `buildScoreCardSVG` (compact OG card).
+  - `model.ts` — `buildModel`: rebuilds the infographic/page model from a stored record; used server-side by `/m/[id]`.
+  - `name-display.ts` — `applyNameDisplay` / `redactName`: full / initials / none player-name redaction for public pages.
+  - `store.ts` — `store` / `loadAll` / `cache` (browser-backed; same `list/get/set/del` surface as always); derives the promoted columns including `name_display` on every `store.set`.
+  - `supabase/client.ts` — `@supabase/ssr` browser client.
+  - `supabase/server.ts` — `@supabase/ssr` server client (reads cookies; used in Server Components and route handlers).
+  - `constants.ts` — `APP_VERSION`, `PALETTE`, `LIVE_EVENTS`, `SPORTS`.
+  - `types.ts`, `util.ts`, `sample.ts` (the fictional `SAMPLE`), `svg-to-png.client.ts` (browser canvas rasterizer).
+- **`components/`**:
+  - `MatchTracker.tsx` — the main editor (ported whole, carries `// @ts-nocheck` — to be decomposed/typed in a later phase).
+  - `ScoreChart.tsx`, `MinuteStep.tsx` — chart and minute-stepper sub-components.
+  - `SignIn.tsx` — presentational sign-in screen.
+  - `SignInGate.tsx` — client component: calls `signInWithOAuth` and passes state to `<SignIn>`.
+  - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker>`.
+  - `PublicMatch.tsx` — read-only public match render.
+  - `ShareWizard.tsx` — publish + share-link wizard (name-display choice → make public → copy link + OG preview).
+- **`test/`** — Vitest suites: `parser.test.ts` (full regression suite, 143 tests total across all files), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `smoke.test.ts`.
+- **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
+- **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
+- **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
+- **`vercel.json`** — `{"framework":"nextjs"}` (pins the framework; Vercel's auto-detect was wrong without it).
+- **`next.config.mjs`**, **`tsconfig.json`**, **`package.json`**.
 
 ## Commands
 
-There is no build/test toolchain. After editing, syntax-check the JSX (needs Node 18+, `nvm use 18`):
+Node 20 is required (`nvm use 20`).
 
 ```bash
-sed -n '/<script type="text\/babel"/,/<\/script>/p' index.html | sed '1d;$d' > /tmp/sideline-app.jsx
-npx esbuild /tmp/sideline-app.jsx --loader:.jsx=jsx --outfile=/dev/null
+npm install
+npm run dev      # → http://localhost:3000
+npm run build    # production build
+npm test         # Vitest (143 tests)
 ```
 
-Parser tests: `node tools/run-tests.js` (extracts the pure functions from `index.html` via `tools/parser-harness.js`). Run after any parser change. The canonical sample (`SAMPLE` with `{myTeam: "Racoons"}`) must give: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings.
+After any parser change, run `npm test` and confirm the canonical `SAMPLE` with `{myTeam:"Racoons"}` produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings. This is asserted in `test/parser.test.ts`.
 
-**Deploy:** push to `main`; GitHub Pages serves `index.html` at https://seaninryan.github.io/sideline/. Supabase OAuth works from any allowlisted redirect URL — the deployed URL and `http://localhost:8000/` are both in Supabase's redirect allowlist, so local testing now works too.
+**Deploy:** push to the production branch (currently `supabase-migration`; will be `main` after merge); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (top of the babel script) is shown beside the SIDELINE logo so the user can spot a stale cached page — Pages serves with `max-age=600`, so a deploy can take ~10 min + a hard refresh to appear. Bump it (v2 → v3 → …) in every change that will be deployed, and tell the user which version to look for. Current: **v37**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown beside the SIDELINE logo. Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v40**.
 
 ## Architecture
 
-Order of code inside the babel script: Supabase store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → pure raw-edit helpers (roster + event-line) → `SAMPLE` → CSS → `MinuteStep` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
+### Module layout
 
-### Auth + storage (no server)
+`lib/` — pure logic, all typed, all tested. `components/` — React components. `app/` — Next.js routing + server-side data fetching. The main editor (`MatchTracker`) is the largest component and still carries `// @ts-nocheck`; the surrounding modules are fully typed.
 
-- GitHub Pages serves the static page; the backend is a **Supabase** project (Postgres + Auth). The page holds only the public anon key (`SUPABASE_ANON_KEY`) — safe behind RLS; no secrets.
-- **Auth:** Supabase Google OAuth via `sb.auth.signInWithOAuth({provider:"google", options:{redirectTo: location.href}})` — a full-page redirect. The session is persisted in `localStorage` by supabase-js and **auto-refreshed**, so there is no token-lifecycle/keep-alive/banner code. `App` calls `sb.auth.getSession()` on load and listens via `onAuthStateChange`; `<MatchTracker/>` renders only after a valid session + `loadAll()`.
+### Auth + storage
+
+- The backend is a **Supabase** project (Postgres + Auth). Env vars `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the only secrets needed — both are public (safe behind RLS).
+- **Auth:** Supabase Google OAuth via `@supabase/ssr`. Flow: `SignInGate` (browser) calls `signInWithOAuth({provider:"google", options:{redirectTo: location.origin+"/auth/callback"}})` → `/auth/callback` route handler exchanges the code and sets session cookies → `app/page.tsx` (server component) reads the session via `getUser()`. **There is intentionally NO middleware.** The `@supabase/supabase-js` realtime/`ws` dependency references Node's `__dirname`, which crashes Vercel's Edge runtime; middleware would run there. Server-side token refresh is therefore omitted — the browser client's auto-refresh keeps the session cookie fresh instead.
 - **Sign-up policy:** open — any Google account can sign in. RLS isolates each user's rows. A "Sign out (\<email\>)" item lives in the ⋯ overflow menu.
-- **Storage:** a `matches` table, row per match. Columns: `id uuid pk`, `owner uuid (default auth.uid())`, `is_public bool default false`, `hide_names bool default false`, `match_date timestamptz`, `my_team text`, `opponent text`, `sport text`, `data jsonb`, `updated_at timestamptz`. `data jsonb` holds the full match record and is the source of truth; the promoted columns (`match_date`, `my_team`, `opponent`, `sport`) are derived on every `store.set` — `opponent` via `parseMatch`. RLS: `own_all` policy (`owner = auth.uid()`) + dormant `public_read` policy (`is_public = true`). `is_public`/`hide_names` are wired but dormant (future public sharing + youth name redaction).
+- **Storage:** a `matches` table, row per match. Columns: `id uuid pk`, `owner uuid (default auth.uid())`, `is_public bool default false`, `name_display text default 'full'`, `match_date timestamptz`, `my_team text`, `opponent text`, `sport text`, `data jsonb`, `updated_at timestamptz`. `data jsonb` holds the full match record and is the source of truth; the promoted columns (`match_date`, `my_team`, `opponent`, `sport`, `name_display`) are derived on every `store.set`. RLS: `own_all` policy (`owner = auth.uid()`) + `public_read` policy (`is_public = true`). The public page and OG route read only `is_public=true` rows and apply `name_display` redaction.
 - **Auto-save & sync:** matches auto-save 2.5s after the last change (`dirty` compares editor state to `cache[curId]`); a new match needs its first explicit Save. The dropdown and Save button show `*` when dirty. The ⋯ **Resync** button re-pulls via `loadAll()` (for edits made on another device) and reloads the open match, confirming first if local changes would be lost. Last-write-wins — there is no merge.
-- **`store` API** (same method shapes the original artifact's `window.storage` wrapper had): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool. `store.set` does a single-row upsert; `store.del` a single-row delete; `loadAll()` replaces the old `driveLoad`. `MatchTracker` is untouched — the `store` surface is identical.
-- `SUPABASE_URL` and `SUPABASE_ANON_KEY` are public constants near the top of the babel script. supabase-js v2 is loaded via `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">` (UMD), preserving the no-build single-file constraint.
+- **`store` API** (`lib/store.ts`): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool. `store.set` does a single-row upsert; `store.del` a single-row delete. `MatchTracker` uses this surface unchanged.
 
-### Parser (`parseMatch`) — pure JS
+### Public match page + OG image
+
+- `/m/[id]` (`app/m/[id]/page.tsx`) — server-rendered read-only view. Fetches only rows where `is_public=true`, runs `buildModel` then `applyNameDisplay`, renders `<PublicMatch>`.
+- `/m/[id]/opengraph-image` (`app/m/[id]/opengraph-image.tsx`) — Next.js OG image route. Renders `buildScoreCardSVG` (compact score card, no player names) via `@resvg/resvg-js` using the bundled LiberationSans fonts. Returns a 1200×630 PNG with `Cache-Control: public, max-age=3600`. Note in the source: if `buildScoreCardSVG` ever adds player names, run `applyNameDisplay` before calling it.
+- **Share wizard** (`components/ShareWizard.tsx`): name-display choice (full / initials / none) → confirm → sets `is_public=true` + `name_display` on the row → shows the `/m/<id>` URL + OG preview.
+- **`name_display`** (`'full' | 'initials' | 'none'`, default `'full'`) replaces the old `hide_names bool`. `initials` renders first initials of each name part; `none` falls back to shirt number or "Player".
+
+### Parser (`parseMatch`) — `lib/parser.ts`
 
 Input is plain text:
 
@@ -70,7 +106,7 @@ Key decisions (preserve these when modifying):
 ### Notation blocks (Notation tab)
 
 - The Notation tab renders the raw text as tappable blocks (one per event line; the preamble — header + roster — is a single Lineup block that expands to a mini textarea). Blocks are a **view over `raw`** — no block model is stored; the old textarea lives behind the "Edit as text" toggle.
-- Edits go through pure helpers beside the roster-edit helpers: `replaceEventLine` / `deleteEventLine` / `insertEventLine` (+ shared `placeEventLineByMinute`). A line whose leading minute changes is re-placed within its own half ordered by elapsed minute (wall-clock wrap, ties land last, never crossing the half's HT/FT marker). Structure lines (clock, bare minute, HT/FT, `+N`) never move. `parseMatch` stamps `srcLine` (index into `raw.split("\n")`) on scoring/notes/halfMarks to classify blocks.
+- Edits go through pure helpers in `lib/raw-edit.ts`: `replaceEventLine` / `deleteEventLine` / `insertEventLine` (+ shared `placeEventLineByMinute`). A line whose leading minute changes is re-placed within its own half ordered by elapsed minute (wall-clock wrap, ties land last, never crossing the half's HT/FT marker). Structure lines (clock, bare minute, HT/FT, `+N`) never move. `parseMatch` stamps `srcLine` (index into `raw.split("\n")`) on scoring/notes/halfMarks to classify blocks.
 - "+ Insert after" opens a type chooser (Score/Sub/Card/Corner/Note) → guided forms reusing the live-entry buttons (`buildEventLine`, `whoGrid`), with a live preview of the exact notation line. The anchor block picks the half and default minute; placement is by minute. The Note form warns when a minuted keyword-less note would parse as a score.
 - One editor open at a time: any raw mutation path (live append, undo, resync, match switch, view toggle) closes open block/insert/lineup editors to avoid stale line indices. Block delete needs a confirming second tap (auto-disarms after 3.5s).
 
@@ -89,9 +125,11 @@ Key decisions (preserve these when modifying):
 
 ### Share image
 
-- `buildInfographicSVG(model)` builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.
-- `svgToPng` rasterizes via a **data-URL** image → canvas → `toDataURL`/`toBlob`. Keep the data-URL approach — blob URLs hit CSP/canvas-taint issues. The panel displays the PNG so long-press-to-save works on iOS; "Save / Share" uses Web Share when available, else downloads; SVG download is the fallback.
-- The infographic uses **Arial** (reliable rasterization); the app uses Bebas Neue (display numbers) and Oswald (everything else) via injected CSS. **Oswald is the `.mt-root` base font** — don't add per-element serif fonts; bare elements inheriting the base is the intended behaviour.
+- `buildInfographicSVG(model)` (`lib/infographic.ts`) builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.
+- `buildScoreCardSVG(model)` (`lib/infographic.ts`) builds a compact landscape (1200×630) SVG score card for OG images — team names, score, grade, result only, no player names.
+- **Browser rasterization** (`lib/svg-to-png.client.ts`): data-URL image → canvas → `toDataURL`/`toBlob`. Keep the data-URL approach — blob URLs hit CSP/canvas-taint issues. The panel displays the PNG so long-press-to-save works on iOS; "Save / Share" uses Web Share when available, else downloads; SVG download is the fallback.
+- **Server rasterization** (OG route, `app/m/[id]/opengraph-image.tsx`): `@resvg/resvg-js` with bundled LiberationSans fonts. `next.config.mjs` marks `@resvg/resvg-js` as an external server package and traces the `assets/` directory for the OG route.
+- The infographic uses **Arial** (reliable browser rasterization); the app uses Bebas Neue (display numbers) and Oswald (everything else) via CSS variables. **Oswald is the `.mt-root` base font** — don't add per-element serif fonts; bare elements inheriting the base is the intended behaviour.
 
 ### UI decisions worth keeping
 
@@ -100,6 +138,7 @@ Key decisions (preserve these when modifying):
 
 ## Known limitations / next steps
 
-- Sign-in + Supabase save/load is in regular real-game use and works; the rarer recovery paths (network errors on save, session expiry edge cases) remain only opportunistically tested.
-- Supabase's auth-code refresh gives multi-day session persistence; a tab close and reopen resumes from `localStorage` without a re-sign-in prompt.
-- Possible additions: PWA manifest + icon; service-worker offline cache.
+- `MatchTracker.tsx` carries `// @ts-nocheck` and has not been decomposed into smaller typed components; that's a future phase.
+- **No server-side auth middleware.** `@supabase/supabase-js`'s `ws` dependency references `__dirname`, which crashes Vercel's Edge runtime. The browser client's auto-refresh keeps the session cookie current; server-side proactive token refresh is intentionally absent.
+- Sign-in + Supabase save/load works in regular real-game use; the rarer recovery paths (network errors on save, session expiry edge cases) remain only opportunistically tested.
+- Possible additions: PWA manifest + service-worker offline cache.
