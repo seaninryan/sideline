@@ -43,7 +43,7 @@ export default function PublicMatch({ model }: { model: Model }) {
           <div className="pm-dash">–</div>
           <div className="pm-team">
             <span className="pm-flag"><i style={{ background: m.colorThem }} /><i style={{ background: m.colorThem2 }} /></span>
-            <div className="pm-name">{m.themName} ({m.homeAway === "home" ? "H" : "A"})</div>
+            <div className="pm-name">{m.themName} ({m.homeAway === "home" ? "A" : "H"})</div>
             <div className="pm-score">{m.totals.them.str}</div>
           </div>
         </div>

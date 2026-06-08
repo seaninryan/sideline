@@ -77,7 +77,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   head.push(flag(W * 0.27 - 16, 46, 32, 19, m.colorUs, m.colorUs2, "rgba(255,255,255,.55)"));
   head.push(flag(W * 0.73 - 16, 46, 32, 19, m.colorThem, m.colorThem2, "rgba(255,255,255,.55)"));
   head.push(T(W * 0.27, 84, m.usName, 15, PAPER, { w: 700, a: "middle" }));
-  head.push(T(W * 0.73, 84, `${m.themName} (${m.homeAway === "home" ? "H" : "A"})`, 15, PAPER, { w: 700, a: "middle" }));
+  head.push(T(W * 0.73, 84, `${m.themName} (${m.homeAway === "home" ? "A" : "H"})`, 15, PAPER, { w: 700, a: "middle" }));
   head.push(T(W * 0.27, 132, m.totals.us.str, 44, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.73, 132, m.totals.them.str, 44, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.5, 124, "–", 24, "#7fa395", { a: "middle" }));
