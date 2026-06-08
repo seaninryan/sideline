@@ -27,7 +27,6 @@ html,body{margin:0;padding:0;background:#0c3b2a;}
   color:var(--paper); flex-wrap:wrap;}
 .mt-logo{font-family:var(--font-bebas); font-size:26px; letter-spacing:1px; line-height:1; display:flex; align-items:center; gap:9px;}
 .mt-logo svg{flex:none;}
-.mt-ver{font-family:var(--font-oswald); font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
 .mt-brand{display:flex; flex-direction:column; line-height:1;}
 .mt-wm{font-family:var(--font-bebas); font-size:26px; letter-spacing:1px; line-height:.9;}
 .mt-go{color:#f5c518;}

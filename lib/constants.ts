@@ -1,4 +1,4 @@
-// Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
+// Shown in the footer at the bottom of the app — bump on every deployed change so a stale cached page is obvious.
 export const APP_VERSION = "v41";
 
 // swatch palette for the colour picker (common kit colours)
