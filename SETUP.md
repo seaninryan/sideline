@@ -111,5 +111,5 @@ If you have matches from an older version of the app, use Backup export/import: 
 ## Good to know
 
 - If sign-in throws a redirect-mismatch error, check that the redirect URL in Supabase (step 5) exactly matches the URL being used, including `/auth/callback` and the correct scheme (`https` vs `http`).
-- The app version is shown beside the HERE WE GO logo. A new Vercel deploy is usually live within a minute or two; hard-refresh if the version number doesn't update.
+- The app version is shown in the footer at the bottom of the app. A new Vercel deploy is usually live within a minute or two; hard-refresh if the version number doesn't update.
 - The public share link (`/m/<id>`) is only accessible when you've published a match through the Share wizard. Unpublished matches are always private (RLS).

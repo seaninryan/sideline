@@ -56,7 +56,7 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE` with 
 
 **Deploy:** push to the production branch (currently `supabase-migration`; will be `main` after merge); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown beside the HERE WE GO logo. Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v41**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v41**.
 
 ## Architecture
 
