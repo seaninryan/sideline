@@ -1,5 +1,17 @@
 import { contrastOn, fmtScore } from "@/lib/util";
 import type { Model } from "@/lib/types";
+import { BRAND_SITE, BRAND_WORDMARK, BRAND_CHANT } from "@/lib/constants";
+
+/* Shared HWG brand pill (same geometry as the app icon / top-bar logo).
+   Drawn as an SVG string so the poster and OG card share one source of truth.
+   Pill text uses the rasterisation font (Liberation Sans / Arial), matching the icon. */
+export function brandPillSVG(x: number, y: number, scale = 1): string {
+  return `<g transform="translate(${x},${y}) scale(${scale})">`
+    + `<rect x="4" y="8" width="120" height="54" rx="27" fill="#0c3b2a" stroke="#f5c518" stroke-width="4"/>`
+    + `<text x="64" y="50" font-family="Liberation Sans, Arial, sans-serif" font-size="40" font-weight="700" text-anchor="middle">`
+    + `<tspan fill="#f4efe1">HW</tspan><tspan fill="#f5c518">G</tspan></text>`
+    + `</g>`;
+}
 
 export function buildScoreCardSVG(m: Model): { svg: string; width: number; height: number } {
   const W = 1200, H = 630;
@@ -31,7 +43,11 @@ export function buildScoreCardSVG(m: Model): { svg: string; width: number; heigh
   parts.push(t(W * 0.75, 410, themS, 120, INK, { w: 700, a: "middle" }));
   if (result) parts.push(t(W / 2, 500, result, 40, INK, { w: 700, a: "middle" }));
   if (ht) parts.push(t(W / 2, 545, `HT ${ht}`, 26, MUTE, { a: "middle" }));
-  parts.push(t(W / 2, 605, "HERE WE GO", 24, MUTE, { w: 700, a: "middle" }));
+  // brand lockup: [pill] HERE WE GO  herewego.ie — laid out as a row centred on W/2
+  // group spans ~[W/2-200, W/2+193] (pill 79w + wordmark ~165w + site ~133w, ~14px gaps)
+  parts.push(brandPillSVG(W / 2 - 200, 565, 0.62));        // 128*0.62 ≈ 79 wide, 70*0.62 ≈ 43 tall
+  parts.push(t(W / 2 - 107, 600, BRAND_WORDMARK, 30, INK, { w: 700 }));     // anchor start
+  parts.push(t(W / 2 + 60, 600, BRAND_SITE, 22, MUTE, { w: 400 }));         // anchor start
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
   return { svg, width: W, height: H };
@@ -61,7 +77,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   head.push(flag(W * 0.27 - 16, 46, 32, 19, m.colorUs, m.colorUs2, "rgba(255,255,255,.55)"));
   head.push(flag(W * 0.73 - 16, 46, 32, 19, m.colorThem, m.colorThem2, "rgba(255,255,255,.55)"));
   head.push(T(W * 0.27, 84, m.usName, 15, PAPER, { w: 700, a: "middle" }));
-  head.push(T(W * 0.73, 84, `${m.themName} (${m.homeAway === "home" ? "H" : "A"})`, 15, PAPER, { w: 700, a: "middle" }));
+  head.push(T(W * 0.73, 84, `${m.themName} (${m.homeAway === "home" ? "A" : "H"})`, 15, PAPER, { w: 700, a: "middle" }));
   head.push(T(W * 0.27, 132, m.totals.us.str, 44, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.73, 132, m.totals.them.str, 44, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.5, 124, "–", 24, "#7fa395", { a: "middle" }));
@@ -244,10 +260,14 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   body.push(L(railX, tlTop, railX, y - 4, LINE, 1.5));
   body.push(...tlBody);
 
-  // ---- footer ----
+  // ---- brand footer ----
   body.push(L(P, y + 2, P + CW, y + 2, LINE, 1));
-  body.push(T(W / 2, y + 22, `Here We Go · ${m.grade || m.sport || ""}`, 9.5, MUTE, { a: "middle", ls: 0.5 }));
-  const H = y + 38;
+  const pillS = 0.5;                          // 128*0.5 = 64 wide, 70*0.5 = 35 tall
+  body.push(brandPillSVG(W / 2 - 32, y + 10, pillS));
+  body.push(T(W / 2, y + 62, BRAND_WORDMARK, 13, INK, { w: 800, a: "middle", ls: 1.5 }));
+  body.push(T(W / 2, y + 78, BRAND_SITE, 10, MUTE, { a: "middle", ls: 0.5 }));
+  body.push(T(W / 2, y + 92, BRAND_CHANT.toUpperCase(), 8, "#9aa89e", { a: "middle", ls: 2 }));
+  const H = y + 104;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
     + R(0, 0, W, H, PAPER) + R(0, 0, W, HH, PITCH) + head.join("") + body.join("") + `</svg>`;

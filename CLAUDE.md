@@ -34,7 +34,7 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker>`.
   - `PublicMatch.tsx` — read-only public match render.
   - `ShareWizard.tsx` — publish + share-link wizard (name-display choice → make public → copy link + OG preview).
-- **`test/`** — Vitest suites: `parser.test.ts` (full regression suite, 143 tests total across all files), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `smoke.test.ts`.
+- **`test/`** — Vitest suites: `parser.test.ts` (full regression suite, 147 tests total across all files), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `brand.test.ts`, `smoke.test.ts`.
 - **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
 - **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
 - **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
@@ -49,14 +49,14 @@ Node 20 is required (`nvm use 20`).
 npm install
 npm run dev      # → http://localhost:3000
 npm run build    # production build
-npm test         # Vitest (143 tests)
+npm test         # Vitest (147 tests)
 ```
 
 After any parser change, run `npm test` and confirm the canonical `SAMPLE` with `{myTeam:"Racoons"}` produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings. This is asserted in `test/parser.test.ts`.
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v41**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v42**.
 
 ## Architecture
 
@@ -75,10 +75,11 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE` with 
 
 ### Public match page + OG image
 
-- `/m/[id]` (`app/m/[id]/page.tsx`) — server-rendered read-only view. Fetches only rows where `is_public=true`, runs `buildModel` then `applyNameDisplay`, renders `<PublicMatch>`.
+- `/m/[id]` (`app/m/[id]/page.tsx`) — server-rendered read-only view. Fetches only rows where `is_public=true`, runs `buildModel` then `applyNameDisplay`, renders `<PublicMatch>`. `PublicMatch` is a full **poster-style responsive page** (mirrors `buildInfographicSVG` as real HTML, reusing the `<ScoreChart>` component): brand header → score header (kit flags, result pill) → 2×2 stats → chart → scorers → lineup pitch (flat starters list when a match has no formation rows) → centre-rail timeline → brand footer with a clickable `herewego.ie` link.
 - `/m/[id]/opengraph-image` (`app/m/[id]/opengraph-image.tsx`) — Next.js OG image route. Renders `buildScoreCardSVG` (compact score card, no player names) via `@resvg/resvg-js` using the bundled LiberationSans fonts. Returns a 1200×630 PNG with `Cache-Control: public, max-age=3600`. Note in the source: if `buildScoreCardSVG` ever adds player names, run `applyNameDisplay` before calling it.
 - **Share wizard** (`components/ShareWizard.tsx`): name-display choice (full / initials / none) → confirm → sets `is_public=true` + `name_display` on the row → shows the `/m/<id>` URL + OG preview.
 - **`name_display`** (`'full' | 'initials' | 'none'`, default `'full'`) replaces the old `hide_names bool`. `initials` renders first initials of each name part; `none` falls back to shirt number or "Player".
+- **Shared brand lockup.** One source per idiom: `brandPillSVG(x,y,scale)` (`lib/infographic.ts`) draws the HWG pill for the two rasterised images (poster footer + OG card); `<BrandHeader>` (`components/BrandHeader.tsx`) is the HTML brand block (pill + wordmark + chant) used by `PublicMatch` and `SignIn`, linking home via `BRAND_HOME` (`/`). Brand strings (`BRAND_SITE`, `BRAND_SITE_URL`, `BRAND_WORDMARK`, `BRAND_CHANT`) live in `lib/constants.ts`. The brand-as-home link is on public surfaces only — the editor top bar keeps its own inline logo, unchanged.
 
 ### Parser (`parseMatch`) — `lib/parser.ts`
 

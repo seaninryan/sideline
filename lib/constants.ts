@@ -1,5 +1,12 @@
 // Shown in the footer at the bottom of the app — bump on every deployed change so a stale cached page is obvious.
-export const APP_VERSION = "v41";
+export const APP_VERSION = "v42";
+
+// Brand lockup — shared across the public page, the poster image, and the OG card.
+export const BRAND_HOME = "/";                       // home link target (relative — portable across prod/preview/localhost)
+export const BRAND_SITE = "herewego.ie";             // domain, shown as text
+export const BRAND_SITE_URL = "https://herewego.ie"; // clickable href on HTML surfaces
+export const BRAND_WORDMARK = "HERE WE GO";
+export const BRAND_CHANT = "Here we go · Here we go";
 
 // swatch palette for the colour picker (common kit colours)
 export const PALETTE = ["#f5c518", "#1f7a4d", "#0c3b2a", "#7a1f1f", "#c0392b", "#2c5fa8", "#1b2a4a", "#7ec8e3",
