@@ -54,7 +54,7 @@ npm test         # Vitest (143 tests)
 
 After any parser change, run `npm test` and confirm the canonical `SAMPLE` with `{myTeam:"Racoons"}` produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings. This is asserted in `test/parser.test.ts`.
 
-**Deploy:** push to the production branch (currently `supabase-migration`; will be `main` after merge); Vercel auto-builds with `@vercel/next`.
+**Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
 **Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v41**.
 
