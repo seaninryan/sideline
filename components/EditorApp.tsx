@@ -12,7 +12,7 @@ export default function EditorApp() {
   return (
     <div className="si-wrap">
       <div className="si-card">
-        <h1>SIDELINE</h1>
+        <h1>HERE WE GO</h1>
         <p>{phase === "error" ? "Couldn't load your matches — check your connection and refresh." : "Loading your matches…"}</p>
       </div>
     </div>

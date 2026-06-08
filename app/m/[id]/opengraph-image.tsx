@@ -24,7 +24,7 @@ export default async function Image({ params }: { params: { id: string } }) {
   const row = data as Pick<MatchRow, "data" | "is_public"> | null;
   const model = row
     ? buildModel(row.data)
-    : { usName: "Sideline", themName: "", totals: { us: { str: "" }, them: { str: "" } }, colorUs: "#0c3b2a", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8" };
+    : { usName: "Here We Go", themName: "", totals: { us: { str: "" }, them: { str: "" } }, colorUs: "#0c3b2a", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8" };
   // INVARIANT: the score card renders only team names, score, grade and result —
   // NO individual player names — so it needs no applyNameDisplay() redaction. If
   // buildScoreCardSVG ever adds a scorer/lineup line, run the model through
