@@ -29,9 +29,9 @@ export function buildModel(record: MatchRecord): Model {
   const starters = roster.filter((p: any) => p.role === "starting");
   const subs = roster.filter((p: any) => p.role === "sub");
   const missing = roster.filter((p: any) => p.role === "missing");
-  // NOTE: the editor falls back to chunk(starters, 3) when there are no explicit
-  // formation rows; we don't, because the only current consumer (PublicMatch) renders
-  // a flat lineup list, not a pitch. Add that fallback here if a public pitch view lands.
+  // formationRows drives the public pitch view; when a match has no formation
+  // notation this is empty and PublicMatch falls back to a flat starters list
+  // (it does the fallback itself, so the model stays a faithful echo of the notation).
   const formationRows = parsed.formationRows && parsed.formationRows.length ? parsed.formationRows : [];
 
   const h1 = series.filter((p: any) => p.half === 1 && p.usScore);

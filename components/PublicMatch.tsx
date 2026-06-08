@@ -80,26 +80,34 @@ export default function PublicMatch({ model }: { model: Model }) {
         ))}
       </section>
 
-      {/* lineup */}
-      {(m.formationRows && m.formationRows.length > 0) && (
+      {/* lineup — pitch when we have formation rows, else a flat starters list */}
+      {((m.formationRows && m.formationRows.length > 0) || (m.starters && m.starters.length > 0)) && (
         <section className="pm-sec">
           <p className="pm-label">Team · {(m.usName || "").toUpperCase()}</p>
-          <div className="pm-pitch">
-            {m.formationRows.map((row: number[], ri: number) => (
-              <div className="pm-pitch-row" key={ri}>
-                {row.map((n, ci) => {
-                  const sc = (m.usScorers || []).find((s: any) => s.num === n && (s.g || s.p));
-                  return (
-                    <div className="pm-jersey" key={ci}>
-                      <div className="sq" style={{ background: m.colorUs, color: contrastOn(m.colorUs) }}>{n}</div>
-                      <div className="nm">{findName(n)}{subOff.has(n) ? " ▼" : ""}</div>
-                      {sc && <div className="sc">{m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+          {(m.formationRows && m.formationRows.length > 0) ? (
+            <div className="pm-pitch">
+              {m.formationRows.map((row: number[], ri: number) => (
+                <div className="pm-pitch-row" key={ri}>
+                  {row.map((n, ci) => {
+                    const sc = (m.usScorers || []).find((s: any) => s.num === n && (s.g || s.p));
+                    return (
+                      <div className="pm-jersey" key={ci}>
+                        <div className="sq" style={{ background: m.colorUs, color: contrastOn(m.colorUs) }}>{n}</div>
+                        <div className="nm">{findName(n)}{subOff.has(n) ? " ▼" : ""}</div>
+                        {sc && <div className="sc">{m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="pm-lineup-list">
+              {m.starters.map((p: any, i: number) => (
+                <span className="pm-lineup-item" key={i}>{p.num ? `${p.num}. ` : ""}{p.name}{subOff.has(p.num) ? " ▼" : ""}</span>
+              ))}
+            </div>
+          )}
           {m.subs && m.subs.length > 0 && <p className="pm-bench">Subs: {m.subs.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
           {m.missing && m.missing.length > 0 && <p className="pm-bench">Missing: {m.missing.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
         </section>
