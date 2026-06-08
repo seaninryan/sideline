@@ -1,6 +1,42 @@
 import { contrastOn, fmtScore } from "@/lib/util";
 import type { Model } from "@/lib/types";
 
+export function buildScoreCardSVG(m: Model): { svg: string; width: number; height: number } {
+  const W = 1200, H = 630;
+  const esc = (s: any) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] as string));
+  const usS = m.totals?.us?.str ?? "0";
+  const themS = m.totals?.them?.str ?? "0";
+  const grade = (m.grade || m.sport || "Match").toUpperCase();
+  const result = m.result || "";
+  const ht = m.ht || "";
+  const flag = (x: number, y: number, w: number, h: number, c1: string, c2: string) =>
+    `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c1}"/>` +
+    `<rect x="${x}" y="${y + h / 2}" width="${w}" height="${h / 2}" fill="${c2}"/></g>`;
+  const t = (x: number, y: number, s: string, size: number, fill: string, opts: { w?: number; a?: string } = {}) =>
+    `<text x="${x}" y="${y}" font-family="Liberation Sans, Arial, sans-serif" font-size="${size}" fill="${fill}" ` +
+    `font-weight="${opts.w || 400}" text-anchor="${opts.a || "start"}">${esc(s)}</text>`;
+
+  const PAPER = "#f4efe1", INK = "#0c3b2a", MUTE = "#5c6b60";
+  const parts: string[] = [];
+  parts.push(`<rect width="${W}" height="${H}" fill="${PAPER}"/>`);
+  parts.push(`<rect x="0" y="0" width="${W / 2}" height="10" fill="${m.colorUs}"/>`);
+  parts.push(`<rect x="${W / 2}" y="0" width="${W / 2}" height="10" fill="${m.colorThem}"/>`);
+  parts.push(t(W / 2, 90, grade, 34, MUTE, { w: 700, a: "middle" }));
+  parts.push(flag(W * 0.25 - 40, 150, 80, 50, m.colorUs, m.colorUs2));
+  parts.push(flag(W * 0.75 - 40, 150, 80, 50, m.colorThem, m.colorThem2));
+  parts.push(t(W * 0.25, 250, m.usName || "Us", 44, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.75, 250, m.themName || "Them", 44, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.25, 410, usS, 120, INK, { w: 700, a: "middle" }));
+  parts.push(t(W / 2, 400, "–", 90, MUTE, { w: 400, a: "middle" }));
+  parts.push(t(W * 0.75, 410, themS, 120, INK, { w: 700, a: "middle" }));
+  if (result) parts.push(t(W / 2, 500, result, 40, INK, { w: 700, a: "middle" }));
+  if (ht) parts.push(t(W / 2, 545, `HT ${ht}`, 26, MUTE, { a: "middle" }));
+  parts.push(t(W / 2, 605, "SIDELINE", 24, MUTE, { w: 700, a: "middle" }));
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
+  return { svg, width: W, height: H };
+}
+
 /* ============================================================
    SHAREABLE INFOGRAPHIC  (pure SVG -> PNG, no external deps)
    ============================================================ */
