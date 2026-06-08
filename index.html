@@ -2431,6 +2431,8 @@ function App() {
       } else { setPhase("out"); }
     }).catch(() => { setErr("Couldn't reach the server — check your connection."); setPhase("out"); });
     // Reflect later sign-out (here or on another tab) back to the sign-in screen.
+    // Note: a lost session unmounts MatchTracker, so any not-yet-autosaved edits are dropped
+    // (rare — autosave runs every 2.5s and token refresh is reliable while the tab is open).
     const { data: listener } = sb.auth.onAuthStateChange((_event, session) => { if (!session) setPhase("out"); });
     return () => { if (listener && listener.subscription) listener.subscription.unsubscribe(); };
   }, []);
