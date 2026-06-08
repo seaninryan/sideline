@@ -1,0 +1,28 @@
+import type { Model, NameDisplay } from "@/lib/types";
+
+export function redactName(name: string, num: number | undefined, mode: NameDisplay): string {
+  if (mode === "full" || !name) return name;
+  if (mode === "initials") {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return parts.map((w) => w[0].toUpperCase() + ".").join("");
+  }
+  return num != null ? `#${num}` : "Player";
+}
+
+export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
+  if (mode === "full") return model;
+  const fixPlayer = (p: any) => (p ? { ...p, name: redactName(p.name, p.num, mode) } : p);
+  const fixScorer = (s: any) =>
+    s ? { ...s, name: redactName(s.name, s.num, mode), scorer: s.scorer ? redactName(s.scorer, s.num, mode) : s.scorer } : s;
+  return {
+    ...model,
+    usScorers: (model.usScorers || []).map(fixScorer),
+    starters: (model.starters || []).map(fixPlayer),
+    subs: (model.subs || []).map(fixPlayer),
+    missing: (model.missing || []).map(fixPlayer),
+    formationRows: (model.formationRows || []).map((row: any[]) => (row || []).map(fixPlayer)),
+    timeline: (model.timeline || []).map((t: any) =>
+      t && t.scorer ? { ...t, scorer: redactName(t.scorer, t.num, mode) } : t,
+    ),
+  };
+}

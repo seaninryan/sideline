@@ -1,1086 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Sideline</title>
-<link rel="icon" href="icon-180.png" />
-<link rel="apple-touch-icon" href="icon-touch-180.png" />
-<style>
-  *{box-sizing:border-box;-webkit-tap-highlight-color:rgba(0,0,0,0);}
-  html,body{margin:0;padding:0;background:#0c3b2a;}
-  #root{min-height:100vh;}
-  .si-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
-  .si-card{background:#f4efe1;border-radius:18px;padding:30px 24px;max-width:340px;width:100%;text-align:center;
-    box-shadow:0 22px 60px rgba(0,0,0,.45);}
-  .si-card h1{font-family:Georgia,serif;font-size:32px;margin:0 0 6px;color:#0c3b2a;letter-spacing:2px;}
-  .si-card p{color:#5c6b60;font-size:14px;margin:0 0 22px;line-height:1.55;}
-  .si-btn{display:inline-block;background:#fff;border:1px solid #d8cfb8;border-radius:11px;padding:12px 20px;
-    font-size:15px;font-weight:600;color:#222;cursor:pointer;}
-  .si-btn:disabled{opacity:.6;}
-  .si-btn:active{transform:translateY(1px);}
-  .si-status{margin-top:16px;font-size:13px;color:#5c6b60;min-height:18px;}
-</style>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel" data-presets="react">
+// @ts-nocheck
+"use client";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import MinuteStep from "@/components/MinuteStep";
+import ScoreChart from "@/components/ScoreChart";
+import { store, cache, loadAll } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
+import { parseMatch, isPlaceholderLabel } from "@/lib/parser";
+import { buildInfographicSVG } from "@/lib/infographic";
+import { svgToPng } from "@/lib/svg-to-png.client";
+import {
+  deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
+  eventLineMinute, swapRosterNums, renumRoster, rosterEnd,
+} from "@/lib/raw-edit";
+import { SAMPLE } from "@/lib/sample";
+import {
+  gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
+  fmtDate, fmtDateShort, toLocalInput, dateKey, MONTHS, pad2,
+} from "@/lib/util";
+import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
+import ShareWizard from "@/components/ShareWizard";
 
-const { useState, useMemo, useEffect, useRef } = React;
+const sb = createClient();
 
-// Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-const APP_VERSION = "v37";
+// --- editor-local helpers (not extracted to lib; copied verbatim from index.html) ---
 
-const SUPABASE_URL = "https://uobatagvcxbqynajojrt.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_5Bthln94hLtsYlgNXIzWSA_UGuhAze7";
-// The page holds only the public anon key; per-user isolation is enforced by RLS on `matches`.
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-let cache = {}; // { id: record } — in-memory mirror; same shape MatchTracker has always read.
-
-// Pull every match the signed-in user owns into `cache`. RLS scopes the query to auth.uid().
-async function loadAll() {
-  const { data, error } = await sb.from("matches").select("id,data");
-  if (error) throw error;
-  cache = {};
-  (data || []).forEach((r) => { if (r && r.id) cache[r.id] = r.data; });
-}
-
-// Derive the promoted columns from a record. `data` (jsonb) stays the source of truth;
-// opponent isn't stored in the record, so parse it from the header.
-function matchCols(data) {
-  let opp = null;
-  try { opp = (parseMatch(data.raw, { myTeam: data.myTeam }).opp) || null; } catch (e) {}
-  return {
-    match_date: data.matchDate || data.date || null,
-    my_team: data.myTeam || null,
-    opponent: opp,
-    sport: data.sport || null,
-  };
-}
-
-const store = {
-  ok: true,
-  async list() { return Object.keys(cache).map((id) => "match:" + id); },
-  async get(id) { return cache[id] || null; },
-  async set(id, data) { // single-row upsert; owner defaults to auth.uid() on insert (RLS-checked)
-    cache[id] = data;
-    const { error } = await sb.from("matches").upsert(Object.assign(
-      { id, data, updated_at: new Date().toISOString() }, matchCols(data),
-    ));
-    if (error) console.warn("save failed", error.message);
-    return !error;
-  },
-  async del(id) {
-    delete cache[id];
-    const { error } = await sb.from("matches").delete().eq("id", id);
-    return !error;
-  },
-};
-
-function gpTotal(g, p, mode) { return mode === "goals" ? g : g * 3 + p; }
-// crypto.randomUUID() — available in modern browsers and Node 18+ (the test harness).
-function mkId() { return crypto.randomUUID(); }
-// Normalise a Backup export ({matches:[{id,...rec}]} or a bare array) into [{id, rec}]
-// with FRESH uuids, dropping any incoming id so old non-uuid ids never reach Postgres.
-// `gen` is injectable for deterministic tests.
-function remapImport(obj, gen) {
-  gen = gen || mkId;
-  const arr = (obj && obj.matches) || (Array.isArray(obj) ? obj : []);
-  return arr.map((mm) => { const { id: _drop, ...rec } = mm; return { id: gen(), rec }; });
-}
-function fmtScore(g, p, mode) { return mode === "goals" ? String(g) : `${g}-${p}`; }
-function squash(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
-const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
-// swatch palette for the colour picker (common kit colours)
-const PALETTE = ["#f5c518", "#1f7a4d", "#0c3b2a", "#7a1f1f", "#c0392b", "#2c5fa8", "#1b2a4a", "#7ec8e3",
-  "#ffffff", "#111111", "#e67e22", "#5e3a87", "#d4af37", "#888888", "#16a085", "#e91e63"];
-// live-entry event buttons ("gaa" ones hide in goals-only mode)
-const LIVE_EVENTS = [
-  { key: "goal", label: "Goal" },
-  { key: "point", label: "Point", gaa: true },
-  { key: "goalfree", label: "Goal · free" },
-  { key: "pointfree", label: "Point · free", gaa: true },
-  { key: "point65", label: "Point · '65", gaa: true },
-  { key: "point45", label: "Point · '45", gaa: true },
-  { key: "og", label: "Own goal" },
-  { key: "yellow", label: "Yellow card" },
-  { key: "red", label: "Red card" },
-  { key: "corner", label: "Corner" },
-  { key: "half", label: "Start half" },
-  { key: "ht", label: "HT" },
-  { key: "ft", label: "FT" },
-];
-const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "point65", "point45", "og", "yellow", "red"];
-// readable text colour for a jersey/button of the given colour (dark kit => white numbers)
-const contrastOn = (hex) => {
-  const h = (hex || "").replace("#", "");
-  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0");
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0);
-  return 0.299 * r + 0.587 * g + 0.114 * b > 145 ? "#11241b" : "#ffffff";
-};
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const pad2 = (n) => String(n).padStart(2, "0");
-const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-const fmtDate = (s) => { if (!s) return ""; const d = new Date(s); if (isNaN(d)) return ""; return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
-const fmtDateShort = (s) => { if (!s) return ""; const d = new Date(s); if (isNaN(d)) return ""; return `${d.getDate()} ${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`; };
-const dateKey = (s, fb) => { const d = s ? Date.parse(s) : NaN; return isNaN(d) ? (fb || 0) : d; };
-
-/* ============================================================
-   SHAREABLE INFOGRAPHIC  (pure SVG -> PNG, no external deps)
-   ============================================================ */
-function buildInfographicSVG(m) {
-  const W = 420, P = 18, CW = W - 2 * P;
-  const PITCH = "#0c3b2a", PAPER = "#f4efe1", INK = "#11241b", MUTE = "#6f7d72", LINE = "#ded4ba";
-  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const T = (x, y, s, size, fill, o = {}) => `<text x="${x}" y="${y}" font-family="Arial,Helvetica,sans-serif" font-size="${size}" fill="${fill}" font-weight="${o.w || 400}" text-anchor="${o.a || "start"}"${o.ls ? ` letter-spacing="${o.ls}"` : ""}>${esc(s)}</text>`;
-  const R = (x, y, w, h, fill, rx = 0, o = {}) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"${rx ? ` rx="${rx}"` : ""}${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw || 1}"` : ""}/>`;
-  const L = (x1, y1, x2, y2, stroke, sw = 1, dash = "") => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${sw}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
-  const C = (cx, cy, r, fill, o = {}) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw || 1}"` : ""}/>`;
-  const flag = (x, y, w, h, c1, c2, stroke = "rgba(0,0,0,.3)") =>
-    `<rect x="${x}" y="${y}" width="${w}" height="${h / 2}" fill="${c1}" rx="1.5"/><rect x="${x}" y="${y + h / 2}" width="${w}" height="${h / 2}" fill="${c2}"/><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="1" rx="2"/>`;
-
-  const head = [], body = [];
-  const HH = 196;
-
-  // ---- header band ----
-  head.push(R(0, 0, W / 2, 6, m.colorUs), R(W / 2, 0, W / 2, 6, m.colorThem));
-  head.push(T(P, 30, (m.grade || m.sport || "Match").toUpperCase(), 12, PAPER, { w: 700, ls: 1 }));
-  head.push(T(W - P, 30, m.dateStr, 11, "#cfe3d8", { a: "end" }));
-  head.push(flag(W * 0.27 - 16, 46, 32, 19, m.colorUs, m.colorUs2, "rgba(255,255,255,.55)"));
-  head.push(flag(W * 0.73 - 16, 46, 32, 19, m.colorThem, m.colorThem2, "rgba(255,255,255,.55)"));
-  head.push(T(W * 0.27, 84, m.usName, 15, PAPER, { w: 700, a: "middle" }));
-  head.push(T(W * 0.73, 84, `${m.themName} (${m.homeAway === "home" ? "H" : "A"})`, 15, PAPER, { w: 700, a: "middle" }));
-  head.push(T(W * 0.27, 132, m.totals.us.str, 44, PAPER, { w: 800, a: "middle" }));
-  head.push(T(W * 0.73, 132, m.totals.them.str, 44, PAPER, { w: 800, a: "middle" }));
-  head.push(T(W * 0.5, 124, "–", 24, "#7fa395", { a: "middle" }));
-  const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
-  const margin = Math.abs(m.totals.us.total - m.totals.them.total);
-  const resFull = resTxt + (m.effMode === "gaa" && margin ? ` BY ${margin}` : "");
-  const resBg = m.result === "Win" ? "#f5c518" : m.result === "Loss" ? "#c0392b" : "#e7dec6";
-  const resFg = m.result === "Loss" ? "#ffffff" : "#11241b";
-  const cw = resFull.length * 7.6 + 24;
-  head.push(R(W / 2 - cw / 2, 152, cw, 24, resBg, 12));
-  head.push(T(W / 2, 168, resFull, 11.5, resFg, { w: 700, a: "middle", ls: 1 }));
-
-  let y = HH + 20;
-
-  // ---- stats 2x2 ----
-  const stats = [["Half-time", m.ht], ["Lead changes", String(m.leadChanges)], ["Times level", String(m.timesLevel)],
-    ["Biggest lead", `${m.maxLead}${m.maxLeadSide ? " " + (m.maxLeadSide === "us" ? m.usName.split(" ")[0] : m.themName.split(" ")[0]) : ""}`]];
-  const colW = CW / 2, rowH = 46;
-  body.push(L(P + colW, y, P + colW, y + 2 * rowH, LINE, 1));
-  body.push(L(P, y + rowH, P + CW, y + rowH, LINE, 1));
-  stats.forEach((st, i) => {
-    const c = i % 2, r = i < 2 ? 0 : 1;
-    const cx = P + c * colW + colW / 2, yt = y + r * rowH;
-    const big = st[0] === "Lead changes" || st[0] === "Times level";
-    body.push(T(cx, yt + 21, st[1], big ? 21 : 15, PITCH, { w: 800, a: "middle" }));
-    body.push(T(cx, yt + 37, st[0].toUpperCase(), 9, MUTE, { w: 700, a: "middle", ls: 0.5 }));
-  });
-  y += 2 * rowH + 16;
-
-  // ---- chart ----
-  const usShort = m.usName.split(" ")[0], themShort = m.themName.split(" ")[0];
-  body.push(T(P, y, "SCORE PROGRESSION", 11, MUTE, { w: 700, ls: 1 }));
-  // legend on title row, right side
-  let lx = W - P;
-  body.push(T(lx, y, themShort, 10, INK, { w: 700, a: "end" })); lx -= themShort.length * 5.6 + 6;
-  body.push(flag(lx - 14, y - 8, 14, 9, m.colorThem, m.colorThem2)); lx -= 14 + 12;
-  body.push(T(lx, y, usShort, 10, INK, { w: 700, a: "end" })); lx -= usShort.length * 5.6 + 6;
-  body.push(flag(lx - 14, y - 8, 14, 9, m.colorUs, m.colorUs2));
-  y += 10;
-  const chH = 150;
-  body.push(R(P, y, CW, chH, "#ffffff", 10, { stroke: LINE, sw: 1 }));
-  const plotL = P + 32, plotR = P + CW - 12, plotT = y + 12, plotB = y + chH - 18;
-  const xMax = Math.max(1, ...m.series.map((p) => p.x));
-  const yMax = Math.max(1, ...m.series.map((p) => Math.max(p.us, p.them)));
-  const pX = (x) => plotL + (plotR - plotL) * (x / xMax);
-  const pY = (v) => plotB - (plotB - plotT) * (v / yMax);
-  for (let g = 0; g <= 2; g++) { const v = Math.round((yMax * g) / 2); const yy = pY(v); body.push(L(plotL, yy, plotR, yy, "#eee5cf", 1)); body.push(T(plotL - 6, yy + 4, String(v), 9, MUTE, { a: "end" })); }
-  if (m.htLine != null) { const hx = pX(m.htLine); body.push(L(hx, plotT, hx, plotB, PITCH, 1, "4 3")); body.push(T(hx, plotT - 3, "HT", 8, PITCH, { a: "middle", w: 700 })); }
-  const step = (key) => { let d = ""; m.series.forEach((p, i) => { const px = pX(p.x), py = pY(p[key]); if (!i) d += `M ${px} ${py}`; else { d += ` L ${px} ${pY(m.series[i - 1][key])} L ${px} ${py}`; } }); return d; };
-  body.push(`<path d="${step("them")}" fill="none" stroke="${m.colorThem}" stroke-width="2.5"/>`);
-  body.push(`<path d="${step("us")}" fill="none" stroke="${m.colorUs}" stroke-width="3"/>`);
-  m.goalDots.forEach((d) => body.push(C(pX(d.x), pY(d.y), 4, d.side === "us" ? m.colorUs : m.colorThem, { stroke: "#fff", sw: 1.5 })));
-  y += chH + 22;
-
-  // ---- our scorers ----
-  body.push(T(P, y, `SCORERS · ${m.usName.toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
-  y += 14;
-  if (!m.usScorers.length) { body.push(T(P, y + 6, "No scores recorded", 12, MUTE)); y += 20; }
-  m.usScorers.forEach((s) => {
-    body.push(L(P, y + 17, P + CW, y + 17, "#ece3cb", 1));
-    body.push(T(P, y + 12, `${s.num ? s.num + ". " : ""}${s.name}`, 13, INK, { w: 600 }));
-    body.push(T(P + CW, y + 12, `${m.effMode === "goals" ? s.g : `${s.g}-${s.p}`}${s.frees ? `  (${s.frees}f)` : ""}`, 13, PITCH, { w: 700, a: "end" }));
-    y += 23;
-  });
-  y += 16;
-
-  // who was involved in subs (for lineup arrows)
-  const subOnSet = new Set(), subOffSet = new Set();
-  (m.timeline || []).forEach((t) => { if (t.kind === "sub") { if (t.onNum != null) subOnSet.add(t.onNum); if (t.offNum != null) subOffSet.add(t.offNum); } });
-
-  // ---- lineup ----
-  body.push(T(P, y, "TEAM", 11, MUTE, { w: 700, ls: 1 }));
-  body.push(flag(P + 44, y - 9, 18, 11, m.colorUs, m.colorUs2));
-  y += 12;
-  const rows = m.formationRows && m.formationRows.length ? m.formationRows : [];
-  const pitchH = rows.length ? rows.length * 54 + 20 : 28;
-  body.push(R(P, y, CW, pitchH, PITCH, 12));
-  body.push(R(P, y + pitchH / 2 - 0.5, CW, 1, "#1c5a40"));
-  body.push(C(P + CW / 2, y + pitchH / 2, 18, "none", { stroke: "#1c5a40", sw: 1 }));
-  const findName = (n) => { const p = (m.starters || []).find((x) => x.num === n); return p ? p.name : ""; };
-  rows.forEach((row, ri) => {
-    const jw = 27, gap = Math.min(54, (CW - 24 - row.length * jw) / Math.max(1, row.length - 1 + 0.0001));
-    const total = row.length * jw + (row.length - 1) * gap;
-    const sx = P + (CW - total) / 2, ry = y + 13 + ri * 54;
-    row.forEach((n, ci) => {
-      const jx = sx + ci * (jw + (isFinite(gap) ? gap : 0));
-      body.push(R(jx, ry, jw, jw, m.colorUs, 7));
-      body.push(T(jx + jw / 2, ry + 18, String(n), 13, contrastOn(m.colorUs), { w: 800, a: "middle" }));
-      body.push(T(jx + jw / 2, ry + jw + 12, findName(n), 9.5, "#eaf3ee", { w: 600, a: "middle" }));
-      if (subOffSet.has(n)) body.push(T(jx + jw + 2, ry + 9, "▼", 8, "#ff6e63"));
-      const sc = (m.usScorers || []).find((s) => s.num === n && (s.g || s.p));
-      if (sc) body.push(T(jx + jw / 2, ry + jw + 23, m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`, 9, "#f5c518", { w: 700, a: "middle", ls: m.effMode === "goals" ? 2 : 0 }));
-    });
-  });
-  y += pitchH + 10;
-  if (m.subs && m.subs.length) {
-    // bench chips, like the app: used subs wear the team colours, with on/off arrows and score badges
-    body.push(T(P, y + 15, "SUBS", 9, MUTE, { w: 700, ls: 1 }));
-    let bx = P + 38, by = y + 4;
-    const chipH = 17;
-    m.subs.forEach((p) => {
-      const used = subOnSet.has(p.num) || subOffSet.has(p.num);
-      const sc = (m.usScorers || []).find((s) => s.num === p.num && (s.g || s.p));
-      const scoreTxt = sc ? (m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`) : "";
-      const label = `${p.num} ${p.name}`;
-      const arrowsW = (subOnSet.has(p.num) ? 9 : 0) + (subOffSet.has(p.num) ? 9 : 0);
-      const w = label.length * 5.4 + arrowsW + (scoreTxt ? scoreTxt.length * 5.6 + 5 : 0) + 16;
-      if (bx + w > P + CW) { bx = P + 38; by += chipH + 5; }
-      body.push(R(bx, by, w, chipH, used ? m.colorUs : "#ffffff", 8.5, { stroke: used ? m.colorUs2 : LINE, sw: 1 }));
-      let tx = bx + 8;
-      body.push(T(tx, by + 12, label, 9.5, used ? contrastOn(m.colorUs) : INK, { w: 600 }));
-      tx += label.length * 5.4 + 3;
-      if (subOnSet.has(p.num)) { body.push(T(tx, by + 12, "▲", 8.5, "#2ecc71", { w: 700 })); tx += 9; }
-      if (subOffSet.has(p.num)) { body.push(T(tx, by + 12, "▼", 8.5, "#ff6e63", { w: 700 })); tx += 9; }
-      if (scoreTxt) body.push(T(tx + 2, by + 12, scoreTxt, 9, used ? contrastOn(m.colorUs) : PITCH, { w: 700 }));
-      bx += w + 6;
-    });
-    y = by + chipH + 6;
-  }
-  if (m.missing && m.missing.length) { body.push(T(P, y + 8, "Missing: " + m.missing.map((p) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
-  y += 16;
-
-  // ---- timeline (centre rail: us left, them right, like the app) ----
-  body.push(T(P, y, "TIMELINE", 11, MUTE, { w: 700, ls: 1 }));
-  y += 14;
-  const railX = P + CW / 2;
-  const tlTop = y;
-  const tlBody = []; // items paint over the rail, so collect them and draw the rail first
-  const estW = (s, fs) => String(s).length * fs * 0.54;
-  const halves = [...new Set(m.timeline.map((t) => t.half))].sort((a, b) => a - b);
-  halves.forEach((h) => {
-    const hTxt = h === 1 ? "FIRST HALF" : h === 2 ? "SECOND HALF" : `PERIOD ${h}`;
-    const pw = estW(hTxt, 9) + 22;
-    tlBody.push(R(railX - pw / 2, y, pw, 15, PAPER, 7.5, { stroke: LINE, sw: 1 }));
-    tlBody.push(T(railX, y + 10.5, hTxt, 9, PITCH, { w: 700, ls: 1, a: "middle" }));
-    y += 22;
-    m.timeline.filter((t) => t.half === h).forEach((it) => {
-      const cy = y + 6;
-      const mm = it.minute != null ? `${it.mmin || it.minute}'` : "";
-      if (it.kind === "score") {
-        const us = it.side === "us";
-        const col = us ? m.colorUs : m.colorThem;
-        const ring = us ? m.colorUs2 : m.colorThem2;
-        const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
-        const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
-        const label = descriptive ? `${it.type === "goal" ? "GOAL  " : ""}${it.desc || it.scorer}`
-          : `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : it.setPiece ? `  ('${it.setPiece})` : ""}`;
-        tlBody.push(C(railX, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
-        if (us) {
-          tlBody.push(T(railX - 13, cy + 4, `${mm}  ${label}`, 11.5, descriptive ? MUTE : INK, { w: it.type === "goal" ? 700 : 400, a: "end" }));
-          tlBody.push(T(P, cy + 4, `${it.usScore} – ${it.themScore}`, 10.5, PITCH, { w: 700 }));
-        } else {
-          tlBody.push(T(railX + 13, cy + 4, `${mm}  ${label}`, 11.5, descriptive ? MUTE : INK, { w: it.type === "goal" ? 700 : 400 }));
-          tlBody.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 10.5, PITCH, { w: 700, a: "end" }));
-        }
-      } else if (it.kind === "sub") {
-        tlBody.push(C(railX, cy, 6, PAPER, { stroke: MUTE, sw: 1 }));
-        tlBody.push(T(railX, cy + 3, "⇄", 7.5, MUTE, { a: "middle" }));
-        const offTxt = `▼ ${it.off}`, onTxt = `▲ ${it.on}`;
-        let tx = railX - 13;
-        tlBody.push(T(tx, cy + 4, offTxt, 11, "#c0392b", { w: 700, a: "end" })); tx -= estW(offTxt, 11) + 7;
-        tlBody.push(T(tx, cy + 4, onTxt, 11, "#1f7a4d", { w: 700, a: "end" })); tx -= estW(onTxt, 11) + 7;
-        if (mm) tlBody.push(T(tx, cy + 4, mm, 11, MUTE, { w: 700, a: "end" }));
-      } else {
-        tlBody.push(C(railX, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        tlBody.push(T(railX - 13, cy + 4, `${mm ? mm + "  " : ""}${it.text}`, 11, MUTE, { a: "end" }));
-      }
-      y += 20;
-    });
-    const am = (m.halfMarks || []).find((x) => x.half === h && x.marker && x.added > 0);
-    if (am) {
-      const aTxt = `+${am.added} added`;
-      const aw = estW(aTxt, 9.5) + 20;
-      tlBody.push(R(railX - aw / 2, y + 1, aw, 14, PAPER, 7, { stroke: LINE, sw: 1 }));
-      tlBody.push(T(railX, y + 11, aTxt, 9.5, MUTE, { w: 600, a: "middle" }));
-      y += 20;
-    }
-    y += 6;
-  });
-  body.push(L(railX, tlTop, railX, y - 4, LINE, 1.5));
-  body.push(...tlBody);
-
-  // ---- footer ----
-  body.push(L(P, y + 2, P + CW, y + 2, LINE, 1));
-  body.push(T(W / 2, y + 22, `Sideline · ${m.grade || m.sport || ""}`, 9.5, MUTE, { a: "middle", ls: 0.5 }));
-  const H = y + 38;
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-    + R(0, 0, W, H, PAPER) + R(0, 0, W, HH, PITCH) + head.join("") + body.join("") + `</svg>`;
-  return { svg, width: W, height: H };
-}
-
-function downloadBlob(blob, name) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-}
-function svgToPng(svg, W, H) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const scale = 2;
-        const c = document.createElement("canvas");
-        c.width = W * scale; c.height = H * scale;
-        const ctx = c.getContext("2d");
-        ctx.fillStyle = "#f4efe1"; ctx.fillRect(0, 0, c.width, c.height);
-        ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
-        const dataUrl = c.toDataURL("image/png");
-        c.toBlob((blob) => { blob ? resolve({ blob, dataUrl }) : reject(new Error("no blob")); }, "image/png");
-      } catch (e) { reject(e); }
-    };
-    img.onerror = () => reject(new Error("img load fail"));
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  });
-}
-
-
-function parseMatch(raw, settings = {}) {
-  const lines = raw.split("\n").map((l) => l.replace(/\s+$/, ""));
-  const warnings = [];
-  const timeRe = /^\s*(\d{1,2}):(\d{2})\s*$/;
-
-  let firstTimeIdx = lines.findIndex((l) => timeRe.test(l));
-  if (firstTimeIdx === -1) firstTimeIdx = lines.length;
-  const preamble = lines.slice(0, firstTimeIdx).filter((l) => l.trim() !== "");
-  const eventLines = lines.slice(firstTimeIdx);
-  const headerRaw = preamble[0] || "";
-
-  const peelScore = (rest) => {
-    const toks = rest.trim().split(/\s+/);
-    const score = [];
-    while (toks.length) {
-      const t = toks[toks.length - 1];
-      if (t === "-" || /^\d+(-\d+)?$/.test(t)) score.unshift(toks.pop());
-      else break;
-    }
-    return { text: toks.join(" ").trim(), scoreToks: score.filter((t) => t !== "-") };
-  };
-
-  // Detect sport: an explicit sport in the header wins; then score shape — a line
-  // carrying two score tokens (one per team, e.g. "0-2 1-3") is Gaelic goals+points,
-  // while hyphen scores that only ever appear one-per-line (e.g. "2-1") read as a
-  // soccer running scoreboard; else any internal hyphen => Gaelic; else goals.
-  let pairLines = 0, soloHyphens = 0;
-  for (const l of eventLines) {
-    const lead = l.trim().match(/^(\d{1,2})\b\s*(.*)$/);
-    if (!lead || timeRe.test(l)) continue;
-    const { scoreToks } = peelScore(lead[2]);
-    if (scoreToks.length >= 2) pairLines++;
-    else if (scoreToks.length === 1 && scoreToks[0].includes("-")) soloHyphens++;
-  }
-  const evText = eventLines.join("\n");
-  const detectedMode =
-    /soccer/i.test(headerRaw) ? "goals"
-    : /hurl|camog|gaelic|gaa|football/i.test(headerRaw) ? "gaa"
-    : pairLines > 0 ? "gaa"
-    : soloHyphens > 0 && !/\bpoints?\b|\bpts?\b/i.test(evText) ? "goals"
-    : /\d+-\d+/.test(evText) ? "gaa"
-    : "goals";
-  const mode = settings.scoringMode || detectedMode;
-
-  // --- header ---
-  const header = { raw: headerRaw, sport: "", opposition: "", homeAway: "", label: "" };
-  if (preamble[0]) {
-    const h = preamble[0];
-    let m;
-    if ((m = h.match(/^(.*?)\s+@\s*(.*)$/))) { header.homeAway = "away"; header.opposition = m[2].trim(); header.label = m[1].trim(); }
-    else if ((m = h.match(/^(.*?)\s+v(?:s|\.)?\s*(.*)$/i))) { header.homeAway = "home"; header.opposition = m[2].trim(); header.label = m[1].trim(); }
-    else { header.label = h.trim(); }
-    if (/hurl/i.test(h)) header.sport = "Hurling";
-    else if (/camog/i.test(h)) header.sport = "Camogie";
-    else if (/gaelic|football|gaa/i.test(h)) header.sport = "Gaelic Football";
-    else if (/soccer/i.test(h)) header.sport = "Soccer";
-  }
-
-  // --- roster (preserve the formation exactly as written, row by row) ---
-  const roster = [];
-  const formationRows = [];
-  let section = "starting";
-  for (let i = 1; i < preamble.length; i++) {
-    const line = preamble[i].trim();
-    if (/^subs?\b/i.test(line)) { section = "sub"; continue; }
-    if (/^missing/i.test(line)) { section = "missing"; continue; }
-    const rowNums = [];
-    for (const chunk of line.split("|")) {
-      const m = chunk.trim().match(/^(\d{1,2})\s*[.)]?\s*(.*)$/);
-      if (m && m[2].trim()) { const num = parseInt(m[1], 10); roster.push({ num, name: m[2].trim(), role: section }); if (section === "starting") rowNums.push(num); }
-    }
-    if (section === "starting" && rowNums.length) formationRows.push(rowNums);
-  }
-  const matchPlayer = (txt) => {
-    const c = squash(txt);
-    if (!c) return null;
-    // exact full-name match beats any fuzzy match anywhere in the roster —
-    // with "Cathal" and "Cathal N" both rostered, "Cathal" must not resolve
-    // to "Cathal N" just because he appears first
-    for (const p of roster) if (squash(p.name) === c) return p;
-    for (const p of roster) {
-      const first = squash(p.name.split(" ")[0]);
-      if (first === c || squash(p.name) === squash(txt.split(" ")[0])) return p;
-    }
-    return null;
-  };
-
-  // resolve a sub line's "12 Rick" / "Rick" / "12" to a roster number (or null)
-  const subRef = (txt) => {
-    const t = (txt || "").trim();
-    const numOnly = t.match(/^(\d{1,2})$/);
-    if (numOnly) { const p = roster.find((r) => r.num === parseInt(numOnly[1], 10)); return p ? p.num : parseInt(numOnly[1], 10); }
-    const p = matchPlayer(t.replace(/^\d+\s*[.)]?\s*/, ""));
-    return p ? p.num : null;
-  };
-
-  // --- walk events ---
-  const scoring = [];
-  const notes = [];
-  let half = 0, startMin = 0, seq = 0, lastElapsed = 0;
-  const halfMarks = [];
-  const addedOverride = {}; // half -> added time written as a "+N" line (overrides the deduced value)
-
-  for (let evIdx = 0; evIdx < eventLines.length; evIdx++) {
-    const rawLine = eventLines[evIdx];
-    const srcLine = firstTimeIdx + evIdx; // index into raw.split("\n")
-    const line = rawLine.trim();
-    if (line === "") continue;
-    const tm = line.match(timeRe);
-    if (tm) { half += 1; startMin = parseInt(tm[2], 10); halfMarks.push({ half, clock: `${tm[1]}:${tm[2]}`, srcLine }); continue; }
-
-    const lead = line.match(/^(\d{1,2})\b\s*(.*)$/);
-    if (lead) {
-      const minute = parseInt(lead[1], 10);
-      let elapsed = minute - startMin; if (elapsed < 0) elapsed += 60;
-      const restFull = lead[2];
-      if (/^(ht|ft|half ?time|full ?time|end)\b/i.test(restFull.trim())) {
-        halfMarks.push({ half, marker: /^f/i.test(restFull.trim()) ? "FT" : "HT", minute, elapsed, srcLine });
-        const am = restFull.match(/\+(\d{1,2})/); // "32 HT +6" sets the added time directly
-        if (am) addedOverride[half || 1] = parseInt(am[1], 10);
-        continue;
-      }
-      const { text, scoreToks } = peelScore(restFull);
-      // cards: "23 Morty yellow card" / "70 T red" — a sided note, not a score
-      const cardM = scoreToks.length === 0 ? restFull.match(/\b(yellow|red)\b(?:\s*card)?/i) : null;
-      if (cardM) {
-        const who = restFull.replace(/\b(yellow|red)\b(?:\s*card)?/i, "").replace(/\?/g, "").trim();
-        const cp = matchPlayer(who);
-        const side = cp ? "us" : (/^t\d*$/i.test(squash(who)) || /^t\b/i.test(who)) ? "them"
-          : settings.myTeam && squash(who) && squash(who) === squash(settings.myTeam) ? "us" : who ? "them" : "us";
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "card", card: cardM[1].toLowerCase(), who: cp ? cp.name : who, side, num: cp ? cp.num : null, text: line, srcLine });
-        continue;
-      }
-      // corners: "31 corner" (us) / "44 T corner" (them)
-      if (scoreToks.length === 0 && /\bcorner\b/i.test(restFull)) {
-        const who = restFull.replace(/\bcorner\b/i, "").trim();
-        const side = (/^t\d*$/i.test(squash(who)) || /^t\b/i.test(who)) ? "them" : "us";
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "corner", side, text: line, srcLine });
-        continue;
-      }
-      // a missed chance ("10 Jack miss pen", "wide", "saved") or a stoppage
-      // ("46 Water Break") is a note, not a score
-      if (scoreToks.length === 0 && /\b(miss(ed|es)?|wide|saved|blocked|short|water)\b/i.test(restFull)) {
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "note", text: restFull.trim(), srcLine });
-        continue;
-      }
-      // "43 Rick for Morty" — a substitution with the minute in front
-      if (scoreToks.length === 0 && /\bfor\b/i.test(restFull)) {
-        const sm = restFull.match(/(.+?)\s+for\s+(.+)/i);
-        const on = sm[1].trim(), off = sm[2].trim();
-        notes.push({ seq: seq++, half: half || 1, minute, elapsed, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line, srcLine });
-        continue;
-      }
-      const isGoal = /goal/i.test(restFull);
-      const isFree = /\bfree\b/i.test(restFull) || /\bf\b/i.test(restFull);
-      const isOg = /\bown goal\b|\bog\b/i.test(restFull);
-      // a point from a placed ball: "'65" (hurling) / "'45" (football); bare "65" works
-      // mid-line too, but the apostrophe form can't be mistaken for a written score
-      const setPiece = ((text.match(/(?:^|\s)['’]?(45|65)(?=\s|$)/) || [])[1]) || null;
-      const scorerText = text.replace(/['’]?\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
-      // a bare minute on its own line marks the start of a half (e.g. "51" for the 2nd half)
-      if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
-        half += 1; startMin = minute; halfMarks.push({ half, startMin: minute, srcLine }); continue;
-      }
-
-      let side, scorer, player = null, sure = true;
-      const player0 = matchPlayer(scorerText);
-      if (player0) { side = "us"; scorer = player0.name; player = player0; }
-      else if (/^t\d*$/i.test(squash(scorerText)) || /^t\b/i.test(scorerText)) { side = "them"; scorer = "Opposition"; }
-      else if (settings.myTeam && squash(scorerText) && squash(scorerText) === squash(settings.myTeam)) { side = "us"; scorer = "Unknown"; }
-      else if (scorerText) { side = "them"; scorer = scorerText; sure = false; } // a name we don't recognise — could be either side
-      else { side = "them"; scorer = ""; sure = false; } // no scorer at all — deduce the team from the score change
-
-      if (isOg) { // an own goal scores for the other side; credit reads "Own goal (name)"
-        side = side === "us" ? "them" : "us"; sure = true;
-        scorer = `own goal${player ? ` (${player.name})` : ""}`;
-      }
-      lastElapsed = elapsed;
-      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, setPiece, scorer, desc: text, og: isOg, ogNum: isOg && player ? player.num : null, playerNum: !isOg && player ? player.num : null, scoreToks, srcLine });
-    } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
-      halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed, srcLine });
-    } else if (/^\+\d{1,2}(\s+added)?$/i.test(line)) {
-      addedOverride[half || 1] = parseInt(line.slice(1), 10); // "+6" after a HT/FT line corrects the added time
-    } else if (/\bfor\b/i.test(line)) {
-      const m = line.match(/(.+?)\s+for\s+(.+)/i);
-      const on = m ? m[1].trim() : "", off = m ? m[2].trim() : "";
-      notes.push({ seq: seq++, half: half || 1, type: "sub", on, off, onNum: subRef(on), offNum: subRef(off), text: line, srcLine });
-    } else {
-      notes.push({ seq: seq++, half: half || 1, type: "note", text: line, srcLine });
-    }
-  }
-
-  // --- added time: halves run in multiples of 5, so "28 HT" reads as 25 +3.
-  // A "+N" line (or "32 HT +6") in the notation overrides the deduction. ---
-  for (const m of halfMarks) {
-    if (!m.marker) continue;
-    const ov = addedOverride[m.half];
-    if (ov != null) { if (ov > 0) m.added = ov; }
-    else if (m.minute != null && m.elapsed != null && m.elapsed % 5 > 0) m.added = m.elapsed % 5;
-  }
-
-  // --- decide whether the written running score drives the totals ---
-  const parseCol = (tok) => {
-    if (tok == null) return { g: 0, p: 0 };
-    if (tok.includes("-")) { const a = tok.split("-"); return { g: parseInt(a[0], 10) || 0, p: parseInt(a[1], 10) || 0 }; }
-    const n = parseInt(tok, 10) || 0; return mode === "goals" ? { g: n, p: 0 } : { g: 0, p: n }; // bare number: "3" = 0-3, "0" = 0-0
-  };
-  // the written running score on a line, as the two scoreboard columns:
-  // two tokens = GAA (one per team); in goals mode a single "2-1" token is the
-  // whole home-away scoreboard.
-  const writtenCols = (s) => {
-    if (!s.scoreToks || s.scoreToks.length === 0) return null;
-    if (s.scoreToks.length === 2) return [parseCol(s.scoreToks[0]), parseCol(s.scoreToks[1])];
-    if (mode === "goals" && s.scoreToks.length === 1 && s.scoreToks[0].includes("-")) {
-      const a = s.scoreToks[0].split("-");
-      return [{ g: parseInt(a[0], 10) || 0, p: 0 }, { g: parseInt(a[1], 10) || 0, p: 0 }];
-    }
-    return null;
-  };
-  const writtenCount = scoring.filter((s) => writtenCols(s)).length;
-  const scoreFromWritten = scoring.length > 0 && writtenCount >= scoring.length / 2;
-
-  // work out which written column is "us" (auto-handles team order and home/away)
-  let usCol = header.homeAway === "home" ? 0 : 1;
-  if (scoreFromWritten) {
-    const vote = [0, 0]; let prev = [{ g: 0, p: 0 }, { g: 0, p: 0 }];
-    for (const s of scoring) {
-      const cols = writtenCols(s);
-      if (!cols) continue;
-      const ch0 = cols[0].g !== prev[0].g || cols[0].p !== prev[0].p;
-      const ch1 = cols[1].g !== prev[1].g || cols[1].p !== prev[1].p;
-      if (ch0 !== ch1 && s.sure) { const changed = ch0 ? 0 : 1; if (s.side === "us") vote[changed]++; else vote[1 - changed]++; }
-      prev = cols;
-    }
-    if (vote[0] + vote[1] > 0) usCol = vote[0] >= vote[1] ? 0 : 1;
-  }
-  const themCol = 1 - usCol;
-
-  // --- running totals + series ---
-  let ug = 0, up = 0, tg = 0, tp = 0;
-  const h1max = Math.max(0, ...scoring.filter((s) => s.half === 1).map((s) => s.elapsed),
-    ...halfMarks.filter((m) => m.half === 1 && m.elapsed != null).map((m) => m.elapsed));
-
-  // match-minute labels: elapsed within the game rather than wall clock; halves
-  // continue ("34'" in the 2nd half of 30-min halves) and stoppage shows as "30+2"
-  const htMark = halfMarks.find((x) => x.half === 1 && x.marker === "HT" && x.elapsed != null && x.minute != null);
-  const h1Len = htMark ? htMark.elapsed - (htMark.elapsed % 5) : Math.ceil(h1max / 5) * 5;
-  const matchMin = (it) => {
-    if (it.elapsed == null) return it.minute != null ? String(it.minute) : "";
-    const h = it.half || 1;
-    const base = h > 1 ? h1Len * (h - 1) : 0;
-    const em = halfMarks.find((x) => x.half === h && x.marker && x.elapsed != null && x.minute != null);
-    const hEnd = em ? em.elapsed - (em.elapsed % 5) : null;
-    return hEnd != null && it.elapsed > hEnd ? `${base + hEnd}+${it.elapsed - hEnd}` : String(base + Math.max(it.elapsed, 1));
-  };
-  scoring.forEach((s) => { s.mmin = matchMin(s); });
-  notes.forEach((n) => { if (n.minute != null) n.mmin = matchMin(n); });
-
-  const GAP = 4;
-  const xOf = (s) => (s.half === 1 ? s.elapsed : h1max + GAP + s.elapsed);
-  const series = [{ x: 0, us: 0, them: 0, label: "Throw-in", half: 1 }];
-  const goalDots = [];
-  const scorers = {};
-  const bump = (name, side, type, free, num) => {
-    const k = side + ":" + squash(name);
-    if (!scorers[k]) scorers[k] = { name: titleCase(name), side, g: 0, p: 0, frees: 0, num: num || null };
-    if (/[A-Z]/.test(name) && !/[A-Z]/.test(scorers[k].name)) scorers[k].name = name;
-    if (type === "goal") scorers[k].g++; else scorers[k].p++;
-    if (free) scorers[k].frees++;
-  };
-
-  let leadChanges = 0, prevLeader = 0, maxLead = 0, maxLeadSide = null, timesLevel = 0, prevEqual = true;
-  for (const s of scoring) {
-    const pUg = ug, pUp = up, pTg = tg, pTp = tp;
-    const cols = scoreFromWritten ? writtenCols(s) : null;
-    if (cols) {
-      ug = cols[usCol].g; up = cols[usCol].p; tg = cols[themCol].g; tp = cols[themCol].p; // take the score as written
-    } else {
-      const effType = mode === "goals" ? "goal" : s.type;
-      if (s.side === "us") { if (effType === "goal") ug++; else up++; }
-      else { if (effType === "goal") tg++; else tp++; }
-    }
-    // see what changed, to attribute the score and classify goal vs point
-    const dUsG = ug - pUg, dUsP = up - pUp, dThemG = tg - pTg, dThemP = tp - pTp;
-    let aSide, dg, dp;
-    if (s.side === "us" && (dUsG || dUsP)) { aSide = "us"; dg = dUsG; dp = dUsP; }
-    else if (s.side === "them" && (dThemG || dThemP)) { aSide = "them"; dg = dThemG; dp = dThemP; }
-    else if (dUsG || dUsP) { aSide = "us"; dg = dUsG; dp = dUsP; }
-    else if (dThemG || dThemP) { aSide = "them"; dg = dThemG; dp = dThemP; }
-    else { aSide = s.side; dg = 0; dp = 0; }
-    if (dUsG < 0 || dUsP < 0 || dThemG < 0 || dThemP < 0)
-      warnings.push({ minute: s.minute, half: s.half, msg: `score seems to drop here (you wrote "${s.scoreToks ? s.scoreToks.join(" ") : "?"}")` });
-    s.side = aSide; s.type = dg > 0 ? "goal" : "point";
-    if (!s.scorer) s.scorer = aSide === "us" ? "Unknown" : "Opposition"; // deduced from which score changed
-    for (let i = 0; i < dg; i++) bump(s.scorer, aSide, "goal", false, s.playerNum);
-    for (let i = 0; i < dp; i++) bump(s.scorer, aSide, "point", s.fromFree && i === 0, s.playerNum);
-
-    const usT = gpTotal(ug, up, mode), themT = gpTotal(tg, tp, mode);
-    const leader = Math.sign(usT - themT);
-    if (leader !== 0 && prevLeader !== 0 && leader !== prevLeader) leadChanges++;
-    if (leader !== 0) prevLeader = leader;
-    const eq = usT === themT;
-    if (eq && !prevEqual) timesLevel++;
-    prevEqual = eq;
-    const lead = Math.abs(usT - themT);
-    if (lead > maxLead) { maxLead = lead; maxLeadSide = usT > themT ? "us" : "them"; }
-    const x = xOf(s);
-    s.usScore = fmtScore(ug, up, mode);
-    s.themScore = fmtScore(tg, tp, mode);
-    series.push({
-      x, half: s.half, minute: s.minute, us: usT, them: themT,
-      usScore: fmtScore(ug, up, mode), themScore: fmtScore(tg, tp, mode),
-      label: `${s.scorer}${dg > 0 ? " GOAL" : s.fromFree ? " (free)" : s.setPiece ? ` ('${s.setPiece})` : ""}`,
-      side: aSide, type: s.type,
-    });
-    if (dg > 0) goalDots.push({ x, y: aSide === "us" ? usT : themT, side: aSide });
-  }
-
-  const totals = {
-    us: { g: ug, p: up, total: gpTotal(ug, up, mode), str: fmtScore(ug, up, mode) },
-    them: { g: tg, p: tp, total: gpTotal(tg, tp, mode), str: fmtScore(tg, tp, mode) },
-  };
-  let result = "Draw";
-  if (totals.us.total > totals.them.total) result = "Win";
-  else if (totals.us.total < totals.them.total) result = "Loss";
-
-  const htX = halfMarks.find((m) => m.marker === "HT");
-  const htLine = htX ? xOf({ half: 1, elapsed: htX.elapsed }) : (scoring.some((s) => s.half === 2) ? h1max + GAP / 2 : null);
-
-  return { header, roster, formationRows, scoring, notes, halfMarks, series, goalDots, scorers: Object.values(scorers), totals, result, leadChanges, timesLevel, maxLead, maxLeadSide, warnings, mode, detectedMode, htLine };
-}
-
-/* ---- roster edits on the raw notation (lineup tab tools) ---- */
-const rosterEnd = (lines) => { const e = lines.findIndex((l) => /^\s*\d{1,2}:\d{2}\s*$/.test(l)); return e === -1 ? lines.length : e; };
-const locRoster = (lines, end, num) => {
-  for (let li = 1; li < end; li++) {
-    if (/^(subs?\b|missing)/i.test(lines[li].trim())) continue;
-    const chunks = lines[li].split("|");
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const m = chunks[ci].trim().match(/^(\d{1,2})\s*[.)]?\s*/);
-      if (m && parseInt(m[1], 10) === num) return { li, ci };
-    }
-  }
-  return null;
-};
-// swap two players' slots (works across formation rows and the Subs section)
-function swapRosterNums(raw, numA, numB) {
-  const lines = raw.split("\n"), end = rosterEnd(lines);
-  const a = locRoster(lines, end, numA), b = locRoster(lines, end, numB);
-  if (!a || !b) return raw;
-  const ca = lines[a.li].split("|"), cb = a.li === b.li ? ca : lines[b.li].split("|");
-  const t = ca[a.ci]; ca[a.ci] = cb[b.ci]; cb[b.ci] = t;
-  lines[a.li] = ca.join("|"); lines[b.li] = cb.join("|");
-  return lines.join("\n");
-}
-// change a player's shirt number in place
-function renumRoster(raw, num, newNum) {
-  const lines = raw.split("\n"), end = rosterEnd(lines);
-  const a = locRoster(lines, end, num);
-  if (!a) return raw;
-  const ch = lines[a.li].split("|");
-  ch[a.ci] = ch[a.ci].replace(/\d{1,2}/, String(newNum));
-  lines[a.li] = ch.join("|");
-  return lines.join("\n");
-}
-
-/* ---- event-line edits on the raw notation (notation blocks) ---- */
-// Lines that are structure, not events: half-start clocks, bare minutes,
-// HT/FT markers (bare or minuted, mirroring the parser's two regexes) and
-// "+N" added-time overrides. They never re-sort.
-const isStructureLine = (l) => {
-  const s = (l || "").trim();
-  return /^\d{1,2}:\d{2}$/.test(s) || /^\d{1,2}$/.test(s) || /^\+\d{1,2}(\s+added)?$/i.test(s)
-    || /^(ht|ft|half ?time|full ?time)$/i.test(s) || /^\d{1,2}\b\s*(ht|ft|half ?time|full ?time|end)\b/i.test(s);
-};
-// the leading minute of an ordinary event line, else null
-function eventLineMinute(line) {
-  if (isStructureLine(line)) return null;
-  const m = (line || "").match(/^\s*(\d{1,2})\b\s*\S/);
-  return m ? parseInt(m[1], 10) : null;
-}
-function deleteEventLine(raw, idx) {
-  const lines = raw.split("\n");
-  if (idx < 0 || idx >= lines.length) return raw;
-  lines.splice(idx, 1);
-  return lines.join("\n");
-}
-// shared placement core: put `line` inside half `half`, ordered by elapsed
-// minute. Returns null when by-minute placement doesn't apply (no minute on
-// the line, or the half has no start mark) — callers fall back to a splice.
-function placeEventLineByMinute(raw, half, line) {
-  const newMin = eventLineMinute(line);
-  if (newMin == null) return null;
-  const lines = raw.split("\n");
-  const p = parseMatch(raw, {});
-  const start = p.halfMarks.find((m) => !m.marker && m.half === half);
-  if (!start) return null;
-  const startMin = start.startMin != null ? start.startMin : parseInt(start.clock.split(":")[1], 10);
-  let newElapsed = newMin - startMin; if (newElapsed < 0) newElapsed += 60; // same wrap as the parser
-  const endMark = p.halfMarks.find((m) => m.marker && m.half === half && m.srcLine > start.srcLine);
-  const nextStart = p.halfMarks.find((m) => !m.marker && m.half === half + 1);
-  let at = endMark ? endMark.srcLine : nextStart ? nextStart.srcLine : lines.length;
-  while (at > start.srcLine + 1 && !(lines[at - 1] || "").trim()) at--; // don't strand it past trailing blanks
-  const entries = [...p.scoring, ...p.notes]
-    .filter((e) => e.half === half && e.srcLine != null && e.srcLine > start.srcLine && e.srcLine < at)
-    .sort((x, y) => x.srcLine - y.srcLine);
-  for (const e of entries) {
-    if (e.elapsed != null && e.elapsed > newElapsed) { at = e.srcLine; break; } // minute-less notes stick to their predecessor
-  }
-  lines.splice(at, 0, line);
-  return lines.join("\n");
-}
-function insertEventLine(raw, afterIdx, line) {
-  const p = parseMatch(raw, {});
-  // the anchor decides the half: its own entry, or the nearest entry above it
-  let half = null;
-  const all = [...p.scoring, ...p.notes, ...p.halfMarks];
-  for (let i = afterIdx; i >= 0 && half == null; i--) {
-    const hit = all.find((e) => e.srcLine === i);
-    if (hit) half = hit.half;
-  }
-  const placed = half != null ? placeEventLineByMinute(raw, half, line) : null;
-  if (placed != null) return placed;
-  const lines = raw.split("\n");
-  lines.splice(afterIdx + 1, 0, line); // minute-less line (or no parsable anchor): literally after the anchor
-  return lines.join("\n");
-}
-function replaceEventLine(raw, idx, newLine) {
-  const lines = raw.split("\n");
-  if (idx < 0 || idx >= lines.length) return raw;
-  const oldMin = eventLineMinute(lines[idx]);
-  const newMin = eventLineMinute(newLine);
-  if (oldMin == null || newMin == null || oldMin === newMin) {
-    lines[idx] = newLine; // structure/minute-less lines edit in place; so do same-minute edits
-    return lines.join("\n");
-  }
-  const p = parseMatch(raw, {});
-  const hit = [...p.scoring, ...p.notes].find((e) => e.srcLine === idx);
-  if (!hit) { lines[idx] = newLine; return lines.join("\n"); }
-  const without = [...lines.slice(0, idx), ...lines.slice(idx + 1)].join("\n");
-  const placed = placeEventLineByMinute(without, hit.half, newLine);
-  if (placed != null) return placed;
-  lines[idx] = newLine;
-  return lines.join("\n");
-}
-
-/* ============================================================
-   STORAGE  (window.storage, with graceful fallback)
-   ============================================================ */
-/* store is defined in the head (Supabase backed) */
-
-/* ============================================================
-   SAMPLE DATA
-   ============================================================ */
-const SAMPLE = `U13A Hurling @ Wildebeests
-                        1 Birdperson
-2.Jerry S | 3. Beth S | 4. Summer
- 5.Squanchy | 6. Mr Poopybutthole | 7. Gearhead
-          8.Snowball | 9. Jessica
-  10.Morty | 11. Rick | 12. Noob Noob
-13. Tammy | 14.Kyle | 15. Zeep
-
-Subs
-16.
-17. Pencilvester
-18. Sleepy Gary
-Missing:
-20. Snuffles
-
-18:21
-21 Racoons Point? 0 1
-23 Rick free 0 0-2
-24 Rick free 0 0-3
-25 T11 0-1 0-3
-30 Rick goal 0-1 - 1-3
-31 T free  0-2 - 1-3
-32 Rick free 0-2 - 1-4
-33 Morty 0-2 - 1-5
-They swapped 6 and 3
-36 terry 0-3 - 1-5
-37 T free 0-4 - 1-5
-38 Terry goal 1-4 - 1-5
-43 HT
-
-18:50
-59 T free 1-5 - 1-5
-03 rick goal 1-5 - 2-5
-05 T goal 2-5 - 2-5
-Sleepy Gary for zeep
-06 rick free 2-5 - 2-6
-08 free T 2-6 - 2-6
-Pencilvester for Tammy
-10 T free 2-7 - 2-6
-13 FT`;
-
-/* ============================================================
-   UI
-   ============================================================ */
-const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;500;600;700&display=swap');
-.mt-root{ --ink:#11241b; --paper:#f4efe1; --pitch:#0c3b2a; --pitch2:#10543a; --line:#d8cfb8; --muted:#6f7d72;
-  font-family:'Oswald',sans-serif; color:var(--ink); background:
-  radial-gradient(140% 120% at 0% 0%, #faf6ea 0%, #efe8d4 60%, #e7dec6 100%);
-  /* overflow:clip (not hidden) keeps the corner clipping without creating a scroll
-     container, so the scoreboard's position:sticky still works on mobile */
-  border:1px solid var(--line); border-radius:14px; overflow:clip; max-width:980px; margin:0 auto;
-  box-shadow:0 24px 60px -28px rgba(12,59,42,.45); position:relative;}
-.mt-root *{box-sizing:border-box;}
-.mt-bar{display:flex; gap:8px; align-items:center; padding:12px 16px; background:var(--pitch);
-  color:var(--paper); flex-wrap:wrap;}
-.mt-logo{font-family:'Bebas Neue'; font-size:26px; letter-spacing:1px; line-height:1; display:flex; align-items:center; gap:9px;}
-.mt-logo svg{flex:none;}
-.mt-ver{font-family:'Oswald'; font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
-.mt-bar .grow{flex:1;}
-.mt-bar.sub{padding-top:0; justify-content:flex-end; background:var(--pitch);} /* "⋯" overflow row */
-.mt-btn.danger{background:#c0392b; border-color:#c0392b; color:#fff; font-weight:600;}
-/* narrow screens: the match picker sizes to its longest label and would wrap the
-   bar anyway — give it a deliberate full-width row under logo · Save · Share · ⋯ */
-@media (max-width:600px){.mt-bar > select.mt-sel{order:9; flex:1 1 100%;}}
-.mt-sel,.mt-btn,.mt-inp{font-family:'Oswald',sans-serif; font-size:13px; border-radius:7px; border:1px solid rgba(255,255,255,.25);
-  background:rgba(255,255,255,.08); color:var(--paper); padding:6px 10px; cursor:pointer;}
-.mt-sel option{color:#11241b;}
-.mt-btn:hover{background:rgba(255,255,255,.2);}
-.mt-btn.solid{background:#f5c518; color:#11241b; border-color:#f5c518; font-weight:600;}
-.mt-btn.solid:hover{background:#ffd530;}
-.mt-toast{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:60; pointer-events:none;
-  background:rgba(12,59,42,.95); color:#f4efe1; font-family:'Oswald'; font-size:12.5px; letter-spacing:.5px;
-  padding:6px 16px; border-radius:20px; box-shadow:0 4px 14px rgba(0,0,0,.35); white-space:nowrap;}
-.mt-board{background:linear-gradient(160deg,var(--pitch) 0%,var(--pitch2) 100%); color:var(--paper);
-  padding:18px 16px 20px; position:relative;}
-.mt-board:before{content:""; position:absolute; inset:0; background:
-  repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,255,255,.03) 38px 76px); pointer-events:none;}
-.mt-meta{font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:2px; font-size:11px;
-  opacity:.8; text-align:center; margin-bottom:10px;}
-.mt-score{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; position:relative;}
-.mt-team{display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0;}
-.mt-team .nm{font-family:'Oswald',sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:1px;
-  font-size:15px; display:flex; align-items:center; gap:7px; max-width:100%;}
-.mt-team .nm b{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.mt-chip{width:14px; height:14px; border-radius:50%; flex:none; border:2px solid rgba(255,255,255,.7);}
-.mt-big{font-family:'Bebas Neue'; font-size:58px; line-height:.82; letter-spacing:1px;}
-.mt-tot{font-family:'Oswald'; font-size:12px; opacity:.75; margin-top:2px;}
-.mt-vs{font-family:'Bebas Neue'; font-size:20px; opacity:.6;}
-.mt-resbar{text-align:center; margin-top:12px;}
-.mt-res{display:inline-block; font-family:'Oswald'; font-weight:600; text-transform:uppercase; letter-spacing:2px;
-  font-size:12px; padding:4px 14px; border-radius:30px;}
-.mt-res.Win{background:#f5c518; color:#11241b;} .mt-res.Loss{background:#c0392b;} .mt-res.Draw{background:#e7dec6; color:#11241b;}
-.mt-tabs{display:flex; gap:0; background:var(--paper); border-bottom:1px solid var(--line); overflow-x:auto;}
-.mt-tab{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1px; font-size:12.5px; padding:11px 16px;
-  border:none; background:none; cursor:pointer; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap;}
-.mt-tab.on{color:var(--pitch); border-bottom-color:#f5c518; font-weight:600;}
-.mt-body{padding:18px 16px 22px;}
-.mt-h{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1.5px; font-size:12px; color:var(--muted); margin:0 0 10px;}
-.mt-stats{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;}
-.mt-warn{background:#fbf3d6; border:1px solid #e6cf7a; border-left:4px solid #d9af00; border-radius:8px;
-  padding:10px 12px; margin-bottom:14px; font-family:'Oswald',sans-serif; font-size:12.5px; color:#5c4a12; line-height:1.45;}
-.mt-warn b{display:block; margin-bottom:2px;}
-.mt-stat{flex:1; min-width:120px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
-.mt-stat .v{font-family:'Bebas Neue'; font-size:26px; line-height:1; color:var(--pitch);}
-.mt-stat .k{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1px; font-size:10px; color:var(--muted);}
-table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
-.mt-tbl th{font-family:'Oswald'; text-transform:uppercase; letter-spacing:1px; font-size:10.5px; color:var(--muted);
-  text-align:left; padding:7px 8px; border-bottom:2px solid var(--line);}
-.mt-tbl td{padding:8px; border-bottom:1px solid var(--line);}
-.mt-tbl td.n{font-family:'Bebas Neue'; font-size:19px; color:var(--pitch);}
-.mt-tbl tr.them td{color:#8a5a52;}
-.mt-num{display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--pitch); color:var(--paper);
-  font-family:'Oswald'; font-size:11px; align-items:center; justify-content:center; margin-right:7px;}
-.mt-tl{position:relative;}
-.mt-tl:before{content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; background:var(--line); transform:translateX(-50%);}
-.mt-ev{position:relative; width:50%; margin-right:auto; box-sizing:border-box; padding:7px 16px 7px 0; font-family:'Oswald'; font-size:13.5px; display:flex; gap:10px; align-items:baseline;}
-.mt-ev:before{content:""; position:absolute; right:-6px; top:12px; width:11px; height:11px; border-radius:50%;
-  background:var(--dot,#fff); border:2px solid var(--ring,var(--muted)); box-sizing:border-box;}
-.mt-ev.goal:before{width:16px; height:16px; right:-8px; top:11px; border-width:3px;}
-.mt-ev.them{width:50%; margin-left:auto; margin-right:0; padding:7px 0 7px 16px;}
-.mt-ev.them:before{right:auto; left:-6px;}
-.mt-ev.them.goal:before{right:auto; left:-8px;}
-.mt-ev.note:before{background:var(--paper); border-style:dashed; border-color:var(--muted);}
-.mt-ev.note{font-family:'Oswald'; font-size:13px;}
-.mt-ev.subev{font-family:'Oswald'; font-size:13px;}
-.mt-ev.subev:before{content:"⇄"; width:16px; height:16px; right:-8px; top:10px; background:var(--paper);
-  border:1px solid var(--muted); color:var(--muted); font-size:9.5px; line-height:14px; text-align:center;}
-.mt-ev.mid{width:100%; margin:0; padding:4px 0; justify-content:center;}
-.mt-ev.mid:before{display:none;}
-.mt-ev.mid .chip{font-family:'Oswald'; font-size:11.5px; color:var(--muted); background:var(--paper);
-  border:1px dashed var(--line); border-radius:20px; padding:2px 10px;}
-.mt-ev .m{font-family:'Oswald'; font-weight:600; color:var(--muted); font-size:12px; min-width:30px;}
-.mt-ev .sc{font-family:'Oswald'; font-weight:600; color:var(--pitch); margin-left:auto; font-size:13px;}
-.mt-ev.them{flex-direction:row-reverse;} /* opposition events mirror to the right */
-.mt-ev.them .sc{margin-left:0; margin-right:auto;}
-.mt-ev.them .m{text-align:right;}
-.mt-half{font-family:'Oswald'; text-transform:uppercase; letter-spacing:2px; font-size:11px; color:var(--pitch);
-  background:var(--paper); display:table; padding:3px 10px; border-radius:20px; border:1px solid var(--line);
-  margin:14px auto 4px; position:relative;}
-.mt-pill{display:inline-block; font-family:'Oswald'; font-size:10px; text-transform:uppercase; letter-spacing:1px;
-  padding:1px 7px; border-radius:20px; margin-left:6px;}
-.mt-pill.goal{background:#c0392b; color:#fff;} .mt-pill.free{background:#e7dec6; color:#5a4;} .mt-pill.sub{background:#dfeee6; color:#0c3b2a;}
-textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12.5px;
-  border:1px solid var(--line); border-radius:10px; padding:12px; background:#fffdf6; color:#222; line-height:1.5; resize:vertical;}
-.mt-live{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px;}
-.mt-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
-.mt-live select,.mt-live input{font-family:'Oswald'; font-size:13px; padding:7px 9px; border:1px solid var(--line);
-  border-radius:7px; background:#fffdf6; color:#222;}
-.mt-live input{width:60px;}
-.mt-add{font-family:'Oswald'; font-weight:600; text-transform:uppercase; letter-spacing:1px; font-size:12px;
-  background:var(--pitch); color:var(--paper); border:none; border-radius:7px; padding:8px 16px; cursor:pointer;}
-.mt-add:hover{background:#10543a;}
-.mt-add.alt{background:#fff; color:var(--pitch); border:1px solid var(--line);}
-.mt-toggle{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
-.mt-toggle .tg{font-family:'Oswald'; font-weight:500; font-size:12.5px; text-transform:uppercase; letter-spacing:.5px;
-  padding:8px 16px; border:none; background:#fffdf6; color:var(--muted); cursor:pointer; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.mt-toggle .tg:not(.on):hover{background:#f1ead8;}
-.mt-panel{background:#fff; border-bottom:1px solid var(--line); padding:14px 16px;}
-.mt-panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
-.mt-panel h3{font-family:'Oswald',sans-serif; margin:0; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--pitch);}
-.mt-panel img.shot{width:100%; max-width:420px; height:auto; border-radius:8px; border:1px solid var(--line); display:block; margin:0 auto;}
-.mt-panel .hint{font-family:'Oswald',sans-serif; font-size:12px; color:var(--muted); margin:10px 0 4px; line-height:1.5; text-align:center;}
-.mt-panel textarea{width:100%; height:90px; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; border:1px solid var(--line); border-radius:8px; padding:8px; background:#fffdf6; color:#333; resize:vertical;}
-.mt-panel .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; justify-content:center;}
-.mt-add:disabled{opacity:.45; cursor:not-allowed;}
-.mt-pitch{display:grid; gap:7px; background:linear-gradient(var(--pitch),var(--pitch2)); border-radius:12px; padding:16px 10px;}
-.mt-line{display:flex; justify-content:center; gap:8px; flex-wrap:wrap;}
-.mt-jersey{display:flex; flex-direction:column; align-items:center; gap:4px; width:84px;}
-.mt-jersey .j{width:26px; height:26px; border-radius:7px; background:#f5c518; color:#11241b; font-family:'Bebas Neue';
-  font-size:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.3);}
-.mt-jersey .nm{font-family:'Oswald'; font-weight:500; font-size:14px; color:#eaf3ee; text-align:center; line-height:1.15; max-width:84px;}
-.mt-jersey .pts{font-family:'Oswald'; font-weight:600; font-size:11px; color:#f5c518; line-height:1;}
-.mt-bench .pts{font-family:'Oswald'; font-weight:600; font-size:11px;}
-.mt-bench{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
-.mt-bench .b{font-family:'Oswald'; font-size:12px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 11px;}
-.mt-bench .b.miss{opacity:.55; text-decoration:line-through;}
-.mt-note{font-family:'Oswald'; font-size:11px; color:var(--muted); margin-top:10px;}
-.mt-tip{background:var(--pitch); color:var(--paper); border-radius:8px; padding:8px 10px; font-family:'Oswald'; font-size:12px;}
-.mt-tip .sc{font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px;}
-.mt-settings{display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 16px; background:#fff;
-  border-bottom:1px solid var(--line); font-family:'Oswald'; font-size:12px;}
-.mt-settings label{display:flex; align-items:center; gap:6px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
-.mt-grid{display:flex; flex-wrap:wrap; gap:8px;}
-.mt-frow{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:6px;} /* live "Who?" formation row */
-.mt-frow .mt-big{flex:0 1 auto; min-width:84px;}
-.mt-big{flex:1 1 30%; min-width:92px; padding:13px 6px; font-family:'Oswald'; font-weight:600; font-size:14px;
-  text-transform:uppercase; letter-spacing:.5px; color:var(--ink); background:#fffdf6; border:1px solid var(--line);
-  border-radius:10px; cursor:pointer;}
-.mt-big.sm{flex:1 1 22%; min-width:76px; padding:10px 6px; font-size:12.5px; text-transform:none; font-weight:500;}
-.mt-big.on{outline:2px solid #f5c518; outline-offset:1px;}
-.mt-big.off{filter:grayscale(.75); opacity:.4;} /* the unselected team fades right back */
-.mt-big:active{transform:translateY(1px);}
-.mt-big:disabled{opacity:.3; filter:grayscale(.8); cursor:default; pointer-events:none;}
-.mt-swatch{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.3); padding:0; cursor:pointer; flex:none;}
-.mt-swatch.big{width:30px; height:30px; border-radius:8px;}
-.mt-swatch.on{outline:2px solid #f5c518; outline-offset:2px;}
-/* game mode: big-button takeover — one wizard stage fills the screen */
-.mt-game{display:flex; flex-direction:column; min-height:calc(100vh - 230px);}
-.mt-game .mt-grid{align-items:stretch;}
-.mt-game .mt-big{min-height:62px; font-size:16px;}
-.mt-game .mt-big.sm{min-height:54px; font-size:14.5px;}
-.mt-game .gm-team{min-height:96px; font-size:21px; letter-spacing:1px;}
-.mt-game .mt-add{padding:10px 16px;}
-/* last entry + undo ride the bottom of the screen (sticky, like the scoreboard at the top) */
-.mt-game .gm-undo{position:sticky; bottom:0; margin-top:auto; display:flex; align-items:center; gap:10px;
-  background:var(--paper); border-top:1px solid var(--line); padding:10px 2px; z-index:5;}
-.mt-game .gm-undo .t{flex:1; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12px; color:#333; word-break:break-word;}
-/* new-match wizard: shares the .mt-game sizing; team buttons wear their kit */
-.mt-game .nw-team{border-width:3px; font-size:17px;}
-.mt-game .nw-team .sub{font-weight:400; opacity:.85; text-transform:none;}
-.mt-game .nw-date input{font-size:18px; padding:12px 10px; border:1px solid var(--line); border-radius:10px; font-family:'Oswald'; background:#fffdf6;}
-.mt-game .nw-in{flex:1 1 140px; font-size:16px; padding:11px 10px; border:1px solid var(--line); border-radius:10px; font-family:'Oswald'; background:#fffdf6;}
-/* touch devices: 16px+ inputs stop iOS zooming the page when a field is focused */
-@media (hover:none){.mt-settings input,.mt-settings select,.mt-live input,.mt-live select,.mt-sel{font-size:16px;}}
-/* touch devices: the scoreboard pins to the top while scrolling, so the score
-   stays in view during live entry (needs overflow:clip on .mt-root, not hidden) */
-@media (hover:none){.mt-board{position:sticky; top:0; z-index:25; box-shadow:0 10px 22px -14px rgba(12,59,42,.55);}}
-.mt-settings input[type=text],.mt-settings input[type=datetime-local]{font-family:'Oswald'; font-size:12px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; width:120px;}
-.mt-settings input[type=datetime-local]{width:auto;}
-.mt-settings input[type=color]{width:26px; height:26px; border:1px solid var(--line); border-radius:6px; padding:0; background:none;}
-.mt-blks{display:flex; flex-direction:column; gap:5px; margin-bottom:8px;}
-.mt-blk{display:flex; align-items:center; gap:8px; background:#fffdf6; border:1px solid var(--line);
-  border-radius:8px; padding:7px 9px; cursor:pointer; text-align:left; width:100%; box-sizing:border-box;}
-.mt-blk .t{flex:1; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12px; color:#333; word-break:break-word;}
-.mt-blk.lineup{background:#f4eedd;}
-.mt-blk .chev{color:#bbac8a; font-size:10px; flex:none;}
-.mt-bpill{font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; border-radius:99px; padding:2px 7px;
-  flex:none; background:#e8e0cc; color:#777; font-weight:600; font-family:'Oswald';}
-.mt-bpill.half{background:#333; color:#fff;}
-.mt-bpill.sub{background:#2c5fa8; color:#fff;}
-.mt-bpill.card-yellow{background:#f1c40f; color:#5a4500;}
-.mt-bpill.card-red{background:#e74c3c; color:#fff;}
-.mt-blk{font: inherit;}
-.mt-blk.editing{display:block; border:2px solid var(--pitch2); cursor:default;}
-.mt-blkrow{display:flex; gap:6px; margin-top:7px; flex-wrap:wrap; align-items:center;}
-.mt-blkrow .mt-add{padding:6px 12px;}
-.mt-blkrow .danger{background:#fff; color:#c0392b; border:1px solid #c0392b; margin-left:auto;}
-.mt-blkrow .danger.armed{background:#c0392b; color:#fff;}
-.mt-minstep{display:flex; gap:6px; align-items:center;}
-.mt-minstep button{width:36px; height:36px; font-size:17px; border-radius:8px; border:1px solid var(--line); background:#fff;}
-.mt-minstep input{width:52px; font-size:16px; text-align:center; padding:6px; border:1px solid var(--line); border-radius:6px; font-family:ui-monospace,Menlo,monospace;}
-.mt-blkta{width:100%; box-sizing:border-box; font-family:ui-monospace,Menlo,monospace; font-size:13px; padding:7px; border:1px solid var(--line); border-radius:6px; background:#fffdf6;}
-`;
-
+// StatCard (index.html 1080-1083)
 function StatCard({ k, v }) {
   return <div className="mt-stat"><div className="v">{v}</div><div className="k">{k}</div></div>;
 }
 
+// ChartTip (index.html 1084-1095)
 function ChartTip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const d = payload[0].payload;
@@ -1092,18 +41,7 @@ function ChartTip({ active, payload }) {
   );
 }
 
-// Header labels that are just template placeholders, not something the user typed.
-const isPlaceholderLabel = (s) => ["", "new match", "my team", "match"].includes((s || "").trim().toLowerCase());
-
-// Selectable sports: dropdown emoji, display label, and the scoring mode each implies.
-const SPORTS = {
-  hurling: { label: "Hurling", emoji: "🏑", mode: "gaa" },
-  camogie: { label: "Camogie", emoji: "🏑", mode: "gaa" },
-  gaelic: { label: "Gaelic Football", emoji: "⚪", mode: "gaa" },
-  soccer: { label: "Soccer", emoji: "⚽", mode: "goals" },
-};
-// Emoji for a saved match: explicit selection wins, then a sport named in the
-// notation header, then goals-mode (unambiguously soccer); ambiguous GAA gets none.
+// sportEmoji (index.html 1107-1113)
 const sportEmoji = (sport, headerSport, mode) => {
   if (SPORTS[sport]) return SPORTS[sport].emoji;
   const byLabel = Object.values(SPORTS).find((s) => s.label === headerSport);
@@ -1111,19 +49,15 @@ const sportEmoji = (sport, headerSport, mode) => {
   return mode === "goals" ? SPORTS.soccer.emoji : "";
 };
 
-function MinuteStep({ val, onChange }) {
-  return (
-    <div className="mt-minstep">
-      <button onClick={() => onChange((val + 59) % 60)}>−</button>
-      <input inputMode="numeric" value={val}
-        onChange={(e) => { const n = parseInt(e.target.value, 10); onChange(isNaN(n) ? 0 : Math.min(59, Math.max(0, n))); }} />
-      <button onClick={() => onChange((val + 1) % 60)}>+</button>
-      <span style={{ fontSize: 11, color: "#9a8c66" }}>min</span>
-    </div>
-  );
+// downloadBlob (index.html 354-359)
+function downloadBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
 
-function MatchTracker() {
+export default function MatchTracker() {
   const [raw, setRaw] = useState(SAMPLE);
   const [myTeam, setMyTeam] = useState("Racoons");
   const [scoringMode, setScoringMode] = useState("gaa");
@@ -1133,6 +67,7 @@ function MatchTracker() {
   const [colorUs2, setColorUs2] = useState("#1f7a4d");
   const [colorThem, setColorThem] = useState("#c0392b");
   const [colorThem2, setColorThem2] = useState("#2c5fa8");
+  const [nameDisplay, setNameDisplay] = useState("full");
   const [tab, setTab] = useState("overview");
   const [matchDate, setMatchDate] = useState("2026-06-02T18:21");
   const [curId, setCurId] = useState(null);
@@ -1170,6 +105,7 @@ function MatchTracker() {
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
+  const [share, setShare] = useState(false);
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
@@ -1246,7 +182,7 @@ function MatchTracker() {
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2 });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -1255,7 +191,7 @@ function MatchTracker() {
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, saved]);
+  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, saved]);
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -1277,7 +213,7 @@ function MatchTracker() {
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
-  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2]);
+  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay]);
   // Re-pull the server copy (e.g. edits made on another device) on demand.
   const doResync = async () => {
     if (dirty && curId && !window.confirm("This match has unsaved changes here — load the server copy over them?")) return;
@@ -1300,6 +236,7 @@ function MatchTracker() {
     setSport(d.sport || "");
     setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
     setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
+    setNameDisplay(d.nameDisplay || "full");
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
   const doNew = () => {
@@ -1422,7 +359,7 @@ function MatchTracker() {
     if (!l) return;
     append(l);
     setLvEvent(null);
-    setSavedMsg(`Added “${l}”`); setTimeout(() => setSavedMsg(""), 1800);
+    setSavedMsg(`Added "${l}"`); setTimeout(() => setSavedMsg(""), 1800);
   };
   // undo: the last non-empty event line — never the header/roster, so only
   // lines after the first half-start clock line are up for removal
@@ -1439,7 +376,7 @@ function MatchTracker() {
     const lines = raw.split("\n");
     lines.splice(undoTarget.idx, 1);
     setRaw(lines.join("\n").replace(/\s+$/, "") + "\n");
-    setSavedMsg(`Removed “${undoTarget.text}”`); setTimeout(() => setSavedMsg(""), 1800);
+    setSavedMsg(`Removed "${undoTarget.text}"`); setTimeout(() => setSavedMsg(""), 1800);
   };
 
   // game mode entry closes every open editor/panel — same rule as other raw-mutation paths
@@ -1448,6 +385,12 @@ function MatchTracker() {
 
   // the wizard touches nothing until its final step, so Cancel is just setNw(null)
   const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
+  const enterShare = () => {
+    setMenuOpen(false);
+    if (!curId) { setSavedMsg("Save the match first, then share"); setTimeout(() => setSavedMsg(""), 2500); return; }
+    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw(null);
+    setShare(true);
+  };
   // build + save the wizard's match directly — recordPayload() would read pre-update state.
   // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
   const finishNew = async (opp, oppColors, oppSport) => {
@@ -1685,14 +628,13 @@ function MatchTracker() {
 
   const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
 
-  const view = gm ? "game" : nw ? "new" : tab; // game mode / new-match wizard replace the tab body
+  const view = gm ? "game" : nw ? "new" : share ? "share" : tab; // game mode / new-match wizard / share wizard replace the tab body
 
   return (
     <div className="mt-root">
-      <style>{CSS}</style>
 
       {/* top bar */}
-      {!(gm || nw) && (
+      {!(gm || nw || share) && (
       <div className="mt-bar">
         <div className="mt-logo">
           {/* same ball as icon-180.png (tools/make-icon.py geometry) */}
@@ -1711,10 +653,11 @@ function MatchTracker() {
       )}
       {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
           panels — fixed/absolute dropdowns miss taps in mobile webviews */}
-      {!(gm || nw) && menuOpen && (
+      {!(gm || nw || share) && menuOpen && (
         <div className="mt-bar sub">
           <button className="mt-btn" onClick={enterNew}>New</button>
           {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
+          <button className="mt-btn" onClick={enterShare}>Publish / share link</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); sb.auth.signOut(); }}>{userEmail ? "Sign out (" + userEmail + ")" : "Sign out"}</button>
@@ -1726,7 +669,7 @@ function MatchTracker() {
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
-      {!(gm || nw) && modal && (
+      {!(gm || nw || share) && modal && (
         <div className="mt-panel">
           {modal.kind === "share" && (
             <>
@@ -1756,7 +699,7 @@ function MatchTracker() {
       )}
 
       {/* settings */}
-      {!(gm || nw) && (
+      {!(gm || nw || share) && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -1783,7 +726,7 @@ function MatchTracker() {
       </div>
       )}
 
-      {!(gm || nw) && colorPick && (() => {
+      {!(gm || nw || share) && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -1812,7 +755,7 @@ function MatchTracker() {
       })()}
 
       {/* scoreboard */}
-      {!nw && (
+      {!(nw || share) && (
       <div className="mt-board">
         <div className="mt-meta">{sportLabel || "Match"} · {header.homeAway === "away" ? "Away" : header.homeAway === "home" ? "Home" : ""} {header.label ? "· " + header.label : ""}{matchDate ? " · " + fmtDate(matchDate) : ""}</div>
         <div className="mt-score">
@@ -1838,7 +781,7 @@ function MatchTracker() {
       )}
 
       {/* tabs */}
-      {!(gm || nw) && (
+      {!(gm || nw || share) && (
       <div className="mt-tabs">
         {tabs.map(([id, lbl]) => (
           <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
@@ -1916,6 +859,14 @@ function MatchTracker() {
               </>
             )}
           </div>
+        )}
+        {share && (
+          <ShareWizard
+            record={{ ...recordPayload(), savedAt: Date.now() }}
+            curId={curId}
+            onClose={() => setShare(false)}
+            onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
+          />
         )}
         {view === "game" && (
           <div className="mt-game">
@@ -2361,92 +1312,3 @@ function MatchTracker() {
     </div>
   );
 }
-
-
-/* ---- dependency-free score chart (replaces recharts) ---- */
-function ScoreChart({ series, goalDots, htLine, colorUs, colorThem }) {
-  const W = 720, H = 280, L = 40, Rp = 14, Tp = 14, Bp = 26;
-  const xMax = Math.max(1, ...series.map((p) => p.x));
-  const yMax = Math.max(1, ...series.map((p) => Math.max(p.us, p.them)));
-  const pX = (x) => L + (W - L - Rp) * (x / xMax);
-  const pY = (v) => (H - Bp) - ((H - Bp) - Tp) * (v / yMax);
-  const stepPath = (key) => {
-    let d = "";
-    series.forEach((p, i) => {
-      const px = pX(p.x), py = pY(p[key]);
-      if (!i) d += "M " + px + " " + py;
-      else d += " L " + px + " " + pY(series[i - 1][key]) + " L " + px + " " + py;
-    });
-    return d;
-  };
-  const grid = [];
-  for (let g = 0; g <= 2; g++) { const v = Math.round((yMax * g) / 2); grid.push({ v, y: pY(v) }); }
-  return (
-    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: "auto", display: "block" }}>
-      {grid.map((gd, i) => (
-        <g key={i}>
-          <line x1={L} y1={gd.y} x2={W - Rp} y2={gd.y} stroke="#e3d9bf" />
-          <text x={L - 6} y={gd.y + 4} fontSize="11" fill="#6f7d72" textAnchor="end" fontFamily="Oswald,sans-serif">{gd.v}</text>
-        </g>
-      ))}
-      {htLine != null && (
-        <g>
-          <line x1={pX(htLine)} y1={Tp} x2={pX(htLine)} y2={H - Bp} stroke="#0c3b2a" strokeDasharray="4 3" />
-          <text x={pX(htLine)} y={Tp - 2} fontSize="10" fill="#0c3b2a" textAnchor="middle" fontWeight="700" fontFamily="Oswald,sans-serif">HT</text>
-        </g>
-      )}
-      <path d={stepPath("them")} fill="none" stroke={colorThem} strokeWidth="2.5" />
-      <path d={stepPath("us")} fill="none" stroke={colorUs} strokeWidth="3" />
-      {goalDots.map((d, i) => (
-        <circle key={i} cx={pX(d.x)} cy={pY(d.y)} r="4.5" fill={d.side === "us" ? colorUs : colorThem} stroke="#fff" strokeWidth="1.5" />
-      ))}
-    </svg>
-  );
-}
-
-/* ---- sign-in + Supabase bootstrap ---- */
-function SignIn({ phase, err, onSignIn }) {
-  const busy = phase === "wait" || phase === "load";
-  const label = phase === "load" ? "Loading your matches…" : phase === "wait" ? "Starting…" : "Sign in with Google";
-  return (
-    <div className="si-wrap"><div className="si-card">
-      <h1>SIDELINE</h1>
-      <p>Match data is saved privately to your account and synced across your devices.</p>
-      <button className="si-btn" onClick={onSignIn} disabled={busy}>{label}</button>
-      <div className="si-status">{err || (phase === "load" ? "Syncing…" : "")}</div>
-    </div></div>
-  );
-}
-function App() {
-  const [phase, setPhase] = useState("wait");
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    // getSession() also resolves the OAuth redirect return: supabase-js parses the URL
-    // hash and persists the session before this promise settles.
-    sb.auth.getSession().then(async ({ data }) => {
-      if (data && data.session) {
-        setPhase("load");
-        try { await loadAll(); setPhase("ready"); }
-        catch (e) { setErr("Couldn't load your matches — check the Supabase config and that the matches table exists."); setPhase("out"); }
-      } else { setPhase("out"); }
-    }).catch(() => { setErr("Couldn't reach the server — check your connection."); setPhase("out"); });
-    // Reflect later sign-out (here or on another tab) back to the sign-in screen.
-    // Note: a lost session unmounts MatchTracker, so any not-yet-autosaved edits are dropped
-    // (rare — autosave runs every 2.5s and token refresh is reliable while the tab is open).
-    const { data: listener } = sb.auth.onAuthStateChange((_event, session) => { if (!session) setPhase("out"); });
-    return () => { if (listener && listener.subscription) listener.subscription.unsubscribe(); };
-  }, []);
-  const signIn = async () => {
-    setErr("");
-    const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.href } });
-    if (error) setErr("Sign-in failed: " + error.message);
-    // on success the browser redirects to Google; nothing more to do here.
-  };
-  if (phase === "ready") return <MatchTracker />;
-  return <SignIn phase={phase} err={err} onSignIn={signIn} />;
-}
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-
-</script>
-</body>
-</html>

@@ -1,2 +1,9 @@
 .superpowers/
 backup.json
+/node_modules
+/.next
+/out
+next-env.d.ts
+.env.local
+.vercel
+tsconfig.tsbuildinfo
