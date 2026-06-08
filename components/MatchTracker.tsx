@@ -18,6 +18,7 @@ import {
   fmtDate, fmtDateShort, toLocalInput, dateKey, MONTHS, pad2,
 } from "@/lib/util";
 import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
+import ShareWizard from "@/components/ShareWizard";
 
 const sb = createClient();
 
@@ -66,6 +67,7 @@ export default function MatchTracker() {
   const [colorUs2, setColorUs2] = useState("#1f7a4d");
   const [colorThem, setColorThem] = useState("#c0392b");
   const [colorThem2, setColorThem2] = useState("#2c5fa8");
+  const [nameDisplay, setNameDisplay] = useState("full");
   const [tab, setTab] = useState("overview");
   const [matchDate, setMatchDate] = useState("2026-06-02T18:21");
   const [curId, setCurId] = useState(null);
@@ -103,6 +105,7 @@ export default function MatchTracker() {
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
+  const [share, setShare] = useState(false);
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
@@ -179,7 +182,7 @@ export default function MatchTracker() {
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2 });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -188,7 +191,7 @@ export default function MatchTracker() {
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, saved]);
+  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, saved]);
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -210,7 +213,7 @@ export default function MatchTracker() {
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
-  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2]);
+  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay]);
   // Re-pull the server copy (e.g. edits made on another device) on demand.
   const doResync = async () => {
     if (dirty && curId && !window.confirm("This match has unsaved changes here — load the server copy over them?")) return;
@@ -233,6 +236,7 @@ export default function MatchTracker() {
     setSport(d.sport || "");
     setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
     setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
+    setNameDisplay(d.nameDisplay || "full");
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
   const doNew = () => {
@@ -381,6 +385,12 @@ export default function MatchTracker() {
 
   // the wizard touches nothing until its final step, so Cancel is just setNw(null)
   const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
+  const enterShare = () => {
+    setMenuOpen(false);
+    if (!curId) { setSavedMsg("Save the match first, then share"); setTimeout(() => setSavedMsg(""), 2500); return; }
+    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw(null);
+    setShare(true);
+  };
   // build + save the wizard's match directly — recordPayload() would read pre-update state.
   // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
   const finishNew = async (opp, oppColors, oppSport) => {
@@ -618,13 +628,13 @@ export default function MatchTracker() {
 
   const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
 
-  const view = gm ? "game" : nw ? "new" : tab; // game mode / new-match wizard replace the tab body
+  const view = gm ? "game" : nw ? "new" : share ? "share" : tab; // game mode / new-match wizard / share wizard replace the tab body
 
   return (
     <div className="mt-root">
 
       {/* top bar */}
-      {!(gm || nw) && (
+      {!(gm || nw || share) && (
       <div className="mt-bar">
         <div className="mt-logo">
           {/* same ball as icon-180.png (tools/make-icon.py geometry) */}
@@ -643,10 +653,11 @@ export default function MatchTracker() {
       )}
       {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
           panels — fixed/absolute dropdowns miss taps in mobile webviews */}
-      {!(gm || nw) && menuOpen && (
+      {!(gm || nw || share) && menuOpen && (
         <div className="mt-bar sub">
           <button className="mt-btn" onClick={enterNew}>New</button>
           {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
+          <button className="mt-btn" onClick={enterShare}>Publish / share link</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
           <button className="mt-btn" onClick={() => { setMenuOpen(false); sb.auth.signOut(); }}>{userEmail ? "Sign out (" + userEmail + ")" : "Sign out"}</button>
@@ -658,7 +669,7 @@ export default function MatchTracker() {
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
-      {!(gm || nw) && modal && (
+      {!(gm || nw || share) && modal && (
         <div className="mt-panel">
           {modal.kind === "share" && (
             <>
@@ -688,7 +699,7 @@ export default function MatchTracker() {
       )}
 
       {/* settings */}
-      {!(gm || nw) && (
+      {!(gm || nw || share) && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -715,7 +726,7 @@ export default function MatchTracker() {
       </div>
       )}
 
-      {!(gm || nw) && colorPick && (() => {
+      {!(gm || nw || share) && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -744,7 +755,7 @@ export default function MatchTracker() {
       })()}
 
       {/* scoreboard */}
-      {!nw && (
+      {!(nw || share) && (
       <div className="mt-board">
         <div className="mt-meta">{sportLabel || "Match"} · {header.homeAway === "away" ? "Away" : header.homeAway === "home" ? "Home" : ""} {header.label ? "· " + header.label : ""}{matchDate ? " · " + fmtDate(matchDate) : ""}</div>
         <div className="mt-score">
@@ -770,7 +781,7 @@ export default function MatchTracker() {
       )}
 
       {/* tabs */}
-      {!(gm || nw) && (
+      {!(gm || nw || share) && (
       <div className="mt-tabs">
         {tabs.map(([id, lbl]) => (
           <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
@@ -848,6 +859,14 @@ export default function MatchTracker() {
               </>
             )}
           </div>
+        )}
+        {share && (
+          <ShareWizard
+            record={{ ...recordPayload(), savedAt: Date.now() }}
+            curId={curId}
+            onClose={() => setShare(false)}
+            onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
+          />
         )}
         {view === "game" && (
           <div className="mt-game">
