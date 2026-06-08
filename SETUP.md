@@ -1,56 +1,94 @@
-# Sideline — standalone app setup (GitHub Pages + Google Drive)
+# Sideline — standalone app setup (Supabase + GitHub Pages)
 
-You'll do three things: set up a Google sign-in, paste its ID into the app, and host the file on GitHub Pages. ~20 minutes, all free.
+You'll do three things: create a Supabase project with the right schema and Google OAuth, paste the connection details into the app, and host the file on GitHub Pages. ~25 minutes, all free tiers.
 
-**How "only me" works:** the page itself is just an empty shell (no data, no secrets), so it's fine that the URL is reachable. All your match data lives in a hidden folder in *your* Google Drive, behind your Google login — and you'll lock sign-in to your account only by keeping the consent screen in "Testing".
+**How it works:** the page is a static file with no server. All match data lives in a Supabase Postgres database behind your Google login, protected by Row-Level Security — only your account can read or write your rows. The anon key embedded in the file is intentionally public; RLS is the security boundary.
 
 ---
 
-## A. Google side (~10 min)
+## A. Supabase project (~10 min)
 
-1. Go to **console.cloud.google.com** and sign in with the Google account whose Drive you want to use.
-2. Top bar → project dropdown → **New Project**. Name it `Sideline`, create it, then make sure it's selected.
-3. **Enable the Drive API:** left menu → *APIs & Services → Library* → search **Google Drive API** → **Enable**.
-4. **Consent screen:** *APIs & Services → OAuth consent screen*.
-   - User type: **External** → Create.
-   - App name `Sideline`; put your own email in the support + developer contact fields. Save and continue.
-   - Scopes page: just **Save and continue** (the app asks for its scope at runtime).
-   - Test users: **Add users** → enter **your own Google email** → Save.
-   - Leave the publishing status as **Testing**. Do *not* publish. In Testing, only the test users you listed can ever sign in — that's your "only me" lock.
-5. **Create the credential:** *APIs & Services → Credentials → Create credentials → OAuth client ID*.
+1. Go to **supabase.com**, sign in, and create a new project. Note your **Project URL** and **anon public key** (both visible in *Project Settings → API*).
+
+2. In the Supabase SQL editor run the following to create the schema and policies:
+
+```sql
+create table matches (
+  id          uuid primary key,
+  owner       uuid not null default auth.uid(),
+  is_public   bool not null default false,
+  hide_names  bool not null default false,
+  match_date  timestamptz,
+  my_team     text,
+  opponent    text,
+  sport       text,
+  data        jsonb not null,
+  updated_at  timestamptz not null default now()
+);
+
+alter table matches enable row level security;
+
+create policy own_all on matches
+  for all
+  using  (owner = auth.uid())
+  with check (owner = auth.uid());
+
+create policy public_read on matches
+  for select
+  using (is_public = true);
+```
+
+## B. Google OAuth (~10 min)
+
+3. **Create a Google OAuth client:** go to **console.cloud.google.com**, create (or reuse) a project, and navigate to *APIs & Services → Credentials → Create credentials → OAuth client ID*.
    - Application type: **Web application**.
-   - Under **Authorized JavaScript origins** → Add URI → enter exactly:
-     `https://YOURUSERNAME.github.io`
-     (just the origin — no repo name, no trailing slash. Replace YOURUSERNAME with your GitHub username.)
-   - Create. **Copy the Client ID** (looks like `1234567-abcd.apps.googleusercontent.com`).
+   - Under **Authorised redirect URIs** add exactly:
+     `https://<YOUR_PROJECT_REF>.supabase.co/auth/v1/callback`
+     (Replace `<YOUR_PROJECT_REF>` with your Supabase project reference, visible in the Project URL.)
+   - Create. **Copy the Client ID and Client Secret.**
 
-## B. Paste the Client ID into the app
+4. **Wire it into Supabase:** in your Supabase project go to *Authentication → Providers → Google*. Enable it, paste the Client ID and Client Secret from step 3, and save.
 
-6. Open **sideline.html** in any text editor. Near the top find:
-   `const CLIENT_ID = "PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com";`
-   Replace the placeholder with your real Client ID. Save.
+5. **Set redirect URLs:** in Supabase *Authentication → URL Configuration*:
+   - **Site URL:** `https://YOURUSERNAME.github.io/REPONAME/`
+   - **Redirect URLs:** add both:
+     - `https://YOURUSERNAME.github.io/REPONAME/`
+     - `http://localhost:8000/` (for local testing)
 
-## C. Host it on GitHub Pages (~5 min)
+## C. Paste the connection details into the app
 
-7. Create a new GitHub repository. **Make it public** — the file contains no secrets (the Client ID is meant to be public), and free GitHub Pages only serves public repos. Your data stays private via Google regardless.
-8. Rename **sideline.html → index.html** and add it to the repo (web UI: *Add file → Upload files*, or `git push`).
+6. Open **index.html** in any text editor. Near the top of the `<script type="text/babel">` block find:
+
+```js
+const SUPABASE_URL  = "...";
+const SUPABASE_ANON_KEY = "...";
+```
+
+Replace the placeholders with your Project URL and anon public key from step 1. Save.
+
+## D. Host it on GitHub Pages (~5 min)
+
+7. Create a new GitHub repository. **Make it public** — free GitHub Pages only serves public repos. Your match data is protected by Supabase RLS regardless of whether the source file is visible.
+8. Add **index.html** (and the icon files) to the repo (web UI: *Add file → Upload files*, or `git push`).
 9. Repo **Settings → Pages** → Source: *Deploy from a branch* → Branch **main**, folder **/ (root)** → Save. After a minute it shows your URL: `https://YOURUSERNAME.github.io/REPONAME/`.
 
-## D. Use it
+## E. Use it
 
-10. Open your Pages URL. Tap **Sign in with Google**, choose your account.
-    - You'll likely see a **"Google hasn't verified this app"** screen — that's normal for your own Testing app. Click **Advanced → Go to Sideline (unsafe)**. It's safe; it's yours.
-    - Grant the one permission it asks for. The scope is `drive.appdata` — it can only touch its *own* hidden folder, never the rest of your Drive.
+10. Open your Pages URL. Tap **Sign in with Google** and choose your account. You'll be redirected to Google and back — the session persists in the browser and auto-refreshes, so you won't need to sign in again until you explicitly sign out.
 11. Sign in on your phone at the **same URL with the same account** and your matches are already there. Add it to your home screen for a full-screen app:
     - iPhone/Safari: Share → **Add to Home Screen**.
     - Android/Chrome: ⋮ → **Add to Home screen**.
 
+## Local testing
+
+Open a terminal in the repo folder and run `python3 -m http.server 8000`, then visit `http://localhost:8000/`. Google OAuth redirects back to `localhost:8000` which is in the allowlist from step 5, so the full sign-in flow works locally.
+
 ## Bringing your existing matches over
 
-Your matches from the chat version are stored in that interface, not in Drive. To move them: in the old version tap **Backup → Copy**, then in the new app tap **Backup**, paste into **Import**, and Import. From then on everything lives in Drive.
+If you have matches from an older version of the app, use Backup export/import: in the old version tap **⋯ → Backup → Copy**, then in the new app tap **⋯ → Backup**, paste into **Import**, and tap Import. IDs are remapped to UUIDs automatically.
 
 ## Good to know
 
-- A sign-in lasts about an hour. If a save ever fails after a long idle, just reload and sign in again.
-- Want it truly private at the hosting level too? Private GitHub Pages needs a paid GitHub plan; with the free public repo, the *code* is visible but your *data* never is.
-- If sign-in throws "origin mismatch", the Authorized JavaScript origin in step 5 doesn't exactly match your Pages origin (check https, no trailing slash, correct username).
+- Want it truly private at the hosting level too? Private GitHub Pages needs a paid GitHub plan; with a free public repo, the *code* is visible but your *data* never is (Supabase RLS).
+- If sign-in throws a redirect-mismatch error, check that the redirect URL in step 5 exactly matches your Pages URL (https, correct username and repo name, trailing slash).
+- The app version is shown beside the SIDELINE logo. Pages serves with `max-age=600`, so a new deploy can take ~10 min + a hard refresh to appear.

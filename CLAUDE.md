@@ -8,8 +8,8 @@ Sideline — a personal match tracker for GAA (hurling/football) and soccer that
 
 ## Repository layout
 
-- **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + Google Identity Services loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
-- **`SETUP.md`** — end-user setup guide (Google Cloud OAuth + GitHub Pages).
+- **`index.html`** — the entire app, one file. React 18 + ReactDOM + Babel standalone + supabase-js v2 loaded from CDN; all app code in a single `<script type="text/babel">` block. No build step, no package.json.
+- **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + GitHub Pages).
 - **`icon-180.png`** / **`icon-touch-180.png`** — app icons: a green-pattern soccer ball, transparent for the favicon and on a pitch-green tile for `apple-touch-icon` (iOS blackens transparency). Don't edit by hand — regenerate both with `python3 tools/make-icon.py` (needs PIL). The top-bar logo SVG uses the same geometry/colours.
 - **`tools/`** — dev-only helpers, not served: `make-icon.py`, `parser-harness.js` (extracts the pure parser + raw-edit helpers from `index.html` for node), `run-tests.js` (regression tests for both).
 
@@ -26,27 +26,23 @@ npx esbuild /tmp/sideline-app.jsx --loader:.jsx=jsx --outfile=/dev/null
 
 Parser tests: `node tools/run-tests.js` (extracts the pure functions from `index.html` via `tools/parser-harness.js`). Run after any parser change. The canonical sample (`SAMPLE` with `{myTeam: "Racoons"}`) must give: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings.
 
-**Deploy:** push to `main`; GitHub Pages serves `index.html` at https://seaninryan.github.io/sideline/. Google sign-in only works from the authorized JS origin (`https://seaninryan.github.io`), so the Drive flow can only be exercised on the deployed page, not from a local server.
+**Deploy:** push to `main`; GitHub Pages serves `index.html` at https://seaninryan.github.io/sideline/. Supabase OAuth works from any allowlisted redirect URL — the deployed URL and `http://localhost:8000/` are both in Supabase's redirect allowlist, so local testing now works too.
 
-**Versioning:** `APP_VERSION` (top of the babel script) is shown beside the SIDELINE logo so the user can spot a stale cached page — Pages serves with `max-age=600`, so a deploy can take ~10 min + a hard refresh to appear. Bump it (v2 → v3 → …) in every change that will be deployed, and tell the user which version to look for.
+**Versioning:** `APP_VERSION` (top of the babel script) is shown beside the SIDELINE logo so the user can spot a stale cached page — Pages serves with `max-age=600`, so a deploy can take ~10 min + a hard refresh to appear. Bump it (v2 → v3 → …) in every change that will be deployed, and tell the user which version to look for. Current: **v37**.
 
 ## Architecture
 
-Order of code inside the babel script: Drive store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → pure raw-edit helpers (roster + event-line) → `SAMPLE` → CSS → `MinuteStep` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
+Order of code inside the babel script: Supabase store + auth preamble → `buildInfographicSVG` / `svgToPng` (share image) → `parseMatch` (parser) → pure raw-edit helpers (roster + event-line) → `SAMPLE` → CSS → `MinuteStep` → `MatchTracker` (main UI) → `ScoreChart` → `SignIn` / `App` → render.
 
 ### Auth + storage (no server)
 
-- GitHub Pages serves the static page; the "backend" is the user's own Google Drive. The page holds no data and no secrets.
-- **Auth:** GIS token client (`google.accounts.oauth2.initTokenClient`), scope `https://www.googleapis.com/auth/drive.appdata`. Token flow uses authorized JS origins — no redirect URIs. Access tokens last ~1 hour.
-- **Token lifecycle:** the GIS `callback`/`error_callback` just resolve the pending `requestToken()` promise — all flows (`signIn`, `reauth`) await that. The token + expiry (60s safety margin, tracked in `tokenExp`/`tokenTimeLeft()`) is kept in `sessionStorage` (`sideline_tok`), so a refresh within the hour resumes without a sign-in click; tab close clears it. On a 401 during save, `saveWithRetry` calls `reauth()` (`prompt: ""`) and retries once; if that fails (e.g. popup blocked outside a user gesture) it fires `onAuthExpired`, which `MatchTracker` surfaces as a red "session expired — Reconnect & save" banner whose button (a real click, so the popup is allowed) re-auths and re-pushes `cache` via `driveSave`.
-- **Keep-alive:** there is no refresh token (no backend), so true background renewal isn't possible — GIS needs a (usually invisible) popup, and browsers only reliably allow it during a user gesture. Three layers stretch the session while the tab is open: `doSave` calls `ensureFreshToken()` at the top of the click (rolls the token when <10 min left); a 60s visible-tab interval + `visibilitychange` listener tries one silent `reauth()` when <12 min remain (works where the browser permits it); if blocked, an amber "session expires soon — Stay signed in" banner appears so a single tap renews before anything fails.
-- `CLIENT_ID` is public, not secret. Gotcha: it must end in a **single** `.apps.googleusercontent.com` — a doubled suffix (placeholder + pasted ID) once caused `Error 401: invalid_client`.
-- **"Only me" lock:** the OAuth consent screen ("Google Auth Platform" in the new console) stays in **External / Testing** with only the owner's account as a test user, so only that account can sign in. Expect the "Google hasn't verified this app" → Advanced → proceed screen.
-- **Storage:** one hidden file `sideline.json` in the Drive `appDataFolder`, holding `{ "<id>": <matchRecord>, ... }`. Kept in an in-memory `cache`; the whole object is rewritten to Drive on every change.
-- **Auto-save & sync:** matches already in Drive auto-save 2.5s after the last change (`dirty` compares editor state to `cache[curId]`); a new match needs its first explicit Save. The dropdown and Save button show `*` when dirty. The top-bar **Resync** button re-pulls `sideline.json` (for edits made on another device) and reloads the open match, confirming first if local changes would be lost. Last-write-wins — there is no merge.
-- **`store` API** (same method shapes the original artifact's `window.storage` wrapper had): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool.
-- Drive REST via `dfetch` (fetch + `Authorization: Bearer`); a 401 throws an error with `.code = 401`. `driveSave` also throws on any non-ok response (with `.code = status`) so `store.set`/`store.del` never report success for a failed write.
-- `App`/`SignIn` poll until GIS loads, init the token client, and only render `<MatchTracker/>` after a successful token + `driveLoad()`.
+- GitHub Pages serves the static page; the backend is a **Supabase** project (Postgres + Auth). The page holds only the public anon key (`SUPABASE_ANON_KEY`) — safe behind RLS; no secrets.
+- **Auth:** Supabase Google OAuth via `sb.auth.signInWithOAuth({provider:"google", options:{redirectTo: location.href}})` — a full-page redirect. The session is persisted in `localStorage` by supabase-js and **auto-refreshed**, so there is no token-lifecycle/keep-alive/banner code. `App` calls `sb.auth.getSession()` on load and listens via `onAuthStateChange`; `<MatchTracker/>` renders only after a valid session + `loadAll()`.
+- **Sign-up policy:** open — any Google account can sign in. RLS isolates each user's rows. A "Sign out (\<email\>)" item lives in the ⋯ overflow menu.
+- **Storage:** a `matches` table, row per match. Columns: `id uuid pk`, `owner uuid (default auth.uid())`, `is_public bool default false`, `hide_names bool default false`, `match_date timestamptz`, `my_team text`, `opponent text`, `sport text`, `data jsonb`, `updated_at timestamptz`. `data jsonb` holds the full match record and is the source of truth; the promoted columns (`match_date`, `my_team`, `opponent`, `sport`) are derived on every `store.set` — `opponent` via `parseMatch`. RLS: `own_all` policy (`owner = auth.uid()`) + dormant `public_read` policy (`is_public = true`). `is_public`/`hide_names` are wired but dormant (future public sharing + youth name redaction).
+- **Auto-save & sync:** matches auto-save 2.5s after the last change (`dirty` compares editor state to `cache[curId]`); a new match needs its first explicit Save. The dropdown and Save button show `*` when dirty. The ⋯ **Resync** button re-pulls via `loadAll()` (for edits made on another device) and reloads the open match, confirming first if local changes would be lost. Last-write-wins — there is no merge.
+- **`store` API** (same method shapes the original artifact's `window.storage` wrapper had): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool. `store.set` does a single-row upsert; `store.del` a single-row delete; `loadAll()` replaces the old `driveLoad`. `MatchTracker` is untouched — the `store` surface is identical.
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` are public constants near the top of the babel script. supabase-js v2 is loaded via `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">` (UMD), preserving the no-build single-file constraint.
 
 ### Parser (`parseMatch`) — pure JS
 
@@ -82,13 +78,13 @@ Key decisions (preserve these when modifying):
 
 - "▶ Game mode" in the Notation tab's live panel swaps the whole UI for scoreboard + a staged big-button wizard, one stage at a time: **Team → Event → Player** (subs: off → on; `completeSub`). `gm` state (`null` off, else `{stage, team?, ev?, off?}`); `view = gm ? "game" : tab` drives the body, and all chrome (top bar, menu, panels, settings, colour picker, tabs) is wrapped in `!gm`. It's a **conditional render inside `MatchTracker`, not a fixed overlay** (see UI decisions). Entering closes any open editors (the raw-mutation rule).
 - Everything reuses the live-entry machinery — `addLive`/`liveLine` took an optional `team` param (defaults to `lvTeam`, old panel unaffected); wall-clock minutes as ever. Phase gating: pre/HT show only Start half; in play, team buttons + Sub/HT/FT; after FT, an undo hint. Opposition events and our corners append straight from the event stage; our player events go to the who-grid.
-- The toast and auth banners stay rendered in game mode (matches outlast the ~1h token — the "Stay signed in" tap must work mid-match). A never-saved match shows an `mt-warn` row with its own Save button, because auto-save needs the first explicit Save and the top bar is hidden.
+- The toast banner stays rendered in game mode. A never-saved match shows an `mt-warn` row with its own Save button, because auto-save needs the first explicit Save and the top bar is hidden.
 - Bottom "last entry + ↩ Undo" row is `position:sticky; bottom:0` (`.gm-undo`) — the sticky pattern the scoreboard already proves out; `margin-top:auto` in the `.mt-game` flex column pins it when stage content is short.
 
 ### New-match wizard (v36)
 
 - "New" (⋯ menu) opens a full-screen wizard in the same takeover slot as game mode (`nw` state; chrome wraps are `!(gm || nw)`; the scoreboard also hides — it would show the previous match): **Date (default now) → Your team → Opponent**. Both team steps offer big kit-coloured buttons mined from `cache` (`prevTeams`: distinct myTeam+label combos / opposition names, header line parsed via `parseMatch`, most recent first); picking applies name, colours, and sport (your team's sport wins; an opponent's only fills a gap). Skip gives the blank template; Cancel touches nothing (state only mutates in `finishNew`, which is guarded by `creatingRef` against a double-tap minting two matches).
-- `finishNew` builds the record locally (not `recordPayload()` — stale state) and saves to Drive immediately, so auto-save is live from creation.
+- `finishNew` builds the record locally (not `recordPayload()` — stale state) and saves to Supabase immediately, so auto-save is live from creation.
 - New matches (wizard and blank) no longer seed a clock line — every match starts at phase "pre" and Start half opens H1 at throw-in.
 
 ### Share image
@@ -104,6 +100,6 @@ Key decisions (preserve these when modifying):
 
 ## Known limitations / next steps
 
-- Sign-in is still needed after the token expires (~1h) or when the tab is closed — full multi-day persistence would need the authorization-code flow + a backend, which this app deliberately doesn't have.
-- Sign-in + Drive save/load is in regular real-game use and works; the rarer recovery paths (401 retry on save, the red "Reconnect & save" banner, sessionStorage resume) are hard to exercise deliberately and remain only opportunistically tested.
-- Possible additions: visible "Signed in as / Sign out" affordance; PWA manifest + icon; service-worker offline cache.
+- Sign-in + Supabase save/load is in regular real-game use and works; the rarer recovery paths (network errors on save, session expiry edge cases) remain only opportunistically tested.
+- Supabase's auth-code refresh gives multi-day session persistence; a tab close and reopen resumes from `localStorage` without a re-sign-in prompt.
+- Possible additions: PWA manifest + icon; service-worker offline cache.
