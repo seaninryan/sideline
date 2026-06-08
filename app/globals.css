@@ -222,3 +222,11 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-share-wiz .sw-opt.sel{outline:2px solid var(--pitch);}
 .mt-share-wiz .sw-opt .sw-hint{font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;}
 .mt-share-wiz .sw-nav{display:flex;gap:10px;justify-content:flex-end;margin-top:6px;}
+
+/* shared brand header (public surfaces) */
+.bh{display:flex; align-items:center; gap:10px; padding:12px 16px; background:#0c3b2a; text-decoration:none;}
+.bh-pill{flex:none;}
+.bh-brand{display:flex; flex-direction:column; line-height:1;}
+.bh-wm{font-family:var(--font-bebas), sans-serif; font-size:26px; letter-spacing:1px; line-height:.9; color:#f4efe1;}
+.bh-go{color:#f5c518;}
+.bh-chant{font-family:var(--font-oswald), sans-serif; font-weight:600; font-size:8.5px; letter-spacing:2px; color:#8fb0a3; margin-top:3px; text-transform:uppercase;}
