@@ -26,10 +26,10 @@ out of scope for Phase 1 and get their own later spec/plan cycles.
 
 ### Why Next.js on Vercel (recorded rationale)
 
-The headline reason is OG images: a shared match link unfurls as the actual
-match infographic poster, server-rendered. This is on-mission for an app built
-around shareable match summaries and is impossible on a client-only SPA (crawlers
-don't run JS). Secondary benefits: instant server-rendered public pages, a server
+The headline reason is OG images: a shared match link unfurls as a server-rendered
+score card (final score, teams, result) instead of a bare URL. This is on-mission
+for an app built around shareable match summaries and is impossible on a client-only
+SPA (crawlers don't run JS). Secondary benefits: instant server-rendered public pages, a server
 runtime for future secret-backed features (RLS can't express everything), and
 file-based routing with automatic code splitting. Accepted costs: cookie-based
 `@supabase/ssr` auth (more involved than the current client-only flow), a heavier
@@ -43,7 +43,7 @@ app/
   page.tsx                        # "/" — editor app (auth-gated, server reads session)
   m/[id]/
     page.tsx                      # public read-only match (server-rendered)
-    opengraph-image.tsx           # OG poster from buildInfographicSVG (runtime: nodejs)
+    opengraph-image.tsx           # compact OG score card from buildScoreCardSVG (runtime: nodejs)
   auth/callback/route.ts          # Supabase OAuth code exchange
   globals.css                     # ported CSS
 lib/
@@ -190,7 +190,7 @@ push-to-deploy reflex as the current GitHub Pages flow.
 ## Constraints preserved
 
 - No real player or club names anywhere in the repo — `SAMPLE` stays fictional.
-- One infographic implementation, shared by app + OG.
+- Two pure SVG builders in `lib/infographic.ts`: `buildInfographicSVG` (full in-app poster, rasterized in-browser via canvas) and `buildScoreCardSVG` (compact OG card, rasterized server-side via resvg). Distinct by design — different sizes, different audiences.
 - Dependency-free inline-SVG `ScoreChart` — no chart library reintroduced.
 - The `store` surface is identical so `MatchTracker` is untouched by the storage move.
 
