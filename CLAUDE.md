@@ -34,7 +34,7 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker>`.
   - `PublicMatch.tsx` — read-only public match render.
   - `ShareWizard.tsx` — publish + share-link wizard (name-display choice → make public → copy link + OG preview).
-- **`test/`** — Vitest suites: `parser.test.ts` (full regression suite, 143 tests total across all files), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `smoke.test.ts`.
+- **`test/`** — Vitest suites: `parser.test.ts` (full regression suite, 147 tests total across all files), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `brand.test.ts`, `smoke.test.ts`.
 - **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
 - **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
 - **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
@@ -49,7 +49,7 @@ Node 20 is required (`nvm use 20`).
 npm install
 npm run dev      # → http://localhost:3000
 npm run build    # production build
-npm test         # Vitest (143 tests)
+npm test         # Vitest (147 tests)
 ```
 
 After any parser change, run `npm test` and confirm the canonical `SAMPLE` with `{myTeam:"Racoons"}` produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings. This is asserted in `test/parser.test.ts`.

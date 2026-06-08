@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildScoreCardSVG } from "@/lib/infographic";
 import { buildModel } from "@/lib/model";
 import { SAMPLE } from "@/lib/sample";
+import { BRAND_SITE, BRAND_WORDMARK } from "@/lib/constants";
 
 describe("buildScoreCardSVG", () => {
   const model = buildModel({ raw: SAMPLE, myTeam: "Racoons", scoringMode: "gaa" });
@@ -22,8 +23,8 @@ describe("buildScoreCardSVG", () => {
     expect(svg).not.toContain("Morty");
   });
   it("carries the brand lockup", () => {
-    expect(svg).toContain("HERE WE GO");
-    expect(svg).toContain("herewego.ie");
+    expect(svg).toContain(BRAND_WORDMARK);
+    expect(svg).toContain(BRAND_SITE);
     expect(svg).toContain('<tspan fill="#f4efe1">HW</tspan>'); // the pill
   });
 });
