@@ -1,5 +1,5 @@
 // Shown beside the logo — bump on every deployed change so a stale cached page is obvious.
-export const APP_VERSION = "v39";
+export const APP_VERSION = "v40";
 
 // swatch palette for the colour picker (common kit colours)
 export const PALETTE = ["#f5c518", "#1f7a4d", "#0c3b2a", "#7a1f1f", "#c0392b", "#2c5fa8", "#1b2a4a", "#7ec8e3",
