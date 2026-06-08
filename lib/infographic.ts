@@ -1,6 +1,17 @@
 import { contrastOn, fmtScore } from "@/lib/util";
 import type { Model } from "@/lib/types";
 
+/* Shared HWG brand pill (same geometry as the app icon / top-bar logo).
+   Drawn as an SVG string so the poster and OG card share one source of truth.
+   Pill text uses the rasterisation font (Liberation Sans / Arial), matching the icon. */
+export function brandPillSVG(x: number, y: number, scale = 1): string {
+  return `<g transform="translate(${x},${y}) scale(${scale})">`
+    + `<rect x="4" y="8" width="120" height="54" rx="27" fill="#0c3b2a" stroke="#f5c518" stroke-width="4"/>`
+    + `<text x="64" y="50" font-family="Liberation Sans, Arial, sans-serif" font-size="40" font-weight="700" text-anchor="middle">`
+    + `<tspan fill="#f4efe1">HW</tspan><tspan fill="#f5c518">G</tspan></text>`
+    + `</g>`;
+}
+
 export function buildScoreCardSVG(m: Model): { svg: string; width: number; height: number } {
   const W = 1200, H = 630;
   const esc = (s: any) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] as string));
