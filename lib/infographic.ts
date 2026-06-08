@@ -43,7 +43,10 @@ export function buildScoreCardSVG(m: Model): { svg: string; width: number; heigh
   parts.push(t(W * 0.75, 410, themS, 120, INK, { w: 700, a: "middle" }));
   if (result) parts.push(t(W / 2, 500, result, 40, INK, { w: 700, a: "middle" }));
   if (ht) parts.push(t(W / 2, 545, `HT ${ht}`, 26, MUTE, { a: "middle" }));
-  parts.push(t(W / 2, 605, "HERE WE GO", 24, MUTE, { w: 700, a: "middle" }));
+  // brand lockup: [pill] HERE WE GO   herewego.ie
+  parts.push(brandPillSVG(W / 2 - 215, 565, 0.62));        // 128*0.62 ≈ 79 wide, 70*0.62 ≈ 43 tall
+  parts.push(t(W / 2 - 120, 600, BRAND_WORDMARK, 30, INK, { w: 700 }));     // anchor start
+  parts.push(t(W / 2 + 130, 600, BRAND_SITE, 22, MUTE, { w: 400 }));        // anchor start
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
   return { svg, width: W, height: H };
