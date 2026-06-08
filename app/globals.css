@@ -230,3 +230,54 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .bh-wm{font-family:var(--font-bebas), sans-serif; font-size:26px; letter-spacing:1px; line-height:.9; color:#f4efe1;}
 .bh-go{color:#f5c518;}
 .bh-chant{font-family:var(--font-oswald), sans-serif; font-weight:600; font-size:8.5px; letter-spacing:2px; color:#8fb0a3; margin-top:3px; text-transform:uppercase;}
+
+/* public match page (poster-style) */
+.pm-root{max-width:560px; margin:0 auto; background:var(--paper,#f4efe1); min-height:100vh;}
+.pm-head{background:#0c3b2a; color:#f4efe1; padding:6px 16px 22px; position:relative;}
+.pm-topline{height:6px; display:flex; margin:0 -16px 16px;}
+.pm-topline i{flex:1;}
+.pm-meta{display:flex; justify-content:space-between; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#cfe3d8;}
+.pm-teams{display:flex; align-items:flex-start; margin-top:14px;}
+.pm-team{flex:1; text-align:center;}
+.pm-flag{width:34px; height:20px; border-radius:2px; overflow:hidden; display:inline-block; border:1px solid rgba(255,255,255,.55);}
+.pm-flag i{display:block; height:50%;}
+.pm-name{font-weight:700; font-size:16px; margin-top:8px;}
+.pm-score{font-family:var(--font-bebas), sans-serif; font-size:54px; line-height:.9; margin-top:6px;}
+.pm-dash{align-self:center; color:#7fa395; font-size:26px; padding:0 4px; margin-top:24px;}
+.pm-result{display:block; text-align:center; margin:14px auto 0; width:max-content; padding:4px 16px; border-radius:14px; font-weight:700; font-size:13px; letter-spacing:1px;}
+.pm-sec{padding:18px 16px; border-bottom:1px solid #ded4ba;}
+.pm-label{font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#6f7d72; font-weight:700; margin:0 0 12px;}
+.pm-empty{color:#6f7d72; font-size:14px;}
+.pm-stats{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#ded4ba;}
+.pm-stat{background:var(--paper,#f4efe1); padding:14px; text-align:center;}
+.pm-stat b{display:block; font-family:var(--font-bebas), sans-serif; font-size:30px; color:#0c3b2a; line-height:1;}
+.pm-stat span{font-size:10px; letter-spacing:.5px; text-transform:uppercase; color:#6f7d72; font-weight:700;}
+.pm-chart{background:#fff; border:1px solid #ded4ba; border-radius:10px; padding:8px;}
+.pm-scorer{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid #ece3cb; font-size:15px;}
+.pm-scorer b{color:#0c3b2a;}
+.pm-pitch{background:#0c3b2a; border-radius:12px; padding:16px 8px;}
+.pm-pitch-row{display:flex; justify-content:center; gap:6%; margin-bottom:18px;}
+.pm-pitch-row:last-child{margin-bottom:0;}
+.pm-jersey{text-align:center; width:56px;}
+.pm-jersey .sq{width:34px; height:34px; border-radius:8px; margin:0 auto; display:flex; align-items:center; justify-content:center; font-family:var(--font-bebas), sans-serif; font-size:18px;}
+.pm-jersey .nm{font-size:10px; color:#eaf3ee; margin-top:4px; line-height:1.1;}
+.pm-jersey .sc{font-size:10px; color:#f5c518; font-weight:700;}
+.pm-bench{font-size:12px; color:#6f7d72; margin:12px 0 0;}
+.pm-tl{position:relative;}
+.pm-tl::before{content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; background:#ded4ba; transform:translateX(-1px);}
+.pm-half{text-align:center; margin:6px 0 12px; position:relative;}
+.pm-half span{background:var(--paper,#f4efe1); border:1px solid #ded4ba; border-radius:8px; padding:3px 12px; font-size:11px; letter-spacing:1px; font-weight:700; color:#0c3b2a;}
+.pm-ev{display:grid; grid-template-columns:1fr 18px 1fr; align-items:center; gap:8px; margin:8px 0; font-size:13px;}
+.pm-ev .dot{width:11px; height:11px; border-radius:50%; margin:0 auto; border:2px solid #fff;}
+.pm-ev .dot.alt{background:#f4efe1; border-color:#6f7d72;}
+.pm-ev .us{text-align:right;}
+.pm-ev .them{text-align:left;}
+.pm-ev .min{color:#6f7d72;}
+.pm-ev .note{color:#6f7d72;}
+.pm-ev .on{color:#1f7a4d; font-weight:700;}
+.pm-ev .off{color:#c0392b; font-weight:700;}
+.pm-ev .run{font-size:11px; color:#0c3b2a; font-weight:700;}
+.pm-foot{background:#0c3b2a; color:#f4efe1; text-align:center; padding:22px 16px;}
+.pm-foot a{color:#f5c518; font-weight:700; text-decoration:none; font-size:16px; letter-spacing:.5px; display:inline-block; margin-top:8px;}
+.pm-foot a:hover{text-decoration:underline;}
+.pm-chant{font-size:11px; letter-spacing:3px; color:#5f7a6c; margin-top:10px; text-transform:uppercase;}
