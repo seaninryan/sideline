@@ -49,7 +49,7 @@ app/
 lib/
   parser.ts                       # parseMatch (pure, typed) + parser types
   raw-edit.ts                     # replace/delete/insert/placeEventLineByMinute helpers
-  infographic.ts                  # buildInfographicSVG (pure, returns SVG string)
+  infographic.ts                  # buildInfographicSVG (full poster) + buildScoreCardSVG (compact OG card) — pure, return SVG strings
   svg-to-png.client.ts            # existing browser-canvas svgToPng (in-app share panel)
   sample.ts                       # SAMPLE fixture (fictional teams — keep no-real-names rule)
   supabase/
@@ -103,48 +103,69 @@ imports the browser-client-backed `store`. The promoted columns
 (opponent via `parseMatch`). The public page and OG route use the **server** client,
 reading only `is_public = true` rows (RLS `public_read`).
 
+**Schema change.** The dormant `hide_names bool` column is replaced by
+`name_display text` (values `'none' | 'initials' | 'full'`, default `'full'`),
+promoted and derived from the `data` jsonb on every `store.set` like the other
+promoted columns. Run the `ALTER TABLE` in the Supabase dashboard during cutover.
+`is_public bool` is unchanged.
+
 ## Public match page + OG image
 
 **Public page** `app/m/[id]/page.tsx` — server component. Fetches the match via
 the server Supabase client (anon key + `public_read` RLS, `is_public = true` only).
 Renders a read-only match view (scoreboard, chart, scorers, timeline, lineup).
-Respects `hide_names` (see redaction). 404 if the row isn't public.
+Applies the `name_display` mode to all player names (see redaction). 404 if the
+row isn't public.
 
-**OG image** `app/m/[id]/opengraph-image.tsx` — Node.js runtime. The technical
-catch: Next's `next/og`/Satori renders only a subset of JSX+flexbox and does NOT
-robustly rasterize an arbitrary SVG string (our step-chart `<path>`s, custom
-layout). So we reuse `buildInfographicSVG` **verbatim** and rasterize the SVG
-string server-side with **`@resvg/resvg-js`**:
+**OG image** `app/m/[id]/opengraph-image.tsx` — Node.js runtime. This is a
+**compact landscape score card (~1200×630)**, NOT the full portrait poster —
+social platforms crop previews to ~1.91:1 and would butcher the tall poster.
+The full poster stays in-app (manual "Save / Share").
+
+Technical catch: Next's `next/og`/Satori renders only a subset of JSX+flexbox and
+does NOT robustly rasterize an arbitrary SVG string (custom paths/layout). So we
+build the card as an SVG string and rasterize it server-side with
+**`@resvg/resvg-js`**:
 
 ```
 fetch match (server client, public_read)
-  → buildInfographicSVG(model)        // the SAME pure module the in-app share uses
+  → buildScoreCardSVG(model)          // new compact builder in lib/infographic.ts
   → @resvg/resvg-js renders SVG → PNG
   → ImageResponse
 ```
 
-This keeps a single infographic implementation shared by both the in-app share
-panel (browser canvas via `svg-to-png.client.ts`) and the OG route (resvg
-server-side). resvg has no system fonts on Vercel, so bundle a Liberation
-Sans / Arial-metric-compatible TTF so the OG poster matches the in-app render.
+`buildScoreCardSVG` shows: two-colour team flags, the final score large, result,
+optional half-time score, and a SIDELINE footer — **scoreboard only, no individual
+player names**, so `name_display` does not affect the OG image (only the public
+page). The in-app share panel keeps using the full `buildInfographicSVG` via the
+browser canvas (`svg-to-png.client.ts`). resvg has no system fonts on Vercel, so
+bundle a Liberation Sans / Arial-metric-compatible TTF.
 
 ## Share wizard (NEW)
 
-Wires the two dormant flags (`is_public`, `hide_names`) into a guided flow,
-following the existing full-screen takeover pattern (game mode, new-match wizard):
+Wires the two formerly-dormant flags (`is_public`, `name_display`) into a guided
+flow, following the existing full-screen takeover pattern (game mode, new-match
+wizard):
 
 1. **Share** (entry from the existing Share control / ⋯ menu).
-2. **"Hide player names?"** — explains youth name redaction; sets `hide_names`.
+2. **"How should player names show?"** — 3-way pick: **No names / Initials / Full names** (explains youth name redaction); sets `name_display`.
 3. **"Make this match public?"** — sets `is_public = true` and saves to Supabase.
-4. **Presents the share link** `/m/[id]` with a copy button and a live preview of the OG poster.
+4. **Presents the share link** `/m/[id]` with a copy button and a live preview of the OG score card.
 
 `ShareWizard.tsx` is a conditional render inside `MatchTracker` (same approach as
 `gm`/`nw` state), with chrome wrapped behind its active state. Entering closes any
 open editors (the raw-mutation rule).
 
-**Name redaction (`hide_names`):** when on, the public page and OG poster replace
-individual player names with their shirt number (`#10`) where known, else a neutral
-label (e.g. `Player`); team names are kept. Exact rules pinned down in the plan.
+**Name redaction (`name_display`)** governs **public-facing rendering only** (the
+public `/m/[id]` page — scorers, lineup, timeline references); the owner's in-app
+editor always shows full names. Modes:
+
+- **`full`** — names as written.
+- **`initials`** — each player name reduced to initials (e.g. `Rick Sanchez` → `R.S.`; single-word → first letter).
+- **`none`** — shirt number `#10` where known, else a neutral label (e.g. `Player`).
+
+Team names are kept in every mode. The OG score card is unaffected (no player
+names on it). Exact initial-derivation edge cases pinned down in the plan.
 
 ## Testing
 
