@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Sideline — a personal match tracker for GAA (hurling/football) and soccer that parses handwritten-style match notation into a scoreboard, running-score chart, scorers table, timeline, lineup, and a shareable infographic image. The sample data uses fictional teams/players (Racoons v Wildebeests, Rick & Morty names) — keep it that way; no real player or club names in the repo.
+Here We Go — a personal match tracker for GAA (hurling/football) and soccer that parses handwritten-style match notation into a scoreboard, running-score chart, scorers table, timeline, lineup, and a shareable infographic image. The sample data uses fictional teams/players (Racoons v Wildebeests, Rick & Morty names) — keep it that way; no real player or club names in the repo.
 
 ## Repository layout
 
@@ -56,7 +56,7 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE` with 
 
 **Deploy:** push to the production branch (currently `supabase-migration`; will be `main` after merge); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown beside the SIDELINE logo. Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v40**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown beside the HERE WE GO logo. Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v41**.
 
 ## Architecture
 

@@ -1,4 +1,4 @@
-# Sideline — setup guide (Supabase + Google OAuth + Vercel)
+# Here We Go — setup guide (Supabase + Google OAuth + Vercel)
 
 You'll do three things: create a Supabase project with the right schema and Google OAuth, deploy to Vercel, and wire the connection details together. ~25 minutes, all free tiers.
 
@@ -111,5 +111,5 @@ If you have matches from an older version of the app, use Backup export/import: 
 ## Good to know
 
 - If sign-in throws a redirect-mismatch error, check that the redirect URL in Supabase (step 5) exactly matches the URL being used, including `/auth/callback` and the correct scheme (`https` vs `http`).
-- The app version is shown beside the SIDELINE logo. A new Vercel deploy is usually live within a minute or two; hard-refresh if the version number doesn't update.
+- The app version is shown beside the HERE WE GO logo. A new Vercel deploy is usually live within a minute or two; hard-refresh if the version number doesn't update.
 - The public share link (`/m/<id>`) is only accessible when you've published a match through the Share wizard. Unpublished matches are always private (RLS).
