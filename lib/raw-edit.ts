@@ -2,7 +2,7 @@ import { squash } from "@/lib/util";
 import { parseMatch } from "@/lib/parser";
 
 /* ---- roster edits on the raw notation (lineup tab tools) ---- */
-const rosterEnd = (lines: string[]): number => { const e = lines.findIndex((l) => /^\s*\d{1,2}:\d{2}\s*$/.test(l)); return e === -1 ? lines.length : e; };
+export const rosterEnd = (lines: string[]): number => { const e = lines.findIndex((l) => /^\s*\d{1,2}:\d{2}\s*$/.test(l)); return e === -1 ? lines.length : e; };
 const locRoster = (lines: string[], end: number, num: number) => {
   for (let li = 1; li < end; li++) {
     if (/^(subs?\b|missing)/i.test(lines[li].trim())) continue;
