@@ -281,3 +281,7 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .pm-foot a{color:#f5c518; font-weight:700; text-decoration:none; font-size:16px; letter-spacing:.5px; display:inline-block; margin-top:8px;}
 .pm-foot a:hover{text-decoration:underline;}
 .pm-chant{font-size:11px; letter-spacing:3px; color:#5f7a6c; margin-top:10px; text-transform:uppercase;}
+
+.si-brand{display:flex; justify-content:center; margin:0 0 16px;}
+.si-brand .bh{background:transparent; padding:0;}
+.si-brand .bh-chant{color:#6f7d72;}
