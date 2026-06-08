@@ -1,0 +1,60 @@
+export type NameDisplay = "full" | "initials" | "none";
+
+export interface Settings {
+  myTeam?: string;
+  scoringMode?: "gaa" | "goals";
+  sport?: string;
+}
+
+export interface MatchRecord {
+  raw: string;
+  matchDate?: string;
+  date?: string;
+  myTeam?: string;
+  scoringMode?: "gaa" | "goals";
+  autoMode?: boolean;
+  sport?: string;
+  colorUs?: string;
+  colorUs2?: string;
+  colorThem?: string;
+  colorThem2?: string;
+  nameDisplay?: NameDisplay;
+  savedAt?: number;
+}
+
+export interface MatchRow {
+  id: string;
+  owner?: string;
+  is_public: boolean;
+  name_display: NameDisplay;
+  match_date: string | null;
+  my_team: string | null;
+  opponent: string | null;
+  sport: string | null;
+  data: MatchRecord;
+  updated_at?: string;
+}
+
+export interface ParsedMatch {
+  mode: "gaa" | "goals";
+  opp: string | null;
+  totals: { us: { g: number; p: number; str: string }; them: { g: number; p: number; str: string } };
+  result: string;
+  scorers: any[];
+  roster: any[];
+  formationRows: any[];
+  series: any[];
+  goalDots: any[];
+  htLine: any;
+  leadChanges: number;
+  timesLevel: number;
+  maxLead: number;
+  maxLeadSide: string | null;
+  warnings: any[];
+  scoring: any[];
+  notes: any[];
+  halfMarks: any[];
+  [k: string]: any;
+}
+
+export type Model = Record<string, any>;
