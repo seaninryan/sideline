@@ -56,7 +56,7 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE` with 
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v42**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v43**.
 
 ## Architecture
 
@@ -126,8 +126,8 @@ Key decisions (preserve these when modifying):
 
 ### Share image
 
-- `buildInfographicSVG(model)` (`lib/infographic.ts`) builds a portrait (~420px wide) SVG poster: header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, footer.
-- `buildScoreCardSVG(model)` (`lib/infographic.ts`) builds a compact landscape (1200×630) SVG score card for OG images — team names, score, grade, result only, no player names.
+- `buildInfographicSVG(model)` (`lib/infographic.ts`) builds a portrait (~420px wide) SVG poster: a brand banner (`brandPillSVG` + wordmark + chant) across the top, then the match header with two-colour club flags, 2×2 stats, step chart, scorers, lineup pitch, timeline, and a brand footer (pill + wordmark + `herewego.ie` + chant).
+- `buildScoreCardSVG(model)` (`lib/infographic.ts`) builds a compact landscape (1200×630) SVG score card for OG images — a brand banner across the top, then team names, score, grade, result, and `herewego.ie` at the bottom; no player names.
 - **Browser rasterization** (`lib/svg-to-png.client.ts`): data-URL image → canvas → `toDataURL`/`toBlob`. Keep the data-URL approach — blob URLs hit CSP/canvas-taint issues. The panel displays the PNG so long-press-to-save works on iOS; "Save / Share" uses Web Share when available, else downloads; SVG download is the fallback.
 - **Server rasterization** (OG route, `app/m/[id]/opengraph-image.tsx`): `@resvg/resvg-js` with bundled LiberationSans fonts. `next.config.mjs` marks `@resvg/resvg-js` as an external server package and traces the `assets/` directory for the OG route.
 - The infographic uses **Arial** (reliable browser rasterization); the app uses Bebas Neue (display numbers) and Oswald (everything else) via CSS variables. **Oswald is the `.mt-root` base font** — don't add per-element serif fonts; bare elements inheriting the base is the intended behaviour.

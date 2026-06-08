@@ -28,26 +28,30 @@ export function buildScoreCardSVG(m: Model): { svg: string; width: number; heigh
     `<text x="${x}" y="${y}" font-family="Liberation Sans, Arial, sans-serif" font-size="${size}" fill="${fill}" ` +
     `font-weight="${opts.w || 400}" text-anchor="${opts.a || "start"}">${esc(s)}</text>`;
 
-  const PAPER = "#f4efe1", INK = "#0c3b2a", MUTE = "#5c6b60";
+  const PAPER = "#f4efe1", INK = "#0c3b2a", MUTE = "#5c6b60", PITCH = "#0c3b2a";
   const parts: string[] = [];
   parts.push(`<rect width="${W}" height="${H}" fill="${PAPER}"/>`);
-  parts.push(`<rect x="0" y="0" width="${W / 2}" height="10" fill="${m.colorUs}"/>`);
-  parts.push(`<rect x="${W / 2}" y="0" width="${W / 2}" height="10" fill="${m.colorThem}"/>`);
-  parts.push(t(W / 2, 90, grade, 34, MUTE, { w: 700, a: "middle" }));
-  parts.push(flag(W * 0.25 - 40, 150, 80, 50, m.colorUs, m.colorUs2));
-  parts.push(flag(W * 0.75 - 40, 150, 80, 50, m.colorThem, m.colorThem2));
-  parts.push(t(W * 0.25, 250, m.usName || "Us", 44, INK, { w: 700, a: "middle" }));
-  parts.push(t(W * 0.75, 250, m.themName || "Them", 44, INK, { w: 700, a: "middle" }));
-  parts.push(t(W * 0.25, 410, usS, 120, INK, { w: 700, a: "middle" }));
-  parts.push(t(W / 2, 400, "–", 90, MUTE, { w: 400, a: "middle" }));
-  parts.push(t(W * 0.75, 410, themS, 120, INK, { w: 700, a: "middle" }));
-  if (result) parts.push(t(W / 2, 500, result, 40, INK, { w: 700, a: "middle" }));
-  if (ht) parts.push(t(W / 2, 545, `HT ${ht}`, 26, MUTE, { a: "middle" }));
-  // brand lockup: [pill] HERE WE GO  herewego.ie — laid out as a row centred on W/2
-  // group spans ~[W/2-200, W/2+193] (pill 79w + wordmark ~165w + site ~133w, ~14px gaps)
-  parts.push(brandPillSVG(W / 2 - 200, 565, 0.62));        // 128*0.62 ≈ 79 wide, 70*0.62 ≈ 43 tall
-  parts.push(t(W / 2 - 107, 600, BRAND_WORDMARK, 30, INK, { w: 700 }));     // anchor start
-  parts.push(t(W / 2 + 60, 600, BRAND_SITE, 22, MUTE, { w: 400 }));         // anchor start
+  // ---- brand banner across the top (like the website header) ----
+  parts.push(`<rect x="0" y="0" width="${W}" height="96" fill="${PITCH}"/>`);
+  parts.push(brandPillSVG(48, 24, 0.72));                                              // 128*0.72 ≈ 92 wide, 70*0.72 ≈ 50 tall
+  parts.push(t(166, 64, BRAND_WORDMARK, 40, PAPER, { w: 700 }));                       // anchor start
+  parts.push(t(W - 48, 60, BRAND_CHANT.toUpperCase(), 16, "#8fb0a3", { a: "end" }));
+  // two-colour team stripe just under the banner
+  parts.push(`<rect x="0" y="96" width="${W / 2}" height="10" fill="${m.colorUs}"/>`);
+  parts.push(`<rect x="${W / 2}" y="96" width="${W / 2}" height="10" fill="${m.colorThem}"/>`);
+  // ---- match ----
+  parts.push(t(W / 2, 175, grade, 32, MUTE, { w: 700, a: "middle" }));
+  parts.push(flag(W * 0.25 - 40, 205, 80, 50, m.colorUs, m.colorUs2));
+  parts.push(flag(W * 0.75 - 40, 205, 80, 50, m.colorThem, m.colorThem2));
+  parts.push(t(W * 0.25, 305, m.usName || "Us", 42, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.75, 305, m.themName || "Them", 42, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.25, 455, usS, 108, INK, { w: 700, a: "middle" }));
+  parts.push(t(W / 2, 446, "–", 80, MUTE, { w: 400, a: "middle" }));
+  parts.push(t(W * 0.75, 455, themS, 108, INK, { w: 700, a: "middle" }));
+  if (result) parts.push(t(W / 2, 532, result, 36, INK, { w: 700, a: "middle" }));
+  if (ht) parts.push(t(W / 2, 570, `HT ${ht}`, 24, MUTE, { a: "middle" }));
+  // just the link at the bottom (the banner carries the brand)
+  parts.push(t(W / 2, 612, BRAND_SITE, 24, MUTE, { w: 700, a: "middle" }));
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
   return { svg, width: W, height: H };
@@ -67,10 +71,16 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   const flag = (x: number, y: number, w: number, h: number, c1: string, c2: string, stroke = "rgba(0,0,0,.3)") =>
     `<rect x="${x}" y="${y}" width="${w}" height="${h / 2}" fill="${c1}" rx="1.5"/><rect x="${x}" y="${y + h / 2}" width="${w}" height="${h / 2}" fill="${c2}"/><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="1" rx="2"/>`;
 
-  const head: string[] = [], body: string[] = [];
-  const HH = 196;
+  const head: string[] = [], body: string[] = [], banner: string[] = [];
+  const HH = 196;        // match-header band height
+  const BAND = 48;       // brand banner above the header
 
-  // ---- header band ----
+  // ---- brand banner (top of the image, like the website header) ----
+  banner.push(brandPillSVG(P, 9, 0.46));                                          // 128*0.46 ≈ 59 wide, 70*0.46 ≈ 32 tall
+  banner.push(T(P + 64, 33, BRAND_WORDMARK, 17, PAPER, { w: 800, ls: 1.5 }));
+  banner.push(T(W - P, 33, BRAND_CHANT.toUpperCase(), 8, "#8fb0a3", { a: "end", ls: 2 }));
+
+  // ---- header band (sits below the banner) ----
   head.push(R(0, 0, W / 2, 6, m.colorUs), R(W / 2, 0, W / 2, 6, m.colorThem));
   head.push(T(P, 30, (m.grade || m.sport || "Match").toUpperCase(), 12, PAPER, { w: 700, ls: 1 }));
   head.push(T(W - P, 30, m.dateStr, 11, "#cfe3d8", { a: "end" }));
@@ -90,7 +100,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   head.push(R(W / 2 - cw / 2, 152, cw, 24, resBg, 12));
   head.push(T(W / 2, 168, resFull, 11.5, resFg, { w: 700, a: "middle", ls: 1 }));
 
-  let y = HH + 20;
+  let y = HH + BAND + 20;
 
   // ---- stats 2x2 ----
   const stats = [["Half-time", m.ht], ["Lead changes", String(m.leadChanges)], ["Times level", String(m.timesLevel)],
@@ -270,6 +280,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   const H = y + 104;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-    + R(0, 0, W, H, PAPER) + R(0, 0, W, HH, PITCH) + head.join("") + body.join("") + `</svg>`;
+    + R(0, 0, W, H, PAPER) + R(0, 0, W, HH + BAND, PITCH) + banner.join("")
+    + `<g transform="translate(0,${BAND})">` + head.join("") + `</g>` + body.join("") + `</svg>`;
   return { svg, width: W, height: H };
 }
