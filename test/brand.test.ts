@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { brandPillSVG } from "@/lib/infographic";
+import { brandPillSVG, buildInfographicSVG } from "@/lib/infographic";
+import { buildModel } from "@/lib/model";
+import { SAMPLE } from "@/lib/sample";
 
 describe("brandPillSVG", () => {
   it("returns an SVG group with the HWG pill geometry", () => {
@@ -12,5 +14,16 @@ describe("brandPillSVG", () => {
     const s = brandPillSVG(0, 0, 1);
     expect(s).toContain('<tspan fill="#f4efe1">HW</tspan>');
     expect(s).toContain('<tspan fill="#f5c518">G</tspan>');
+  });
+});
+
+describe("buildInfographicSVG branding", () => {
+  const model = buildModel({ raw: SAMPLE, myTeam: "Racoons", scoringMode: "gaa" });
+  const { svg } = buildInfographicSVG(model);
+  it("carries the brand lockup in the footer", () => {
+    expect(svg).toContain("HERE WE GO");
+    expect(svg).toContain("herewego.ie");
+    expect(svg).toContain("Here we go · Here we go".toUpperCase()); // chant rendered uppercase
+    expect(svg).toContain('<tspan fill="#f4efe1">HW</tspan>');      // the pill
   });
 });

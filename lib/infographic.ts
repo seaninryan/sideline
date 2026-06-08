@@ -1,5 +1,6 @@
 import { contrastOn, fmtScore } from "@/lib/util";
 import type { Model } from "@/lib/types";
+import { BRAND_SITE, BRAND_WORDMARK, BRAND_CHANT } from "@/lib/constants";
 
 /* Shared HWG brand pill (same geometry as the app icon / top-bar logo).
    Drawn as an SVG string so the poster and OG card share one source of truth.
@@ -255,10 +256,14 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   body.push(L(railX, tlTop, railX, y - 4, LINE, 1.5));
   body.push(...tlBody);
 
-  // ---- footer ----
+  // ---- brand footer ----
   body.push(L(P, y + 2, P + CW, y + 2, LINE, 1));
-  body.push(T(W / 2, y + 22, `Here We Go · ${m.grade || m.sport || ""}`, 9.5, MUTE, { a: "middle", ls: 0.5 }));
-  const H = y + 38;
+  const pillS = 0.5;                          // 128*0.5 = 64 wide, 70*0.5 = 35 tall
+  body.push(brandPillSVG(W / 2 - 32, y + 10, pillS));
+  body.push(T(W / 2, y + 62, BRAND_WORDMARK, 13, INK, { w: 800, a: "middle", ls: 1.5 }));
+  body.push(T(W / 2, y + 78, BRAND_SITE, 10, MUTE, { a: "middle", ls: 0.5 }));
+  body.push(T(W / 2, y + 92, BRAND_CHANT.toUpperCase(), 8, "#9aa89e", { a: "middle", ls: 2 }));
+  const H = y + 104;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
     + R(0, 0, W, H, PAPER) + R(0, 0, W, HH, PITCH) + head.join("") + body.join("") + `</svg>`;
