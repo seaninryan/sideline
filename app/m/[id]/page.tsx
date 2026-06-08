@@ -19,10 +19,10 @@ async function fetchPublic(id: string): Promise<MatchRow | null> {
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const row = await fetchPublic(params.id);
-  if (!row) return { title: "Sideline" };
+  if (!row) return { title: "Here We Go" };
   const m = buildModel(row.data);
   const title = `${m.usName} ${m.totals.us.str} – ${m.totals.them.str} ${m.themName}`;
-  return { title: `${title} · Sideline`, openGraph: { title, type: "website" } };
+  return { title: `${title} · Here We Go`, openGraph: { title, type: "website" } };
 }
 
 export default async function PublicMatchPage({ params }: { params: { id: string } }) {

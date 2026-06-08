@@ -637,9 +637,17 @@ export default function MatchTracker() {
       {!(gm || nw || share) && (
       <div className="mt-bar">
         <div className="mt-logo">
-          {/* same ball as icon-180.png (tools/make-icon.py geometry) */}
-          <svg width="22" height="22" viewBox="0 0 128 128" aria-hidden="true"><defs><clipPath id="bc"><circle cx="64" cy="64" r="56"/></clipPath></defs><circle cx="64" cy="64" r="56" fill="#f7f7f2"/><g clipPath="url(#bc)" fill="#1f7a4d"><polygon points="64.0,44.0 83.0,57.8 75.8,80.2 52.2,80.2 45.0,57.8"/><line x1="64.0" y1="44.0" x2="64.0" y2="15.8" stroke="#1f7a4d" strokeWidth="3"/><polygon points="64.0,20.4 46.9,8.0 53.4,-12.2 74.6,-12.2 81.1,8.0"/><line x1="83.0" y1="57.8" x2="109.8" y2="49.1" stroke="#1f7a4d" strokeWidth="3"/><polygon points="105.5,50.5 112.0,30.4 133.2,30.4 139.7,50.5 122.6,63.0"/><line x1="75.8" y1="80.2" x2="92.3" y2="103.0" stroke="#1f7a4d" strokeWidth="3"/><polygon points="89.6,99.3 110.8,99.3 117.3,119.4 100.2,131.8 83.1,119.4"/><line x1="52.2" y1="80.2" x2="35.7" y2="103.0" stroke="#1f7a4d" strokeWidth="3"/><polygon points="38.4,99.3 44.9,119.4 27.8,131.8 10.7,119.4 17.2,99.3"/><line x1="45.0" y1="57.8" x2="18.2" y2="49.1" stroke="#1f7a4d" strokeWidth="3"/><polygon points="22.5,50.5 5.4,63.0 -11.7,50.5 -5.2,30.4 16.0,30.4"/></g><circle cx="64" cy="64" r="56" fill="none" stroke="#1f7a4d" strokeWidth="2"/></svg>
-          SIDELINE <i className="mt-ver">{APP_VERSION}</i>
+          {/* same pill as icon-180.png (tools/make-icon.py geometry) */}
+          <svg width="40" height="22" viewBox="0 0 128 70" aria-hidden="true" style={{ flex: "none" }}>
+            <rect x="4" y="8" width="120" height="54" rx="27" fill="#0c3b2a" stroke="#f5c518" strokeWidth="4" />
+            <text x="64" y="48" fontSize="34" textAnchor="middle" style={{ fontFamily: "var(--font-bebas), sans-serif" }}>
+              <tspan fill="#f4efe1">HW</tspan><tspan fill="#f5c518">G</tspan>
+            </text>
+          </svg>
+          <span className="mt-brand">
+            <span className="mt-wm">HERE WE <span className="mt-go">GO</span></span>
+            <span className="mt-chant">HERE WE GO · HERE WE GO</span>
+          </span>
         </div>
         <div className="grow" />
         <select className="mt-sel" value={curId || ""} onChange={(e) => e.target.value && doLoad(e.target.value)}>
@@ -1309,6 +1317,9 @@ export default function MatchTracker() {
           </>
         )}
       </div>
+      {!(gm || nw || share) && (
+        <div className="mt-foot">Here We Go · {APP_VERSION}</div>
+      )}
     </div>
   );
 }

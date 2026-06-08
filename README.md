@@ -1,4 +1,4 @@
-# Sideline
+# Here We Go
 
 A personal match tracker for GAA (hurling/football) and soccer. Type match notes in a simple handwritten-style notation and get a scoreboard, running-score chart, scorers table, timeline, lineup pitch, and a shareable infographic image.
 

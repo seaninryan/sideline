@@ -6,7 +6,7 @@ const oswald = Oswald({ subsets: ["latin"], weight: ["300", "400", "500", "600",
 const bebas = Bebas_Neue({ subsets: ["latin"], weight: "400", variable: "--font-bebas" });
 
 export const metadata: Metadata = {
-  title: "Sideline",
+  title: "Here We Go",
   icons: { icon: "/icon-180.png", apple: "/icon-touch-180.png" },
 };
 

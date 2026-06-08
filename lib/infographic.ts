@@ -31,7 +31,7 @@ export function buildScoreCardSVG(m: Model): { svg: string; width: number; heigh
   parts.push(t(W * 0.75, 410, themS, 120, INK, { w: 700, a: "middle" }));
   if (result) parts.push(t(W / 2, 500, result, 40, INK, { w: 700, a: "middle" }));
   if (ht) parts.push(t(W / 2, 545, `HT ${ht}`, 26, MUTE, { a: "middle" }));
-  parts.push(t(W / 2, 605, "SIDELINE", 24, MUTE, { w: 700, a: "middle" }));
+  parts.push(t(W / 2, 605, "HERE WE GO", 24, MUTE, { w: 700, a: "middle" }));
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${parts.join("")}</svg>`;
   return { svg, width: W, height: H };
@@ -246,7 +246,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
 
   // ---- footer ----
   body.push(L(P, y + 2, P + CW, y + 2, LINE, 1));
-  body.push(T(W / 2, y + 22, `Sideline · ${m.grade || m.sport || ""}`, 9.5, MUTE, { a: "middle", ls: 0.5 }));
+  body.push(T(W / 2, y + 22, `Here We Go · ${m.grade || m.sport || ""}`, 9.5, MUTE, { a: "middle", ls: 0.5 }));
   const H = y + 38;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`

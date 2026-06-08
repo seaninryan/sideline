@@ -27,7 +27,11 @@ html,body{margin:0;padding:0;background:#0c3b2a;}
   color:var(--paper); flex-wrap:wrap;}
 .mt-logo{font-family:var(--font-bebas); font-size:26px; letter-spacing:1px; line-height:1; display:flex; align-items:center; gap:9px;}
 .mt-logo svg{flex:none;}
-.mt-ver{font-family:var(--font-oswald); font-size:10px; font-style:normal; letter-spacing:.5px; color:#7fa395; align-self:flex-end; padding-bottom:2px;}
+.mt-brand{display:flex; flex-direction:column; line-height:1;}
+.mt-wm{font-family:var(--font-bebas); font-size:26px; letter-spacing:1px; line-height:.9;}
+.mt-go{color:#f5c518;}
+.mt-chant{font-family:var(--font-oswald); font-weight:600; font-size:8.5px; letter-spacing:2px; color:#8fb0a3; margin-top:3px;}
+.mt-foot{font-family:var(--font-oswald); font-size:10px; letter-spacing:.5px; color:var(--muted); text-align:center; padding:14px 0 18px;}
 .mt-bar .grow{flex:1;}
 .mt-bar.sub{padding-top:0; justify-content:flex-end; background:var(--pitch);} /* "⋯" overflow row */
 .mt-btn.danger{background:#c0392b; border-color:#c0392b; color:#fff; font-weight:600;}
