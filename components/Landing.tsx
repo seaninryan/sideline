@@ -31,7 +31,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
   useEffect(() => {
     if (!userId) { setOwn([]); return; }
     sb.from("matches").select("id,short_code,is_public,data,updated_at").eq("owner", userId)
-      .order("updated_at", { ascending: false })
+      .order("match_date", { ascending: false, nullsFirst: false })
       .then(({ data, error }) => { if (error) console.warn(error.message); setOwn(((data as Row[]) || [])); });
   }, [userId]);
 
@@ -42,7 +42,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
     if (loadingRef.current || !moreRef.current) return;
     loadingRef.current = true; setLoading(true);
     let q = sb.from("matches").select("id,short_code,data,updated_at")
-      .eq("is_public", true).order("updated_at", { ascending: false });
+      .eq("is_public", true).order("match_date", { ascending: false, nullsFirst: false });
     if (userId) q = q.neq("owner", userId); // own public matches already show above
     // Offset pagination: fine for v1. If rows shift between pages a boundary row
     // can duplicate (shares r.id → same React key, harmless) or be skipped.
@@ -111,7 +111,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
 
         <div className="ml-sechead" style={{ marginTop: email ? 26 : 0 }}><h3>Recent public matches</h3></div>
         {feed.map((r) => (
-          <MatchRow key={r.id} record={r.data} href={href(r)} date={relativeDate(r.updated_at, now)} />
+          <MatchRow key={r.id} record={r.data} href={href(r)} date={relativeDate(r.data.matchDate || r.data.date, now)} />
         ))}
         {!feed.length && !loading && <p className="ml-note">No public matches yet.</p>}
         {loading && <p className="ml-note">Loading…</p>}
