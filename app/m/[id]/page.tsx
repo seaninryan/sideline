@@ -22,7 +22,14 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   if (!row) return { title: "Here We Go" };
   const m = buildModel(row.data);
   const title = `${m.usName} ${m.totals.us.str} – ${m.totals.them.str} ${m.themName}`;
-  return { title: `${title} · Here We Go`, openGraph: { title, type: "website" } };
+  const description = [m.grade, m.dateStr, m.result].filter(Boolean).join(" · ") || "Match report on Here We Go";
+  const url = `/m/${params.id}`;
+  return {
+    title: `${title} · Here We Go`,
+    description,
+    openGraph: { title, description, url, siteName: "Here We Go", type: "website" },
+    twitter: { card: "summary_large_image", title, description },
+  };
 }
 
 export default async function PublicMatchPage({ params }: { params: { id: string } }) {

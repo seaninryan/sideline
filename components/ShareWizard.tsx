@@ -18,6 +18,7 @@ export default function ShareWizard({ record, curId, onClose, onApplied }: {
   const [nameDisplay, setNameDisplay] = useState<NameDisplay>(record.nameDisplay || "full");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [bust] = useState(() => Date.now()); // freshens the preview <img> each time the wizard opens
   const shareUrl = typeof location !== "undefined" ? `${location.origin}/m/${curId}` : "";
 
   const publish = async () => {
@@ -73,7 +74,8 @@ export default function ShareWizard({ record, curId, onClose, onApplied }: {
             </button>
           </div>
           <p className="hint">Link preview:</p>
-          <img src={`/m/${curId}/opengraph-image`} alt="Score card preview" style={{ maxWidth: "100%", borderRadius: 8, border: "1px solid var(--line)" }} />
+          {/* cache-buster: the OG route sends max-age=3600, so without this the panel shows a stale card after a redesign */}
+          <img src={`/m/${curId}/opengraph-image?cb=${bust}`} alt="Score card preview" style={{ maxWidth: "100%", borderRadius: 8, border: "1px solid var(--line)" }} />
           <div className="sw-nav"><button className="mt-add alt" onClick={onClose}>Done</button></div>
         </div>
       )}
