@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Link from "next/link";
+import { BRAND_CHANT } from "@/lib/constants";
 
 // The persistent header used on every screen. Brand + optional back link on the
 // left; a context-specific action cluster (children) plus New and the account /
@@ -34,7 +35,10 @@ export default function AppHeader({
               <tspan fill="#f4efe1">HW</tspan><tspan fill="#f5c518">G</tspan>
             </text>
           </svg>
-          <span className="mt-brand"><span className="mt-wm">HERE WE <span className="mt-go">GO</span></span></span>
+          <span className="mt-brand">
+            <span className="mt-wm">HERE WE <span className="mt-go">GO</span></span>
+            <span className="mt-chant">{BRAND_CHANT}</span>
+          </span>
         </Link>
         {backHref && <Link className="ah-back" href={backHref}>‹ matches</Link>}
         <div className="grow" />
