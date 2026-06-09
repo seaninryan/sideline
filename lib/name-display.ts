@@ -24,5 +24,8 @@ export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
     timeline: (model.timeline || []).map((t: any) =>
       t && t.scorer ? { ...t, scorer: redactName(t.scorer, t.num, mode) } : t,
     ),
+    ...(model.oppRoster
+      ? { oppRoster: { ...model.oppRoster, players: model.oppRoster.players.map(fixPlayer) } }
+      : {}),
   };
 }

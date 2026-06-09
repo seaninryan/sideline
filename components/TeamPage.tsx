@@ -6,10 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
 import { SPORTS } from "@/lib/constants";
 import type { TeamRecord } from "@/lib/types";
+import MatchRow from "@/components/MatchRow";
+import { relativeDate } from "@/lib/match-list";
+import type { MatchRecord } from "@/lib/types";
 
-export default function TeamPage({ team, isOwner }: { team: TeamRecord; isOwner: boolean }) {
+export default function TeamPage({ team, isOwner, fixtures = [] }: { team: TeamRecord; isOwner: boolean; fixtures?: { id: string; href: string; data: MatchRecord; date: string | null }[] }) {
   const router = useRouter();
   const sb = createClient();
+  const now = Date.now();
   const [email, setEmail] = useState<string | null>(null);
   useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
   const byNum = (n: number) => team.roster.players.find((p) => p.num === n);
@@ -48,7 +52,11 @@ export default function TeamPage({ team, isOwner }: { team: TeamRecord; isOwner:
       {subs.length > 0 && <p className="mt-note" style={{ margin: "0 14px" }}>Subs: {subs.map((p) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
 
       <p className="mt-h" style={{ margin: "18px 14px 6px" }}>Fixtures</p>
-      <div className="tp-fixtures">Fixtures involving this team will appear here.</div>
+      <div className="ml-page" style={{ paddingTop: 0 }}>
+        {fixtures.length === 0
+          ? <div className="tp-fixtures">No public fixtures involving this team yet.</div>
+          : fixtures.map((f) => <MatchRow key={f.id} record={f.data} href={f.href} date={relativeDate(f.date || undefined, now)} />)}
+      </div>
     </div>
   );
 }

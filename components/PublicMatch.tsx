@@ -156,6 +156,23 @@ export default function PublicMatch({ model }: { model: Model }) {
           {m.missing && m.missing.length > 0 && <p className="pm-bench">Missing: {m.missing.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
         </section>
       )}
+      {m.oppRoster && m.oppRoster.formation && m.oppRoster.formation.length > 0 && (
+        <section className="pm-sec">
+          <p className="pm-label">Team · {(m.themName || "").toUpperCase()}</p>
+          <div className="pm-pitch">
+            {m.oppRoster.formation.map((row: number[], ri: number) => (
+              <div className="pm-pitch-row" key={ri}>
+                {row.map((n, ci) => { const op = m.oppRoster.players.find((x: any) => x.num === n); return (
+                  <div className="pm-jersey" key={ci}>
+                    <div className="sq" style={{ background: m.colorThem, color: contrastOn(m.colorThem) }}>{n}</div>
+                    <div className="nm">{op ? op.name : ""}</div>
+                  </div>
+                ); })}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* timeline */}
       {(m.timeline && m.timeline.length > 0) && (
