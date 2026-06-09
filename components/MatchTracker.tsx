@@ -259,7 +259,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     if (ok) {
       // route transition is in-place (same /m/[id] route → no remount), so reflect the new match locally
       setRaw(newRaw); setMatchDate(date); setMyTeam(team);
-      setScoringMode("gaa"); setAutoMode(true); setCurId(id); setNw(null); setTab("notation");
+      setScoringMode("gaa"); setAutoMode(true); setCurId(id); setNw(null); setTab("game");
       router.replace(`/m/${id}`);
     } else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
@@ -424,7 +424,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       const mode = SPORTS[newSport] ? SPORTS[newSport].mode : parseMatch(newRaw, { myTeam: team }).mode;
       setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
       setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
-      setMatchDate(nw.date); setNw(null); setTab("notation");
+      setMatchDate(nw.date); setNw(null); setTab("game");
       const id = mkId();
       const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
       if (ok) { setCurId(id); router.replace(`/m/${id}`); }
