@@ -77,7 +77,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
 
   return (
     <div className="mt-root">
-      <AppHeader email={email} showNew={!!email} onNew={() => router.push("/m/new")} onSignIn={onSignIn} onSignOut={onSignOut} />
+      <AppHeader email={email} showNew={!!email} showTeams={!!email} onNew={() => router.push("/m/new")} onSignIn={onSignIn} onSignOut={onSignOut} />
 
       <div className="ml-page">
         {email && (
