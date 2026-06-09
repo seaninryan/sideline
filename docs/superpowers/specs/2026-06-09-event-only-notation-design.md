@@ -88,6 +88,22 @@ Applied as a **guarded one-time client-side backfill** on `loadAll` (transform +
 - New **`migrate` suite:** legacy `raw` (+ team names) → migrated record → parsed totals equal the legacy parse's totals (round-trip integrity).
 - `model.test.ts`/`name-display.test.ts` updated for both-side scorers. `APP_VERSION` → v50.
 
+## 9a. Header-out integration (revised T5+, added after T1–T4)
+
+Enumerating the `parseMatch` callers during execution surfaced that event-only notation removes **the header line too** (it carried `label`/`opponent`/`homeAway`/`sport`), not just the roster — and ~a-dozen call-sites read or write that header. The chosen direction is **full header-out**: those fields move onto the match record / linked teams, and the notation is purely events.
+
+- **`MatchRecord` gains** `label?: string` and `homeAway?: "home" | "away"`. `sport` is already on the record; the opponent name comes from the linked away/them team (or the existing inline name). The notation no longer contains a header or roster — it starts at the first clock line.
+- **`parseMatch` synthesises `parsed.header`** (`{label, opposition, homeAway, sport}`) from `settings`/the record, not from the notation. The adapter passes the record's `label`/`homeAway`/`sport` + both team names; `parseEvents` (which already ignores pre-clock lines) handles the events.
+- **Caller rework (all read/write the record, not the notation):**
+  - `setHeaderField` (MatchTracker) → sets record state (`label`/`homeAway`/opponent) directly; no notation mutation.
+  - the home/away `<select>` + ⇄ swap (③b) → flip `homeAway` + the two `team_id`s on the record (no header-line rewrite).
+  - `refreshList` match labels → built from record fields (`myTeam`/`label`/opponent/`homeAway`), not `parsed.header`.
+  - `team-link.ts` `teamLinkPatch`/`swapHomeAway` → set `label`/`homeAway` on the record instead of rewriting the raw header line.
+  - `matchRowView` (`match-list`) + `store.matchCols` → take `homeAway`/opponent from the record, totals from `parseEvents` (rosters from the record's `usRoster`/`oppRoster`).
+  - new-match template → empty events (no header line); `label`/`homeAway`/opponent set as record fields.
+- **Migration** (`migrateLegacyNotation`) additionally lifts the legacy header line into `label`/`homeAway` on the record (parsing the `Label @/v Opp` form) before dropping it, and sets the opponent/team names accordingly.
+- This is captured in a **revised T5+ plan**; T1–T4 (the parser + migration core) are unaffected (the migration just gains the header-lift).
+
 ## 9. Risk / mitigations
 
 Highest-risk change in the project. Mitigations: (a) the parser gets **simpler** (column-vote/written-truth removed) — net less code to be wrong; (b) **explicit test parity** translation, not a rewrite-from-scratch of coverage; (c) **non-destructive migration** with `legacyRaw`, and the user can reconstruct data if needed; (d) ships behind the established per-task spec+quality review + a final integration review; (e) sides are stable, so the ②/③b display/swap logic is unaffected. Because this is one large spec, the implementation plan will sequence it so the **new parser + its tests land and go green before** the migration + UI-render changes build on top.
