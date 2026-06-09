@@ -1,0 +1,33 @@
+import { describe, it, expect } from "vitest";
+import { migrateLegacyNotation } from "@/lib/migrate-notation";
+
+it("strips roster, rewrites T<n>→opp, builds usRoster, keeps legacyRaw, sets notationV", () => {
+  const legacy = "U13A Hurling @ Wildebeests\n10. Morty | 11. Rick\nSubs:\n16. Sub\n18:00\n5 Morty goal\n9 T11 goal\n12 Morty\n44 T corner";
+  const rec = migrateLegacyNotation({ raw: legacy } as any, { teamAName: "Racoons", teamBName: "Wildebeests" });
+  expect(rec.legacyRaw).toBe(legacy);
+  expect(rec.notationV).toBe(2);
+  // roster block gone from the new raw:
+  expect(rec.raw).not.toMatch(/10\.\s*Morty/);
+  expect(rec.raw).not.toMatch(/Subs:/);
+  // T<n> rewritten to the opponent team name + number; bare T → team name:
+  expect(rec.raw).toMatch(/Wildebeests 11 goal/);
+  expect(rec.raw).toMatch(/Wildebeests corner/);
+  // your players left as names; the header line is dropped (event-only):
+  expect(rec.raw).toMatch(/5 Morty goal/);
+  expect(rec.raw).toMatch(/12 Morty/);
+  // roster captured as a snapshot:
+  expect(rec.usRoster?.players.find((p: any) => p.num === 10)?.name).toBe("Morty");
+  expect(rec.usRoster?.players.find((p: any) => p.num === 16)?.role).toBe("sub");
+  expect(rec.usRoster?.formation).toEqual([[10, 11]]);
+});
+
+it("idempotent: a record already at notationV 2 is returned unchanged", () => {
+  const rec = { raw: "18:00\n5 Morty goal", notationV: 2 } as any;
+  expect(migrateLegacyNotation(rec, { teamAName: "Racoons", teamBName: "Wildebeests" })).toBe(rec);
+});
+
+it("a match with no roster block still migrates events (T→opp) and sets notationV", () => {
+  const rec = migrateLegacyNotation({ raw: "18:00\n5 T9 goal" } as any, { teamAName: "Racoons", teamBName: "Wildebeests" });
+  expect(rec.raw).toMatch(/Wildebeests 9 goal/);
+  expect(rec.notationV).toBe(2);
+});

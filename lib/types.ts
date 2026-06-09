@@ -22,6 +22,9 @@ export interface MatchRecord {
   homeTeamId?: string | null;
   awayTeamId?: string | null;
   oppRoster?: TeamRoster;
+  usRoster?: TeamRoster;
+  legacyRaw?: string;
+  notationV?: number;
   savedAt?: number;
 }
 
