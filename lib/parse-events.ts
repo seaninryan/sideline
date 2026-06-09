@@ -49,11 +49,31 @@ const other = (s: Side): Side => (s === "A" ? "B" : "A");
 
 export interface EventSettings { teamA: TeamArg; teamB: TeamArg; scoringMode?: "gaa" | "goals" }
 
+export interface TeamTotals { g: number; p: number; total: number; str: string }
+export interface ParsedEvents {
+  mode: "gaa" | "goals";
+  detectedMode: "gaa" | "goals";
+  totals: { A: TeamTotals; B: TeamTotals };
+  result: "A" | "B" | "draw";
+  scoring: any[];
+  notes: any[];
+  halfMarks: any[];
+  series: any[];
+  goalDots: any[];
+  scorers: any[];
+  leadChanges: number;
+  timesLevel: number;
+  maxLead: number;
+  maxLeadSide: "A" | "B" | null;
+  htLine: number | null;
+  warnings: any[];
+}
+
 // Two-team, event-only parser. No roster block in the notation — rosters come from
 // settings.teamA / settings.teamB. Totals are COUNTED from the events themselves
 // (no written-score vote machinery). Ported from the legacy parseMatch event walk,
 // with us/them → A/B via resolveWho.
-export function parseEvents(raw: string, settings: EventSettings): any {
+export function parseEvents(raw: string, settings: EventSettings): ParsedEvents {
   const teamA = settings.teamA, teamB = settings.teamB;
   const lines = raw.split("\n").map((l) => l.replace(/\s+$/, ""));
   const warnings: any[] = [];
@@ -266,7 +286,7 @@ export function parseEvents(raw: string, settings: EventSettings): any {
     if (lead > maxLead) { maxLead = lead; maxLeadSide = aT > bT ? "A" : "B"; }
 
     const x = xOf(s);
-    s.usScore = fmtScore(ag, ap, mode); s.themScore = fmtScore(bg, bp, mode);
+    s.aScore = fmtScore(ag, ap, mode); s.bScore = fmtScore(bg, bp, mode);
     series.push({
       x, half: s.half, minute: s.minute, a: aT, b: bT,
       aScore: fmtScore(ag, ap, mode), bScore: fmtScore(bg, bp, mode),

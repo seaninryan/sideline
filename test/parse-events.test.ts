@@ -37,27 +37,27 @@ describe("parseEvents — event walk + counted totals", () => {
     const r = parseEvents("18:00\n3 Morty\n10 Wildebeests 9 goal\n34 Morty goal\n40 Morty free", teamsGaa);
     expect(r.totals.A).toMatchObject({ g: 1, p: 2 });   // Morty: point, goal, free-point
     expect(r.totals.B).toMatchObject({ g: 1, p: 0 });   // Gerald goal
-    expect(r.scorers.find((s) => s.name === "Morty")).toMatchObject({ side: "A", g: 1, p: 2, frees: 1 });
-    expect(r.scorers.find((s) => s.name === "Gerald")).toMatchObject({ side: "B", g: 1 });
+    expect(r.scorers.find((s: any) => s.name === "Morty")).toMatchObject({ side: "A", g: 1, p: 2, frees: 1 });
+    expect(r.scorers.find((s: any) => s.name === "Gerald")).toMatchObject({ side: "B", g: 1 });
   });
   it("own goal scores for the other side", () => {
     const r = parseEvents("18:00\n20 Morty own goal", teamsGaa);          // Morty is side A → counts for B
     expect(r.totals.B.g).toBe(1); expect(r.totals.A.g).toBe(0);
-    expect(r.scoring.find((s) => s.og)).toMatchObject({ side: "B", og: true });
+    expect(r.scoring.find((s: any) => s.og)).toMatchObject({ side: "B", og: true });
   });
   it("'65 setPiece, cards, corners, subs, miss-note, team-level point", () => {
     const r = parseEvents("18:00\n9 Morty '65\n23 Wildebeests 9 yellow card\n31 Racoons corner\n40 11 for 10\n12 Morty miss wide\n52 Wildebeests", teamsGaa);
-    expect(r.scoring.find((s) => s.setPiece)).toMatchObject({ setPiece: "65", side: "A" });
-    expect(r.notes.find((n) => n.type === "card")).toMatchObject({ side: "B", card: "yellow" });
-    expect(r.notes.find((n) => n.type === "corner")).toMatchObject({ side: "A" });
-    expect(r.notes.find((n) => n.type === "sub")).toBeTruthy();
-    expect(r.notes.find((n) => n.type === "note")?.text).toMatch(/miss/i);
+    expect(r.scoring.find((s: any) => s.setPiece)).toMatchObject({ setPiece: "65", side: "A" });
+    expect(r.notes.find((n: any) => n.type === "card")).toMatchObject({ side: "B", card: "yellow" });
+    expect(r.notes.find((n: any) => n.type === "corner")).toMatchObject({ side: "A" });
+    expect(r.notes.find((n: any) => n.type === "sub")).toBeTruthy();
+    expect(r.notes.find((n: any) => n.type === "note")?.text).toMatch(/miss/i);
     expect(r.totals.B.p).toBe(1);                                          // team-level Wildebeests point
   });
   it("added time deduced (28 HT → +3) and +N override", () => {
     const r = parseEvents("18:00\n28 HT\n18:30\n63 FT +4", teamsGaa);
-    expect(r.halfMarks.find((m) => m.marker === "HT")?.added).toBe(3);
-    expect(r.halfMarks.find((m) => m.marker === "FT")?.added).toBe(4);
+    expect(r.halfMarks.find((m: any) => m.marker === "HT")?.added).toBe(3);
+    expect(r.halfMarks.find((m: any) => m.marker === "FT")?.added).toBe(4);
   });
   it("result + stats from the counted series", () => {
     const r = parseEvents("18:00\n5 Morty goal\n10 Wildebeests 9 goal\n12 Wildebeests 9", teamsGaa);
