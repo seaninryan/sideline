@@ -1,12 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import SignInGate from "@/components/SignInGate";
-import EditorApp from "@/components/EditorApp";
+import Landing from "@/components/Landing";
 
-export default async function Home({ searchParams }: { searchParams: { auth_error?: string } }) {
+export default async function Home() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  if (!data.user) {
-    return <SignInGate initialError={searchParams.auth_error ? "Sign-in failed — please try again." : ""} />;
-  }
-  return <EditorApp />;
+  const user = data.user;
+  return <Landing userId={user?.id ?? null} email={user?.email ?? null} />;
 }
