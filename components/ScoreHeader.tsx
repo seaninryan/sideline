@@ -18,8 +18,9 @@ export default function ScoreHeader({
   const flag = (c: [string, string]) => (
     <span className="sh-flag"><i style={{ background: c[0] }} /><i style={{ background: c[1] }} /></span>
   );
+  const showResult = phase !== "pre"; // a not-yet-started match isn't "leading" or "tied"
   const lead = (side: "home" | "away") =>
-    r.kind !== "tie" && r.side === side
+    showResult && r.kind !== "tie" && r.side === side
       ? <span className="sh-lead">{r.kind === "won" ? "Won by" : "Leading by"} {r.margin}</span>
       : null;
   return (
@@ -27,7 +28,7 @@ export default function ScoreHeader({
       <div className="sh-meta"><span>{(grade || "Match").toUpperCase()}</span><span>{dateStr}</span></div>
       <div className="sh-row">
         <div className="sh-team">{flag(homeColors)}<div className="sh-nm">{homeName}</div><div className="sh-sc">{homeStr}</div>{lead("home")}</div>
-        {r.kind === "tie" ? <span className="sh-tie">TIE</span> : <span className="sh-dash">–</span>}
+        {showResult && r.kind === "tie" ? <span className="sh-tie">TIE</span> : <span className="sh-dash">–</span>}
         <div className="sh-team">{flag(awayColors)}<div className="sh-nm">{awayName}</div><div className="sh-sc">{awayStr}</div>{lead("away")}</div>
       </div>
     </div>

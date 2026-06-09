@@ -330,13 +330,13 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .ml-empty button { margin-top: 10px; }
 
 /* --- Shared ScoreHeader (v47) --- */
-.sh { background: var(--card, #11171d); border-radius: 10px; padding: 14px; }
-.sh-meta { display: flex; justify-content: space-between; color: var(--muted, #6f7d72); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 12px; }
+.sh { background: #0c3b2a; color: #f4efe1; border-radius: 10px; padding: 14px; }
+.sh-meta { display: flex; justify-content: space-between; color: #cfe3d8; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 12px; }
 .sh-row { display: flex; align-items: flex-start; justify-content: center; gap: 12px; }
 .sh-team { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
 .sh-flag { display: flex; } .sh-flag i { width: 13px; height: 18px; display: block; }
 .sh-nm { font-weight: 700; font-size: 15px; }
 .sh-sc { font-weight: 800; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
-.sh-dash { color: var(--muted, #475569); font-size: 24px; align-self: center; }
+.sh-dash { color: #cfe3d8; font-size: 24px; align-self: center; }
 .sh-tie { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #8a6d1a; background: #fdf0c8; border-radius: 6px; padding: 4px 10px; }
 .sh-lead { margin-top: 4px; font-size: 11px; font-weight: 800; letter-spacing: .5px; color: #14532d; background: #c9f0d6; border-radius: 6px; padding: 3px 9px; }
