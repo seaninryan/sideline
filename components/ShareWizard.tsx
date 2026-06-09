@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { store } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
+import { genShortCode } from "@/lib/short-code";
 import type { MatchRecord, NameDisplay } from "@/lib/types";
 
 const NAME_OPTS: { v: NameDisplay; label: string; hint: string }[] = [
@@ -19,12 +20,34 @@ export default function ShareWizard({ record, curId, onClose, onApplied }: {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [bust] = useState(() => Date.now()); // freshens the preview <img> each time the wizard opens
-  const shareUrl = typeof location !== "undefined" ? `${location.origin}/m/${curId}` : "";
+  const [slug, setSlug] = useState(curId);   // short_code once we have one, else the full id
+  const origin = typeof location !== "undefined" ? location.origin : "";
+  const shareUrl = `${origin}/m/${slug}`;
+
+  // Give the row a short_code if it doesn't have one yet (idempotent; the `is null`
+  // guard never clobbers an existing code). Falls back to the UUID if the column
+  // isn't there yet (migration not run) or after repeated unique collisions.
+  const ensureShortCode = async (sb: ReturnType<typeof createClient>): Promise<string> => {
+    try {
+      const { data: cur } = await sb.from("matches").select("short_code").eq("id", curId).maybeSingle();
+      let code: string | null = (cur as any)?.short_code ?? null;
+      for (let i = 0; i < 5 && !code; i++) {
+        const cand = genShortCode();
+        const { error } = await sb.from("matches").update({ short_code: cand }).eq("id", curId).is("short_code", null);
+        if (error) { if (error.code === "23505") continue; break; } // 23505 = unique clash → retry; else give up
+        const { data: chk } = await sb.from("matches").select("short_code").eq("id", curId).maybeSingle();
+        code = (chk as any)?.short_code ?? null; // re-read in case a racing publish won
+      }
+      return code || curId;
+    } catch { return curId; }
+  };
 
   const publish = async () => {
     setBusy(true);
     await store.set(curId, { ...record, nameDisplay });
     const sb = createClient();
+    const code = await ensureShortCode(sb);
+    setSlug(code);
     await sb.from("matches").update({ is_public: true, name_display: nameDisplay }).eq("id", curId);
     onApplied({ nameDisplay });
     setBusy(false);

@@ -3,15 +3,17 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { buildModel } from "@/lib/model";
 import { applyNameDisplay } from "@/lib/name-display";
+import { isUuid } from "@/lib/util";
 import PublicMatch from "@/components/PublicMatch";
 import type { MatchRow } from "@/lib/types";
 
-async function fetchPublic(id: string): Promise<MatchRow | null> {
+// The [id] segment is either a short_code (new links) or a full UUID (legacy links).
+async function fetchPublic(slug: string): Promise<MatchRow | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("matches")
-    .select("id,data,is_public,name_display")
-    .eq("id", id)
+    .select("id,data,is_public,name_display,short_code")
+    .eq(isUuid(slug) ? "id" : "short_code", slug)
     .eq("is_public", true)
     .maybeSingle();
   return (data as MatchRow) || null;

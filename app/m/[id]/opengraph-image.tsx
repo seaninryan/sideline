@@ -3,6 +3,7 @@ import { Resvg } from "@resvg/resvg-js";
 import { createClient } from "@/lib/supabase/server";
 import { buildModel } from "@/lib/model";
 import { buildScoreCardSVG } from "@/lib/infographic";
+import { isUuid } from "@/lib/util";
 import type { MatchRow } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export default async function Image({ params }: { params: { id: string } }) {
   const { data } = await supabase
     .from("matches")
     .select("data,is_public")
-    .eq("id", params.id)
+    .eq(isUuid(params.id) ? "id" : "short_code", params.id)
     .eq("is_public", true)
     .maybeSingle();
 

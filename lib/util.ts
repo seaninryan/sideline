@@ -10,6 +10,10 @@ export function remapImport(obj: any, gen?: () => string): { id: string; rec: Re
   return arr.map((mm: any) => { const { id: _drop, ...rec } = mm; return { id: g(), rec }; });
 }
 export function fmtScore(g: number, p: number, mode: string): string { return mode === "goals" ? String(g) : `${g}-${p}`; }
+// Is this public-match slug a full UUID (legacy/full link) vs a short code?
+export function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 export function squash(s: string): string { return (s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
 export const titleCase = (s: string): string => s.replace(/\b\w/g, (c) => c.toUpperCase());
 // readable text colour for a jersey/button of the given colour (dark kit => white numbers)

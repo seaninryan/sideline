@@ -26,6 +26,7 @@ export interface MatchRow {
   id: string;
   owner?: string;
   is_public: boolean;
+  short_code?: string | null;
   name_display: NameDisplay;
   match_date: string | null;
   my_team: string | null;
