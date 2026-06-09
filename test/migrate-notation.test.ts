@@ -31,3 +31,13 @@ it("a match with no roster block still migrates events (T→opp) and sets notati
   expect(rec.raw).toMatch(/Wildebeests 9 goal/);
   expect(rec.notationV).toBe(2);
 });
+
+it("lifts the legacy header into label/homeAway/opponent", () => {
+  const away = migrateLegacyNotation({ raw: "U13A Hurling @ Wildebeests\n10. Morty\n18:00\n5 Morty goal" } as any, { teamAName: "Racoons", teamBName: "Wildebeests" });
+  expect(away.label).toBe("U13A Hurling");
+  expect(away.homeAway).toBe("away");
+  expect(away.opponent).toBe("Wildebeests");
+  expect(away.raw.split("\n")[0]).toMatch(/^18:00/);
+  const home = migrateLegacyNotation({ raw: "Senior v Rovers\n12:00\n5 Morty goal" } as any, { teamAName: "Racoons", teamBName: "Rovers" });
+  expect(home).toMatchObject({ label: "Senior", homeAway: "home", opponent: "Rovers" });
+});

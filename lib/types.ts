@@ -23,6 +23,9 @@ export interface MatchRecord {
   awayTeamId?: string | null;
   oppRoster?: TeamRoster;
   usRoster?: TeamRoster;
+  label?: string;
+  homeAway?: "home" | "away";
+  opponent?: string;
   legacyRaw?: string;
   notationV?: number;
   savedAt?: number;

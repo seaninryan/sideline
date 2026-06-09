@@ -100,12 +100,31 @@ export function migrateLegacyNotation(
     eventLines = lines.slice(clockIdx);
   }
 
-  // The first non-empty preamble line is the legacy header — drop it
+  // The first non-empty preamble line is the legacy header — parse and drop it
   const rosterLines: string[] = [];
   let headerDropped = false;
+  let headerLabel: string | undefined;
+  let headerHomeAway: "home" | "away" | undefined;
+  let headerOpponent: string | undefined;
   for (const l of preambleLines) {
     if (!headerDropped && l.trim() !== "") {
-      headerDropped = true; // skip this (the header line)
+      headerDropped = true; // parse then skip this (the header line)
+      const headerLine = l.trim();
+      const awayMatch = headerLine.match(/^(.*?)\s+@\s*(.*)$/);
+      if (awayMatch) {
+        headerLabel = awayMatch[1].trim() || undefined;
+        headerHomeAway = "away";
+        headerOpponent = awayMatch[2].trim() || undefined;
+      } else {
+        const homeMatch = headerLine.match(/^(.*?)\s+v(?:s|\.)?\s+(.*)$/i);
+        if (homeMatch) {
+          headerLabel = homeMatch[1].trim() || undefined;
+          headerHomeAway = "home";
+          headerOpponent = homeMatch[2].trim() || undefined;
+        } else {
+          headerLabel = headerLine || undefined;
+        }
+      }
       continue;
     }
     rosterLines.push(l);
@@ -125,5 +144,10 @@ export function migrateLegacyNotation(
     usRoster,
     legacyRaw: record.raw,
     notationV: 2,
+    ...(headerLabel !== undefined && { label: headerLabel }),
+    ...(headerHomeAway !== undefined && { homeAway: headerHomeAway }),
+    ...(headerOpponent !== undefined || teamBName
+      ? { opponent: headerOpponent ?? teamBName }
+      : {}),
   };
 }
