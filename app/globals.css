@@ -290,3 +290,9 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .si-brand{display:flex; justify-content:center; margin:0 0 16px;}
 .si-brand .bh{background:transparent; padding:0;}
 .si-brand .bh-chant{color:#6f7d72;}
+
+/* --- App shell (v46) --- */
+.ah-back { color: var(--muted, #6f7d72); font-size: 13px; text-decoration: none; margin-left: 8px; align-self: center; }
+.ah-back:hover { text-decoration: underline; }
+.ah-icn { display: inline-flex; align-items: center; justify-content: center; }
+.ah-icn svg { width: 18px; height: 18px; }
