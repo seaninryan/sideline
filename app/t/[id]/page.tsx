@@ -23,5 +23,7 @@ export default async function TeamRoutePage({ params }: { params: { id: string }
   const { data: auth } = await supabase.auth.getUser();
   const team = await fetchTeam(params.id);
   if (!team) notFound();
-  return <TeamPage team={team} isOwner={!!auth.user && auth.user.id === team.owner} />;
+  const isOwner = !!auth.user && auth.user.id === team.owner;
+  delete (team as any).owner; // don't ship the owner uuid to the public client
+  return <TeamPage team={team} isOwner={isOwner} />;
 }
