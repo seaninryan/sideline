@@ -1,27 +1,30 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { buildModel } from "@/lib/model";
 import { applyNameDisplay } from "@/lib/name-display";
 import { isUuid } from "@/lib/util";
+import { resolveMatchView } from "@/lib/match-view";
 import PublicMatch from "@/components/PublicMatch";
+import EditorApp from "@/components/EditorApp";
 import type { MatchRow } from "@/lib/types";
 
-// The [id] segment is either a short_code (new links) or a full UUID (legacy links).
-async function fetchPublic(slug: string): Promise<MatchRow | null> {
+// Fetch by short_code (new links) or UUID (legacy/private). NO is_public filter:
+// RLS returns the row when the viewer owns it OR it is public, and we branch below.
+async function fetchRow(slug: string): Promise<MatchRow | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("matches")
-    .select("id,data,is_public,name_display,short_code")
+    .select("id,owner,data,is_public,name_display,short_code")
     .eq(isUuid(slug) ? "id" : "short_code", slug)
-    .eq("is_public", true)
     .maybeSingle();
   return (data as MatchRow) || null;
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const row = await fetchPublic(params.id);
-  if (!row) return { title: "Here We Go" };
+  if (params.id === "new") return { title: "New match · Here We Go" };
+  const row = await fetchRow(params.id);
+  if (!row || !row.is_public) return { title: "Here We Go" };
   const m = buildModel(row.data);
   const title = `${m.usName} ${m.totals.us.str} – ${m.totals.them.str} ${m.themName}`;
   const description = [m.grade, m.dateStr, m.result].filter(Boolean).join(" · ") || "Match report on Here We Go";
@@ -34,9 +37,28 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function PublicMatchPage({ params }: { params: { id: string } }) {
-  const row = await fetchPublic(params.id);
-  if (!row) notFound();
-  const model = applyNameDisplay(buildModel(row.data), row.name_display || row.data.nameDisplay || "full");
+export default async function MatchPage({ params }: { params: { id: string } }) {
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const viewerId = auth.user?.id ?? null;
+
+  // "new" sentinel: the create flow. Requires sign-in; opens the wizard.
+  if (params.id === "new") {
+    if (!viewerId) redirect("/");
+    return <EditorApp wizard />;
+  }
+
+  const row = await fetchRow(params.id);
+  const kind = resolveMatchView({
+    found: !!row,
+    isOwner: !!row && !!viewerId && row.owner === viewerId,
+    isPublic: !!row && !!row.is_public,
+  });
+
+  if (kind === "notfound") notFound();
+  if (kind === "editor") return <EditorApp initialId={row!.id} />;
+
+  // public read-only
+  const model = applyNameDisplay(buildModel(row!.data), row!.name_display || row!.data.nameDisplay || "full");
   return <PublicMatch model={model} />;
 }

@@ -1,8 +1,12 @@
 "use client";
-import React from "react";
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import ScoreChart from "@/components/ScoreChart";
-import BrandHeader from "@/components/BrandHeader";
+import AppHeader from "@/components/AppHeader";
+import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
+import { buildInfographicSVG } from "@/lib/infographic";
+import { svgToPng } from "@/lib/svg-to-png.client";
 import { BRAND_SITE, BRAND_SITE_URL, BRAND_CHANT } from "@/lib/constants";
 import type { Model } from "@/lib/types";
 
@@ -23,9 +27,47 @@ export default function PublicMatch({ model }: { model: Model }) {
   const findName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
   const halves: number[] = [...new Set<number>((m.timeline || []).map((t: any) => t.half as number))].sort((a, b) => a - b);
 
+  const sb = useMemo(() => createClient(), []);
+  const router = useRouter();
+  const [share, setShare] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  React.useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
+  const copyLink = () => { navigator.clipboard?.writeText(location.href); };
+  const shareImage = () => {
+    try {
+      const { svg, width, height } = buildInfographicSVG(m);
+      svgToPng(svg, width, height).then(({ blob }) => {
+        if (!blob) return;
+        const file = new File([blob], "match.png", { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {});
+        else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "match.png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
+      }).catch(() => {});
+    } catch { /* ignore */ }
+  };
+
   return (
     <div className="pm-root mt-root">
-      <BrandHeader />
+      <AppHeader
+        email={email}
+        showNew={!!email}
+        onNew={() => router.push("/m/new")}
+        onSignIn={async () => { await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${location.origin}/auth/callback` } }); }}
+        onSignOut={async () => { await sb.auth.signOut(); router.refresh(); }}
+      >
+        <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={() => setShare((o) => !o)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+            <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+          </svg>
+        </button>
+      </AppHeader>
+      {share && (
+        <div className="mt-live" style={{ marginTop: 0 }}>
+          <div className="mt-row"><span className="mt-h" style={{ margin: 0, flex: 1 }}>Share</span><button className="mt-add alt" onClick={() => setShare(false)}>✕ Close</button></div>
+          <button className="mt-add" style={{ marginTop: 8 }} onClick={copyLink}>🔗 Copy link</button>
+          <button className="mt-add alt" style={{ marginTop: 8 }} onClick={shareImage}>🖼 Share as image</button>
+        </div>
+      )}
 
       {/* score header */}
       <div className="pm-head">

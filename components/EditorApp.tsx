@@ -3,12 +3,12 @@ import React, { useEffect, useState } from "react";
 import { loadAll } from "@/lib/store";
 import MatchTracker from "@/components/MatchTracker";
 
-export default function EditorApp() {
+export default function EditorApp({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
   const [phase, setPhase] = useState<"load" | "ready" | "error">("load");
   useEffect(() => {
     loadAll().then(() => setPhase("ready")).catch(() => setPhase("error"));
   }, []);
-  if (phase === "ready") return <MatchTracker />;
+  if (phase === "ready") return <MatchTracker initialId={initialId} wizard={wizard} />;
   return (
     <div className="si-wrap">
       <div className="si-card">

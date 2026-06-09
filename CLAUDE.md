@@ -10,10 +10,10 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
 
 - **`app/`** — Next.js 14 App Router pages and route handlers:
   - `layout.tsx` — root layout; loads Oswald + Bebas Neue via `next/font`, applies CSS variables `--font-oswald` / `--font-bebas`.
-  - `page.tsx` — `/` server component: reads Supabase session via `getUser()`, renders `<SignInGate>` or `<EditorApp>`.
+  - `page.tsx` — `/` server component: reads the session via `getUser()` and renders `<Landing>` (the match list) for everyone, signed in or out.
   - `globals.css` — all app styles (ported from the old single-file `<style>` block; fonts use `var(--font-oswald)` / `var(--font-bebas)`).
   - `auth/callback/route.ts` — OAuth code-exchange handler; exchanges the code for a session cookie and redirects to `/`.
-  - `m/[id]/page.tsx` — public read-only match page (SSR); fetches only `is_public=true` rows, applies `applyNameDisplay`.
+  - `m/[id]/page.tsx` — **dual-mode** match page (SSR): fetches the row through RLS (no `is_public` filter) and branches via `resolveMatchView` — owner → `<EditorApp initialId>` (the editor), public non-owner → `<PublicMatch>` read-only (with `applyNameDisplay`), else 404. The `new` sentinel (`/m/new`) renders `<EditorApp wizard>` (the create flow), redirecting to `/` if signed out.
   - `m/[id]/opengraph-image.tsx` — OG score-card PNG (1200×630) rendered server-side via `@resvg/resvg-js` + `buildScoreCardSVG`.
 - **`lib/`** — pure, typed, unit-tested logic:
   - `parser.ts` — `parseMatch` (the full parser).
@@ -21,20 +21,26 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `infographic.ts` — `buildInfographicSVG` (full portrait poster) + `buildScoreCardSVG` (compact OG card).
   - `model.ts` — `buildModel`: rebuilds the infographic/page model from a stored record; used server-side by `/m/[id]`.
   - `name-display.ts` — `applyNameDisplay` / `redactName`: full / initials / none player-name redaction for public pages.
+  - `match-list.ts` — `matchRowView` (home/away ordering, score strings, winner side, sport emoji, kit colours) + `relativeDate`; powers the landing list rows.
+  - `match-view.ts` — `resolveMatchView`: the editor / public / 404 decision for the dual-mode `/m/[id]` page.
   - `store.ts` — `store` / `loadAll` / `cache` (browser-backed; same `list/get/set/del` surface as always); derives the promoted columns including `name_display` on every `store.set`.
   - `supabase/client.ts` — `@supabase/ssr` browser client.
   - `supabase/server.ts` — `@supabase/ssr` server client (reads cookies; used in Server Components and route handlers).
   - `constants.ts` — `APP_VERSION`, `PALETTE`, `LIVE_EVENTS`, `SPORTS`.
   - `types.ts`, `util.ts`, `sample.ts` (the fictional `SAMPLE`), `svg-to-png.client.ts` (browser canvas rasterizer).
 - **`components/`**:
-  - `MatchTracker.tsx` — the main editor (ported whole, carries `// @ts-nocheck` — to be decomposed/typed in a later phase).
+  - `MatchTracker.tsx` — the main editor (ported whole, carries `// @ts-nocheck`). Boots from a route `initialId` (or `wizard` for `/m/new`); the old match dropdown and ⋯ overflow menu were removed. To be decomposed/typed in a later phase.
+  - `AppHeader.tsx` — the persistent header used on every screen (brand→`/`, optional back link + New, a context-specific action slot, and an email→Sign out account menu / Sign in). Reuses the editor's `mt-*` classes.
+  - `Landing.tsx` — the `/` match list: your matches (Both/Personal/Public privacy filter) + a global "Recent public matches" infinite-scroll feed; rows are `<MatchRow>`.
+  - `MatchRow.tsx` — one list row built from `matchRowView`; winner emphasis (loser dimmed, draw neutral), kit-colour flags, date, public/private indicator.
+  - `ShareSheet.tsx` — contextual owner Share panel in the editor (private → publish + name-display; public → copy link / change name privacy / unshare) plus a "share as image" entry. Supersedes `ShareWizard.tsx` (kept in the repo, now unused).
   - `ScoreChart.tsx`, `MinuteStep.tsx` — chart and minute-stepper sub-components.
-  - `SignIn.tsx` — presentational sign-in screen.
-  - `SignInGate.tsx` — client component: calls `signInWithOAuth` and passes state to `<SignIn>`.
-  - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker>`.
-  - `PublicMatch.tsx` — read-only public match render.
-  - `ShareWizard.tsx` — publish + share-link wizard (name-display choice → make public → copy link + OG preview).
-- **`test/`** — Vitest suites: `parser.test.ts` (full regression suite, 147 tests total across all files), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `brand.test.ts`, `smoke.test.ts`.
+  - `SignIn.tsx` — presentational sign-in screen (still used as a standalone; sign-in is otherwise triggered inline from `AppHeader`).
+  - `SignInGate.tsx` — client sign-in wrapper (now unused — sign-in is handled inline by `Landing`/`AppHeader`/`PublicMatch`).
+  - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker initialId wizard>`.
+  - `PublicMatch.tsx` — read-only public match render; carries the `<AppHeader>` with a visitor Share (copy link + share-as-image built client-side from the model).
+  - `ShareWizard.tsx` — legacy publish wizard, superseded by `ShareSheet` (unused; retained for reference).
+- **`test/`** — Vitest suites (168 tests total across all files): `parser.test.ts` (full regression suite), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-view.test.ts`, `smoke.test.ts`.
 - **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
 - **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
 - **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
@@ -49,14 +55,14 @@ Node 20 is required (`nvm use 20`).
 npm install
 npm run dev      # → http://localhost:3000
 npm run build    # production build
-npm test         # Vitest (147 tests)
+npm test         # Vitest (168 tests)
 ```
 
 After any parser change, run `npm test` and confirm the canonical `SAMPLE` with `{myTeam:"Racoons"}` produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings. This is asserted in `test/parser.test.ts`.
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v45**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v46**.
 
 ## Architecture
 
@@ -64,14 +70,18 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE` with 
 
 `lib/` — pure logic, all typed, all tested. `components/` — React components. `app/` — Next.js routing + server-side data fetching. The main editor (`MatchTracker`) is the largest component and still carries `// @ts-nocheck`; the surrounding modules are fully typed.
 
+### App shell & navigation (v46, sub-project ① of a 5-part restructure)
+
+The app is **list-first**. `/` renders `<Landing>`: signed-in users see "Your matches" (a Both/Personal/Public privacy filter over their own rows, queried `.eq("owner", userId)`) above a **global** "Recent public matches" feed (`is_public=true`, `.neq("owner", userId)`, offset-paginated with an IntersectionObserver for infinite scroll); signed-out users see only the feed. Each match has **one canonical URL, `/m/[id]`**, made dual-mode (see the `m/[id]/page.tsx` entry above): the owner gets the editor, everyone else the read-only page, and `/m/new` opens the create wizard. Creating a match (`finishNew`/`doNew`) saves it immediately then `router.replace`s to its URL — because that's a same-route param transition, the editor is **not** remounted, so both paths set `curId` + local state directly. One **`<AppHeader>`** frames every screen (only its action cluster changes); Share is a single standard-share-glyph icon opening `<ShareSheet>` (owner) or a copy-link/share-image panel (`PublicMatch`). Sub-projects ②–⑤ (editor tabs/game-mode-first, home/away model, wizard polish, colour-picker) build on this skeleton — see `docs/superpowers/specs/`. Pure seams `matchRowView` (`lib/match-list.ts`) and `resolveMatchView` (`lib/match-view.ts`) are unit-tested.
+
 ### Auth + storage
 
 - The backend is a **Supabase** project (Postgres + Auth). Env vars `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the only secrets needed — both are public (safe behind RLS).
 - **Auth:** Supabase Google OAuth via `@supabase/ssr`. Flow: `SignInGate` (browser) calls `signInWithOAuth({provider:"google", options:{redirectTo: location.origin+"/auth/callback"}})` → `/auth/callback` route handler exchanges the code and sets session cookies → `app/page.tsx` (server component) reads the session via `getUser()`. **There is intentionally NO middleware.** The `@supabase/supabase-js` realtime/`ws` dependency references Node's `__dirname`, which crashes Vercel's Edge runtime; middleware would run there. Server-side token refresh is therefore omitted — the browser client's auto-refresh keeps the session cookie fresh instead.
-- **Sign-up policy:** open — any Google account can sign in. RLS isolates each user's rows. A "Sign out (\<email\>)" item lives in the ⋯ overflow menu.
+- **Sign-up policy:** open — any Google account can sign in. RLS isolates each user's rows. Sign out lives in the header account menu (email ▾ → Sign out).
 - **Storage:** a `matches` table, row per match. Columns: `id uuid pk`, `owner uuid (default auth.uid())`, `is_public bool default false`, `short_code text unique`, `name_display text default 'full'`, `match_date timestamptz`, `my_team text`, `opponent text`, `sport text`, `data jsonb`, `updated_at timestamptz`. `data jsonb` holds the full match record and is the source of truth; the promoted columns (`match_date`, `my_team`, `opponent`, `sport`, `name_display`) are derived on every `store.set`. RLS: `own_all` policy (`owner = auth.uid()`) + `public_read` policy (`is_public = true`). The public page and OG route read only `is_public=true` rows and apply `name_display` redaction.
-- **Short links (`short_code`).** Public matches are shared as `herewego.ie/m/<short_code>` — a 6-char code from an unambiguous alphabet (`lib/short-code.ts`), generated once on publish in `ShareWizard.ensureShortCode` (idempotent: an `is null` guard never clobbers an existing code; retries on the unique-index clash; falls back to the full UUID if the column is absent or after repeated collisions). Routing (`/m/[id]` page + OG route) resolves the `[id]` segment by `short_code` when it isn't a UUID and by `id` when it is, so legacy full-UUID links keep working. `store.set` does **not** touch `short_code`, so auto-save can't clobber it. **Schema migration (run once in Supabase):** `alter table matches add column if not exists short_code text; create unique index if not exists matches_short_code_key on matches (short_code);`
-- **Auto-save & sync:** matches auto-save 2.5s after the last change (`dirty` compares editor state to `cache[curId]`); a new match needs its first explicit Save. The dropdown and Save button show `*` when dirty. The ⋯ **Resync** button re-pulls via `loadAll()` (for edits made on another device) and reloads the open match, confirming first if local changes would be lost. Last-write-wins — there is no merge.
+- **Short links (`short_code`).** Public matches are shared as `herewego.ie/m/<short_code>` — a 6-char code from an unambiguous alphabet (`lib/short-code.ts`), generated once on publish in `ShareSheet.ensureShortCode` (idempotent: an `is null` guard never clobbers an existing code; retries on the unique-index clash; falls back to the full UUID if the column is absent or after repeated collisions). Routing (`/m/[id]` page + OG route) resolves the `[id]` segment by `short_code` when it isn't a UUID and by `id` when it is, so legacy full-UUID links keep working. `store.set` does **not** touch `short_code`, so auto-save can't clobber it. **Schema migration (run once in Supabase):** `alter table matches add column if not exists short_code text; create unique index if not exists matches_short_code_key on matches (short_code);`
+- **Auto-save & sync:** every match is saved on creation (so it always has a `/m/<uuid>` home), then auto-saves 2.5s after each change (`dirty` compares editor state to `cache[curId]`). The header **Resync** icon re-pulls via `loadAll()` (for edits made on another device) and reloads the open match, confirming first if local changes would be lost. Last-write-wins — there is no merge. (The old explicit Save button + match dropdown were removed; the never-saved-match Save button in game mode is now an inert safety net since `curId` is always set in a routed editor.)
 - **`store` API** (`lib/store.ts`): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool. `store.set` does a single-row upsert; `store.del` a single-row delete. `MatchTracker` uses this surface unchanged.
 
 ### Public match page + OG image
