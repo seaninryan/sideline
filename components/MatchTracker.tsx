@@ -18,7 +18,9 @@ import {
   fmtDate, fmtDateShort, toLocalInput, dateKey, MONTHS, pad2,
 } from "@/lib/util";
 import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
-import ShareWizard from "@/components/ShareWizard";
+import ShareSheet from "@/components/ShareSheet";
+import AppHeader from "@/components/AppHeader";
+import { useRouter } from "next/navigation";
 
 const sb = createClient();
 
@@ -57,7 +59,8 @@ function downloadBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
 
-export default function MatchTracker() {
+export default function MatchTracker({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
+  const router = useRouter();
   const [raw, setRaw] = useState(SAMPLE);
   const [myTeam, setMyTeam] = useState("Racoons");
   const [scoringMode, setScoringMode] = useState("gaa");
@@ -177,8 +180,9 @@ export default function MatchTracker() {
   };
   useEffect(() => {
     (async () => {
-      const items = await refreshList();
-      if (items.length && !curId) doLoad(items[0].id); // open the most recent match by default
+      await refreshList();
+      if (wizard) { enterNew(); return; }      // /m/new — open the new-match wizard
+      if (initialId) doLoad(initialId);         // /m/<uuid> — open this match
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
@@ -239,10 +243,15 @@ export default function MatchTracker() {
     setNameDisplay(d.nameDisplay || "full");
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
-  const doNew = () => {
-    // header + roster stub only — the half starts when Start half is tapped at throw-in
-    setRaw(`${myTeam.trim() || "My Team"} @ Opponent\n1 \n`);
-    setMatchDate(toLocalInput(new Date())); setCurId(null); setNw(null); setTab("notation");
+  const doNew = async () => {
+    // blank match: create + save immediately so it has a real /m/<uuid> home, then go there
+    const team = myTeam.trim() || "My Team";
+    const newRaw = `${team} @ Opponent\n1 \n`;
+    const date = toLocalInput(new Date());
+    const id = mkId();
+    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, myTeam: team, scoringMode: "gaa", autoMode: true, colorUs, colorUs2, colorThem, colorThem2, savedAt: Date.now() });
+    if (ok) router.replace(`/m/${id}`);
+    else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
   const doDuplicate = () => {
     setCurId(null);
@@ -250,7 +259,10 @@ export default function MatchTracker() {
     setTimeout(() => setSavedMsg(""), 3500);
   };
   const doDelete = async () => {
-    if (curId) { const ok = await store.del(curId); setCurId(null); await refreshList(); setSavedMsg(ok ? "Deleted" : "NOT deleted — check connection"); setTimeout(() => setSavedMsg(""), ok ? 1500 : 6000); }
+    if (!curId) return;
+    const ok = await store.del(curId);
+    if (ok) { router.push("/"); }
+    else { setSavedMsg("NOT deleted — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
 
   // edit header (opponent / home-away / label) without touching the raw text
@@ -409,7 +421,7 @@ export default function MatchTracker() {
       setMatchDate(nw.date); setNw(null); setTab("notation");
       const id = mkId();
       const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, savedAt: Date.now() });
-      if (ok) { setCurId(id); await refreshList(); setSavedMsg("Match created ✓"); setTimeout(() => setSavedMsg(""), 2000); }
+      if (ok) { router.replace(`/m/${id}`); }
       else { setCurId(null); setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
     } finally {
       creatingRef.current = false;
@@ -628,56 +640,36 @@ export default function MatchTracker() {
 
   const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
 
-  const view = gm ? "game" : nw ? "new" : share ? "share" : tab; // game mode / new-match wizard / share wizard replace the tab body
+  const view = gm ? "game" : nw ? "new" : tab; // game mode / new-match wizard replace the tab body; Share is an inline panel
 
   return (
     <div className="mt-root">
 
-      {/* top bar */}
-      {!(gm || nw || share) && (
-      <div className="mt-bar">
-        <div className="mt-logo">
-          {/* same pill as icon-180.png (tools/make-icon.py geometry) */}
-          <svg width="40" height="22" viewBox="0 0 128 70" aria-hidden="true" style={{ flex: "none" }}>
-            <rect x="4" y="8" width="120" height="54" rx="27" fill="#0c3b2a" stroke="#f5c518" strokeWidth="4" />
-            <text x="64" y="48" fontSize="34" textAnchor="middle" style={{ fontFamily: "var(--font-bebas), sans-serif" }}>
-              <tspan fill="#f4efe1">HW</tspan><tspan fill="#f5c518">G</tspan>
-            </text>
-          </svg>
-          <span className="mt-brand">
-            <span className="mt-wm">HERE WE <span className="mt-go">GO</span></span>
-            <span className="mt-chant">HERE WE GO · HERE WE GO</span>
-          </span>
-        </div>
-        <div className="grow" />
-        <select className="mt-sel" value={curId || ""} onChange={(e) => e.target.value && doLoad(e.target.value)}>
-          <option value="">{store.ok ? (curId ? "Saved matches…" : "* new match — not saved") : "Storage off"}</option>
-          {saved.map((m) => <option key={m.id} value={m.id}>{m.id === curId && dirty ? "* " + m.label : m.label}</option>)}
-        </select>
-        <button className="mt-btn solid" onClick={doSave}>Save{dirty ? " *" : ""}</button>
-        <button className="mt-btn" onClick={doExport}>Share image</button>
-        <button className={"mt-btn" + (menuOpen ? " solid" : "")} aria-label="More actions" onClick={() => { setMenuOpen((o) => !o); setConfirmDel(false); }}>⋯</button>
-      </div>
-      )}
-      {/* overflow menu: an inline secondary bar, same reasoning as the Share/Backup
-          panels — fixed/absolute dropdowns miss taps in mobile webviews */}
-      {!(gm || nw || share) && menuOpen && (
-        <div className="mt-bar sub">
-          <button className="mt-btn" onClick={enterNew}>New</button>
-          {curId && <button className="mt-btn" onClick={() => { setMenuOpen(false); doDuplicate(); }}>Duplicate</button>}
-          <button className="mt-btn" onClick={enterShare}>Publish / share link</button>
-          <button className="mt-btn" onClick={() => { setMenuOpen(false); doResync(); }}>Resync</button>
-          <button className="mt-btn" onClick={() => { setMenuOpen(false); openBackup(); }}>Backup</button>
-          <button className="mt-btn" onClick={() => { setMenuOpen(false); sb.auth.signOut(); }}>{userEmail ? "Sign out (" + userEmail + ")" : "Sign out"}</button>
-          {curId && <button className={"mt-btn" + (confirmDel ? " danger" : "")} onClick={() => {
-            if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; } // arm, then auto-disarm
-            setConfirmDel(false); setMenuOpen(false); doDelete();
-          }}>{confirmDel ? "Tap again to delete" : "Delete"}</button>}
-        </div>
+      {/* persistent header */}
+      {!(gm || nw) && (
+        <AppHeader
+          email={userEmail}
+          showNew
+          backHref="/"
+          onNew={() => router.push("/m/new")}
+          onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
+        >
+          <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={enterShare}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+            </svg>
+          </button>
+          <button className="mt-btn" aria-label="Resync" title="Resync from server" onClick={doResync}>⟳</button>
+          <button className={"mt-btn" + (confirmDel ? " danger" : "")} aria-label="Delete match" title={confirmDel ? "Tap again to delete" : "Delete match"} onClick={() => {
+            if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
+            setConfirmDel(false); doDelete();
+          }}>🗑</button>
+        </AppHeader>
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
-      {!(gm || nw || share) && modal && (
+      {!(gm || nw) && modal && (
         <div className="mt-panel">
           {modal.kind === "share" && (
             <>
@@ -706,8 +698,18 @@ export default function MatchTracker() {
         </div>
       )}
 
+      {!(gm || nw) && share && curId && (
+        <ShareSheet
+          record={{ ...recordPayload(), savedAt: Date.now() }}
+          curId={curId}
+          onClose={() => setShare(false)}
+          onShareImage={() => { setShare(false); doExport(); }}
+          onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
+        />
+      )}
+
       {/* settings */}
-      {!(gm || nw || share) && (
+      {!(gm || nw) && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -734,7 +736,7 @@ export default function MatchTracker() {
       </div>
       )}
 
-      {!(gm || nw || share) && colorPick && (() => {
+      {!(gm || nw) && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -763,7 +765,7 @@ export default function MatchTracker() {
       })()}
 
       {/* scoreboard */}
-      {!(nw || share) && (
+      {!nw && (
       <div className="mt-board">
         <div className="mt-meta">{sportLabel || "Match"} · {header.homeAway === "away" ? "Away" : header.homeAway === "home" ? "Home" : ""} {header.label ? "· " + header.label : ""}{matchDate ? " · " + fmtDate(matchDate) : ""}</div>
         <div className="mt-score">
@@ -789,7 +791,7 @@ export default function MatchTracker() {
       )}
 
       {/* tabs */}
-      {!(gm || nw || share) && (
+      {!(gm || nw) && (
       <div className="mt-tabs">
         {tabs.map(([id, lbl]) => (
           <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
@@ -802,7 +804,7 @@ export default function MatchTracker() {
           <div className="mt-game">
             <div className="mt-row" style={{ marginBottom: 12 }}>
               <span className="mt-h" style={{ margin: 0, flex: 1 }}>New match{nw.stage === "us" ? " — your team" : nw.stage === "opp" ? " — opposition" : ""}</span>
-              <button className="mt-add alt" onClick={() => setNw(null)}>✕ Cancel</button>
+              <button className="mt-add alt" onClick={() => router.push("/")}>✕ Cancel</button>
             </div>
 
             {/* stage 1 — when? */}
@@ -867,14 +869,6 @@ export default function MatchTracker() {
               </>
             )}
           </div>
-        )}
-        {share && (
-          <ShareWizard
-            record={{ ...recordPayload(), savedAt: Date.now() }}
-            curId={curId}
-            onClose={() => setShare(false)}
-            onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
-          />
         )}
         {view === "game" && (
           <div className="mt-game">
@@ -1317,7 +1311,7 @@ export default function MatchTracker() {
           </>
         )}
       </div>
-      {!(gm || nw || share) && (
+      {!(gm || nw) && (
         <div className="mt-foot">Here We Go · {APP_VERSION}</div>
       )}
     </div>
