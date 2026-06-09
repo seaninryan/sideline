@@ -1191,6 +1191,23 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>{p.num}. {p.name} {subArrows(p.num)}{playerMarks(p.num)} {scoreFor(p.num)}</span>;
             })}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
+            {oppRoster && oppRoster.formation && oppRoster.formation.length > 0 && (
+              <>
+                <p className="mt-h" style={{ marginTop: 18 }}>Opponent — {themName}</p>
+                <div className="mt-pitch" style={{ background: `linear-gradient(${colorThem2}22, #0c3b2a 60%)` }}>
+                  {oppRoster.formation.map((row, ri) => (
+                    <div className="mt-line" key={ri}>
+                      {row.map((n) => { const op = oppRoster.players.find((x) => x.num === n); return (
+                        <div className="mt-jersey" key={n}>
+                          <div className="j" style={{ background: colorThem, color: contrastOn(colorThem), borderBottom: `4px solid ${colorThem2}` }}>{n}</div>
+                          <div className="nm">{op ? op.name : ""}</div>
+                        </div>
+                      ); })}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
 

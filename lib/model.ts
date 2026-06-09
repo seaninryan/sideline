@@ -50,6 +50,7 @@ export function buildModel(record: MatchRecord): Model {
     colorUs: r.colorUs || "#f5c518", colorUs2: r.colorUs2 || "#1f7a4d",
     colorThem: r.colorThem || "#c0392b", colorThem2: r.colorThem2 || "#2c5fa8",
     nameDisplay: r.nameDisplay || "full",
+    oppRoster: r.oppRoster || null,
     parsed,
   };
 }
