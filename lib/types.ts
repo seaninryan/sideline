@@ -59,3 +59,20 @@ export interface ParsedMatch {
 }
 
 export type Model = Record<string, any>;
+
+export interface TeamRoster {
+  formation: number[][];                 // rows of shirt numbers (starting XV/XI layout)
+  players: { num: number; name: string; role: "starting" | "sub" }[];
+}
+
+export interface TeamRecord {
+  id: string;
+  owner?: string;
+  short_code?: string | null;
+  name: string;
+  color1?: string;
+  color2?: string;
+  sport?: string;
+  roster: TeamRoster;
+  updated_at?: string;
+}
