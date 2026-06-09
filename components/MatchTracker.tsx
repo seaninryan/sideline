@@ -20,6 +20,7 @@ import {
 import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
 import AppHeader from "@/components/AppHeader";
+import ScoreHeader from "@/components/ScoreHeader";
 import { useRouter } from "next/navigation";
 
 const sb = createClient();
@@ -71,7 +72,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [colorThem, setColorThem] = useState("#c0392b");
   const [colorThem2, setColorThem2] = useState("#2c5fa8");
   const [nameDisplay, setNameDisplay] = useState("full");
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("details");
   const [matchDate, setMatchDate] = useState("2026-06-02T18:21");
   const [curId, setCurId] = useState(null);
   const [saved, setSaved] = useState([]);
@@ -88,6 +89,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [blkIns, setBlkIns] = useState(null);         // insert flow state (Task 7)
   const [lineupEdit, setLineupEdit] = useState(null); // preamble text while editing (Task 8)
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); }, [curId]);
+  // default tab when a match opens: Game mode while unfinished, Details once it's full time.
+  // Keyed on curId so it only fires on open, never mid-session (won't yank the user off a tab).
+  useEffect(() => { if (curId) setTab(phase === "over" ? "details" : "game"); /* eslint-disable-next-line */ }, [curId]);
+  // switching tabs closes any open Advanced editor and resets the game-mode stage
+  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGmStage({ stage: "team" }); }, [tab]);
   useEffect(() => { sb.auth.getUser().then(({ data }) => setUserEmail((data && data.user && data.user.email) || "")); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
@@ -642,7 +648,59 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     } catch (e) { setSavedMsg("Import failed — check the text"); setTimeout(() => setSavedMsg(""), 2500); }
   };
 
-  const tabs = [["overview", "Overview"], ["timeline", "Timeline"], ["lineup", "Lineup"], ["notation", "Notation / Live"]];
+  const tabs = [["details", "Details"], ["lineup", "Lineup"], ["game", "Game mode"], ["advanced", "Advanced"]];
+
+  const renderTimeline = () => (
+    <div className="mt-tl">
+      {[1, 2].map((h) => {
+        const items = timeline.filter((t) => t.half === h);
+        if (!items.length) return null;
+        const mk = halfMarks.find((m) => m.half === h && m.clock);
+        const addedMk = halfMarks.find((m) => m.half === h && m.marker && m.added > 0);
+        return (
+          <div key={h}>
+            <div className="mt-half">{h === 1 ? "First half" : "Second half"}{mk ? ` · ${mk.clock}` : ""}</div>
+            {items.map((it, i) => {
+              if (it.kind === "score") {
+                const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
+                const evName = it.scorer === "Opposition" ? themName : it.scorer;
+                return (
+                  <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
+                    <span className="m">{it.mmin || it.minute}'</span>
+                    <span>
+                      {descriptive
+                        ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
+                        : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">'{it.setPiece}</span> : ""}</>}
+                    </span>
+                    <span className="sc">{it.usScore} – {it.themScore}</span>
+                  </div>
+                );
+              }
+              if (it.kind === "card") {
+                const whoTxt = it.side === "them" && (!it.who || /^t\d*$/i.test(it.who)) ? themName : (it.who || usName);
+                return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
+                  <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
+                  <span><span style={{ display: "inline-block", width: 9, height: 12, borderRadius: 2, background: it.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", verticalAlign: "-2px", marginRight: 6 }} />{whoTxt}</span>
+                </div>;
+              }
+              if (it.kind === "corner") {
+                const nth = timeline.filter((x) => x.kind === "corner" && x.side === it.side && x.seq <= it.seq).length;
+                const ord = nth === 1 ? "1st" : nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
+                return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
+                  <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
+                  <span style={{ color: "#6f7d72" }}>⚑ {ord} corner — {it.side === "them" ? themName : usName}</span>
+                </div>;
+              }
+              if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
+              return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
+            })}
+            {addedMk && <div className="mt-ev mid"><span className="chip">⏱ +{addedMk.added} added</span></div>}
+          </div>
+        );
+      })}
+      {timeline.length === 0 && <p style={{ color: "#6f7d72" }}>No events parsed.</p>}
+    </div>
+  );
 
   const view = gm ? "game" : nw ? "new" : tab; // game mode / new-match wizard replace the tab body; Share is an inline panel
 
@@ -768,31 +826,27 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         );
       })()}
 
-      {/* scoreboard */}
-      {!nw && (
-      <div className="mt-board">
-        <div className="mt-meta">{sportLabel || "Match"} · {header.homeAway === "away" ? "Away" : header.homeAway === "home" ? "Home" : ""} {header.label ? "· " + header.label : ""}{matchDate ? " · " + fmtDate(matchDate) : ""}</div>
-        <div className="mt-score">
-          <div className="mt-team">
-            <div className="nm"><span className="mt-chip" style={{ background: `linear-gradient(135deg, ${colorUs} 0 50%, ${colorUs2} 50% 100%)` }} /><b>{usName}</b></div>
-            <div className="mt-big">{totals.us.str}</div>
-            <div className="mt-tot">{effMode === "gaa" ? `${totals.us.total} pts` : "goals"}</div>
-          </div>
-          <div className="mt-vs">vs</div>
-          <div className="mt-team">
-            <div className="nm"><b>{themName}</b><span className="mt-chip" style={{ background: `linear-gradient(135deg, ${colorThem} 0 50%, ${colorThem2} 50% 100%)` }} /></div>
-            <div className="mt-big">{totals.them.str}</div>
-            <div className="mt-tot">{effMode === "gaa" ? `${totals.them.total} pts` : "goals"}</div>
-          </div>
-        </div>
-        <div className="mt-resbar">
-          <span className={"mt-res " + result}>
-            {result === "Win" ? "Win" : result === "Loss" ? "Defeat" : "Draw"}
-            {effMode === "gaa" && totals.us.total !== totals.them.total ? ` by ${Math.abs(totals.us.total - totals.them.total)}` : ""}
-          </span>
-        </div>
-      </div>
-      )}
+      {/* score header (shared with the public page) */}
+      {!nw && (() => {
+        const usIsHome = header.homeAway === "home";
+        const usTotal = gpTotal(totals.us.g, totals.us.p, effMode);
+        const themTotal = gpTotal(totals.them.g, totals.them.p, effMode);
+        return (
+          <ScoreHeader
+            homeName={usIsHome ? usName : themName}
+            awayName={usIsHome ? themName : usName}
+            homeStr={usIsHome ? totals.us.str : totals.them.str}
+            awayStr={usIsHome ? totals.them.str : totals.us.str}
+            homeColors={usIsHome ? [colorUs, colorUs2] : [colorThem, colorThem2]}
+            awayColors={usIsHome ? [colorThem, colorThem2] : [colorUs, colorUs2]}
+            grade={header.label || sportLabel || ""}
+            dateStr={matchDate ? fmtDate(matchDate) : ""}
+            homeTotal={usIsHome ? usTotal : themTotal}
+            awayTotal={usIsHome ? themTotal : usTotal}
+            phase={phase}
+          />
+        );
+      })()}
 
       {/* tabs */}
       {!(gm || nw) && (
@@ -965,7 +1019,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </div>
         )}
 
-        {view === "overview" && (
+        {view === "details" && (
           <>
             {parsed.warnings.length > 0 && (
               <div className="mt-warn">
@@ -1026,60 +1080,9 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                 </table>
               </>
             )}
+            <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
+            {renderTimeline()}
           </>
-        )}
-
-        {view === "timeline" && (
-          <div className="mt-tl">
-            {[1, 2].map((h) => {
-              const items = timeline.filter((t) => t.half === h);
-              if (!items.length) return null;
-              const mk = halfMarks.find((m) => m.half === h && m.clock);
-              const addedMk = halfMarks.find((m) => m.half === h && m.marker && m.added > 0);
-              return (
-                <div key={h}>
-                  <div className="mt-half">{h === 1 ? "First half" : "Second half"}{mk ? ` · ${mk.clock}` : ""}</div>
-                  {items.map((it, i) => {
-                    if (it.kind === "score") {
-                      // a scorer we couldn't attribute is description, not a name: "GOAL long free"
-                      const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
-                      const evName = it.scorer === "Opposition" ? themName : it.scorer;
-                      return (
-                        <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
-                          <span className="m">{it.mmin || it.minute}'</span>
-                          <span>
-                            {descriptive
-                              ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
-                              : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">'{it.setPiece}</span> : ""}</>}
-                          </span>
-                          <span className="sc">{it.usScore} – {it.themScore}</span>
-                        </div>
-                      );
-                    }
-                    if (it.kind === "card") {
-                      const whoTxt = it.side === "them" && (!it.who || /^t\d*$/i.test(it.who)) ? themName : (it.who || usName);
-                      return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
-                        <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
-                        <span><span style={{ display: "inline-block", width: 9, height: 12, borderRadius: 2, background: it.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", verticalAlign: "-2px", marginRight: 6 }} />{whoTxt}</span>
-                      </div>;
-                    }
-                    if (it.kind === "corner") {
-                      const nth = timeline.filter((x) => x.kind === "corner" && x.side === it.side && x.seq <= it.seq).length;
-                      const ord = nth === 1 ? "1st" : nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
-                      return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
-                        <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
-                        <span style={{ color: "#6f7d72" }}>⚑ {ord} corner — {it.side === "them" ? themName : usName}</span>
-                      </div>;
-                    }
-                    if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
-                    return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
-                  })}
-                  {addedMk && <div className="mt-ev mid"><span className="chip">⏱ +{addedMk.added} added</span></div>}
-                </div>
-              );
-            })}
-            {timeline.length === 0 && <p style={{ color: "#6f7d72" }}>No events parsed.</p>}
-          </div>
         )}
 
         {view === "lineup" && (
@@ -1153,7 +1156,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </>
         )}
 
-        {view === "notation" && (
+        {view === "advanced" && (
           <>
             <div className="mt-live">
               <div className="mt-row" style={{ marginBottom: 8 }}>
