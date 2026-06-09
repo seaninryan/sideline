@@ -339,4 +339,21 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .sh-sc { font-weight: 800; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
 .sh-dash { color: #cfe3d8; font-size: 24px; align-self: center; }
 .sh-tie { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #8a6d1a; background: #fdf0c8; border-radius: 6px; padding: 4px 10px; }
+
+/* --- Teams (v48) --- */
+.te { max-width: 620px; margin: 0 auto; }
+.te-field { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-weight: 600; }
+.te-field .mt-inp, .te-field .mt-sel { flex: 1; }
+.te-pick { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-left: 4px; }
+.te-pitch { border-radius: 10px; padding: 14px 8px; }
+.te-slot { cursor: pointer; }
+.tl-list { max-width: 760px; margin: 0 auto; }
+.tl-row { display: flex; align-items: center; gap: 12px; background: var(--card, #fff); border: 1px solid var(--line, #e4dcc6); border-radius: 10px; padding: 11px 14px; margin-bottom: 9px; cursor: pointer; }
+.tl-row:hover { border-color: #1f7a4d; }
+.tl-flag { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+.tl-name { font-weight: 700; font-size: 15px; flex: 1; }
+.tl-meta { color: var(--muted, #6f7d72); font-size: 12px; }
+.tp-id { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.tp-flag { width: 30px; height: 30px; border-radius: 7px; flex: none; }
+.tp-fixtures { color: var(--muted, #6f7d72); text-align: center; padding: 20px; border: 1px dashed var(--line, #e4dcc6); border-radius: 10px; margin: 14px; }
 .sh-lead { margin-top: 4px; font-size: 11px; font-weight: 800; letter-spacing: .5px; color: #14532d; background: #c9f0d6; border-radius: 6px; padding: 3px 9px; }
