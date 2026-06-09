@@ -19,6 +19,9 @@ export interface MatchRecord {
   colorThem?: string;
   colorThem2?: string;
   nameDisplay?: NameDisplay;
+  homeTeamId?: string | null;
+  awayTeamId?: string | null;
+  oppRoster?: TeamRoster;
   savedAt?: number;
 }
 

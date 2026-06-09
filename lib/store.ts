@@ -30,6 +30,8 @@ function matchCols(data: MatchRecord) {
     opponent: opp,
     sport: data.sport || null,
     name_display: data.nameDisplay || "full",
+    home_team_id: data.homeTeamId || null,
+    away_team_id: data.awayTeamId || null,
   };
 }
 
