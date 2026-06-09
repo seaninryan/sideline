@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScoreChart from "@/components/ScoreChart";
 import AppHeader from "@/components/AppHeader";
@@ -27,7 +27,7 @@ export default function PublicMatch({ model }: { model: Model }) {
   const findName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
   const halves: number[] = [...new Set<number>((m.timeline || []).map((t: any) => t.half as number))].sort((a, b) => a - b);
 
-  const sb = createClient();
+  const sb = useMemo(() => createClient(), []);
   const router = useRouter();
   const [share, setShare] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export default function PublicMatch({ model }: { model: Model }) {
         const file = new File([blob], "match.png", { type: "image/png" });
         if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {});
         else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "match.png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
-      });
+      }).catch(() => {});
     } catch { /* ignore */ }
   };
 
