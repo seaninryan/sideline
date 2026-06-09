@@ -36,7 +36,7 @@ export function matchRowView(rec: MatchRecord): RowView {
 
   const usTotal = gpTotal(totals.us.g, totals.us.p, mode);
   const themTotal = gpTotal(totals.them.g, totals.them.p, mode);
-  const usIsHome = header.homeAway === "home";
+  const usIsHome = header.homeAway === "home"; // homeAway "" (no opponent line) → us treated as away; fine for a list row
 
   const usName = rec.myTeam || "My Team";
   const themName = header.opposition || "Opponent";
@@ -61,6 +61,8 @@ export function matchRowView(rec: MatchRecord): RowView {
   };
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 // Human "2h ago" / "Yesterday" / short-date, given an explicit `now` (testable).
 export function relativeDate(iso: string | undefined, now: number): string {
   if (!iso) return "";
@@ -77,6 +79,6 @@ export function relativeDate(iso: string | undefined, now: number): string {
   const dayStart = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((dayStart(nd) - dayStart(d)) / 86400000);
   if (days === 1) return "Yesterday";
-  if (days < 7) return `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  if (days < 7) return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
   return fmtDateShort(iso);
 }

@@ -48,4 +48,6 @@ describe("relativeDate", () => {
     expect(relativeDate("2026-05-01T09:00:00", now)).toMatch(/May/);
   });
   it("empty input → empty string", () => expect(relativeDate("", now)).toBe(""));
+  it("invalid date → empty string", () => expect(relativeDate("not-a-date", now)).toBe(""));
+  it("just now under a minute", () => expect(relativeDate("2026-06-09T11:59:30", now)).toBe("just now"));
 });
