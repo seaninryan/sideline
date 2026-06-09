@@ -3,6 +3,8 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScoreChart from "@/components/ScoreChart";
 import AppHeader from "@/components/AppHeader";
+import ScoreHeader from "@/components/ScoreHeader";
+import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
 import { buildInfographicSVG } from "@/lib/infographic";
@@ -69,28 +71,28 @@ export default function PublicMatch({ model }: { model: Model }) {
         </div>
       )}
 
-      {/* score header */}
-      <div className="pm-head">
-        <div className="pm-topline"><i style={{ background: m.colorUs }} /><i style={{ background: m.colorThem }} /></div>
-        <div className="pm-meta">
-          <span>{(m.grade || m.sport || "Match").toUpperCase()}</span>
-          <span>{m.dateStr}</span>
-        </div>
-        <div className="pm-teams">
-          <div className="pm-team">
-            <span className="pm-flag"><i style={{ background: m.colorUs }} /><i style={{ background: m.colorUs2 }} /></span>
-            <div className="pm-name">{m.usName}</div>
-            <div className="pm-score">{m.totals.us.str}</div>
-          </div>
-          <div className="pm-dash">–</div>
-          <div className="pm-team">
-            <span className="pm-flag"><i style={{ background: m.colorThem }} /><i style={{ background: m.colorThem2 }} /></span>
-            <div className="pm-name">{m.themName} ({m.homeAway === "home" ? "A" : "H"})</div>
-            <div className="pm-score">{m.totals.them.str}</div>
-          </div>
-        </div>
-        {m.result && <span className="pm-result" style={{ background: resBg, color: resFg }}>{resFull}</span>}
-      </div>
+      {/* score header (shared with the editor) */}
+      {(() => {
+        const usIsHome = m.homeAway === "home";
+        const usTotal = gpTotal(m.totals.us.g, m.totals.us.p, m.effMode);
+        const themTotal = gpTotal(m.totals.them.g, m.totals.them.p, m.effMode);
+        const phase = (m.halfMarks || []).some((mk: any) => mk.marker === "FT") ? "over" : "play";
+        return (
+          <ScoreHeader
+            homeName={usIsHome ? m.usName : m.themName}
+            awayName={usIsHome ? m.themName : m.usName}
+            homeStr={usIsHome ? m.totals.us.str : m.totals.them.str}
+            awayStr={usIsHome ? m.totals.them.str : m.totals.us.str}
+            homeColors={usIsHome ? [m.colorUs, m.colorUs2] : [m.colorThem, m.colorThem2]}
+            awayColors={usIsHome ? [m.colorThem, m.colorThem2] : [m.colorUs, m.colorUs2]}
+            grade={m.grade || m.sport || ""}
+            dateStr={m.dateStr}
+            homeTotal={usIsHome ? usTotal : themTotal}
+            awayTotal={usIsHome ? themTotal : usTotal}
+            phase={phase}
+          />
+        );
+      })()}
 
       {/* stats 2x2 */}
       <section className="pm-sec">
