@@ -107,9 +107,9 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // live entry: team -> event -> (player); each tap that completes an event adds it straight away
   const [lvTeam, setLvTeam] = useState("us");
   const [lvEvent, setLvEvent] = useState(null); // pending player event awaiting a "Who?" tap
-  // game mode: full-screen live entry — null when off, else {stage, team?, ev?, off?}
-  // stages: "team" → "event" → "who"; "subOff" → "subOn" for substitutions
-  const [gm, setGm] = useState(null);
+  // game mode is a tab (tab === "game"); gmStage holds the staged-entry position.
+  // stages: "team" → "event" → "who"; "subOff" → "subOn" for substitutions.
+  const [gmStage, setGmStage] = useState({ stage: "team" });
 
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
@@ -401,16 +401,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setSavedMsg(`Removed "${undoTarget.text}"`); setTimeout(() => setSavedMsg(""), 1800);
   };
 
-  // game mode entry closes every open editor/panel — same rule as other raw-mutation paths
-  const enterGame = () => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setModal(null); setColorPick(null); setMenuOpen(false); setGm({ stage: "team" }); };
-  const exitGame = () => setGm(null);
-
   // the wizard touches nothing until its final step, so Cancel is just setNw(null)
-  const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
+  const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
   const enterShare = () => {
     setMenuOpen(false);
     if (!curId) { setSavedMsg("Save the match first, then share"); setTimeout(() => setSavedMsg(""), 2500); return; }
-    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGm(null); setNw(null);
+    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null);
     setShare(true);
   };
   // build + save the wizard's match directly — recordPayload() would read pre-update state.
@@ -702,13 +698,13 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     </div>
   );
 
-  const view = gm ? "game" : nw ? "new" : tab; // game mode / new-match wizard replace the tab body; Share is an inline panel
+  const view = nw ? "new" : tab; // new-match wizard replaces the tab body; game mode is the "game" tab; Share is an inline panel
 
   return (
     <div className="mt-root">
 
       {/* persistent header */}
-      {!(gm || nw) && (
+      {!nw && (
         <AppHeader
           email={userEmail}
           showNew
@@ -731,7 +727,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
-      {!(gm || nw) && modal && (
+      {!nw && modal && (
         <div className="mt-panel">
           {modal.kind === "share" && (
             <>
@@ -760,7 +756,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         </div>
       )}
 
-      {!(gm || nw) && share && curId && (
+      {!nw && share && curId && (
         <ShareSheet
           record={{ ...recordPayload(), savedAt: Date.now() }}
           curId={curId}
@@ -771,7 +767,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       )}
 
       {/* settings */}
-      {!(gm || nw) && (
+      {!nw && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -798,7 +794,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       </div>
       )}
 
-      {!(gm || nw) && colorPick && (() => {
+      {!nw && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -849,7 +845,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       })()}
 
       {/* tabs */}
-      {!(gm || nw) && (
+      {!nw && (
       <div className="mt-tabs">
         {tabs.map(([id, lbl]) => (
           <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
@@ -934,22 +930,21 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               <span className="mt-h" style={{ margin: 0, flex: 1 }}>
                 {phase === "pre" ? "Before throw-in" : phase === "ht" ? "Half time" : phase === "over" ? "Full time" : `Half ${halfMarks.filter((m) => !m.marker).length} — in play`}
               </span>
-              <button className="mt-add alt" onClick={exitGame}>✕ Exit</button>
             </div>
-            {/* a never-saved match doesn't auto-save, and the Save button is hidden in here */}
-            {!curId && (
-              <div className="mt-warn" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ flex: 1 }}><b>Not saved yet</b> — auto-save is off until the first save.</span>
-                <button className="mt-add" onClick={doSave}>Save</button>
-              </div>
+
+            {/* full time: only Undo + a pointer to Advanced */}
+            {phase === "over" && (
+              <p className="mt-note" style={{ marginTop: 0 }}>
+                <b>Full time — match closed.</b> Need to change something? Edit it in the <b>Advanced</b> tab. (Or undo the FT line below to keep adding.)
+              </p>
             )}
 
             {/* stage 1 — who? (+ phase-gated match controls) */}
-            {gm.stage === "team" && (
+            {phase !== "over" && gmStage.stage === "team" && (
               <>
                 <div className="mt-grid">
-                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setGm({ stage: "event", team: "us" })}>{usName}</button>
-                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setGm({ stage: "event", team: "them" })}>{themName}</button>
+                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setGmStage({ stage: "event", team: "us" })}>{usName}</button>
+                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setGmStage({ stage: "event", team: "them" })}>{themName}</button>
                 </div>
                 {(phase === "pre" || phase === "ht") && (
                   <div className="mt-grid" style={{ marginTop: 10 }}>
@@ -958,7 +953,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                 )}
                 {phase === "play" && (
                   <div className="mt-grid" style={{ marginTop: 10 }}>
-                    <button className="mt-big" onClick={() => setGm({ stage: "subOff" })}>Sub</button>
+                    <button className="mt-big" onClick={() => setGmStage({ stage: "subOff" })}>Sub</button>
                     <button className="mt-big" onClick={() => addLive("ht", null)}>HT</button>
                     <button className="mt-big" onClick={() => addLive("ft", null)}>FT</button>
                   </div>
@@ -970,44 +965,44 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             )}
 
             {/* stage 2 — what happened? */}
-            {gm.stage === "event" && (
+            {phase !== "over" && gmStage.stage === "event" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gm.team === "us" ? usName : themName} — what happened?</p>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.team === "us" ? usName : themName} — what happened?</p>
                 <div className="mt-grid">
                   {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
                     <button key={ev.key} className="mt-big ev" onClick={() => {
                       // our player events wait for a "Who?" tap; everything else lands straight in the notation
-                      if (gm.team === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setGm({ ...gm, stage: "who", ev: ev.key });
-                      else { addLive(ev.key, null, gm.team); setGm({ stage: "team" }); }
+                      if (gmStage.team === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setGmStage({ ...gmStage, stage: "who", ev: ev.key });
+                      else { addLive(ev.key, null, gmStage.team); setGmStage({ stage: "team" }); }
                     }}>{ev.label}</button>
                   ))}
                 </div>
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "team" })}>← Back</button>
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team" })}>← Back</button>
               </>
             )}
 
             {/* stage 3 — which player? */}
-            {gm.stage === "who" && (
+            {phase !== "over" && gmStage.stage === "who" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{liveEvents.find((ev) => ev.key === gm.ev).label} — who?</p>
-                {whoGrid((p) => { addLive(gm.ev, p, gm.team); setGm({ stage: "team" }); })}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "event", team: gm.team })}>← Back</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{liveEvents.find((ev) => ev.key === gmStage.ev).label} — who?</p>
+                {whoGrid((p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "team" }); })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "event", team: gmStage.team })}>← Back</button>
               </>
             )}
 
             {/* sub flow — off then on, same line shape as the Lineup tab */}
-            {gm.stage === "subOff" && (
+            {phase !== "over" && gmStage.stage === "subOff" && (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Substitution — who goes off?</p>
-                {whoGrid((p) => p !== "unknown" && setGm({ stage: "subOn", off: p }))}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "team" })}>← Back</button>
+                {whoGrid((p) => p !== "unknown" && setGmStage({ stage: "subOn", off: p }))}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team" })}>← Back</button>
               </>
             )}
-            {gm.stage === "subOn" && (
+            {phase !== "over" && gmStage.stage === "subOn" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gm.off.name} off — who comes on?</p>
-                {whoGrid((p) => { if (p === "unknown") return; completeSub(p.name, gm.off.name); setGm({ stage: "team" }); })}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGm({ stage: "subOff" })}>← Back</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.off.name} off — who comes on?</p>
+                {whoGrid((p) => { if (p === "unknown") return; completeSub(p.name, gmStage.off.name); setGmStage({ stage: "team" }); })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "subOff" })}>← Back</button>
               </>
             )}
 
@@ -1016,6 +1011,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               <span className="t">{undoTarget ? `Last: ${undoTarget.text}` : "Nothing added yet"}</span>
               <button className="mt-add alt" disabled={!undoTarget} onClick={doUndo}>↩ Undo</button>
             </div>
+
+            {/* running timeline beneath the controls */}
+            <p className="mt-h" style={{ marginTop: 16 }}>Timeline</p>
+            {renderTimeline()}
           </div>
         )}
 
@@ -1158,39 +1157,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
         {view === "advanced" && (
           <>
-            <div className="mt-live">
-              <div className="mt-row" style={{ marginBottom: 8 }}>
-                <p className="mt-h" style={{ margin: 0, flex: 1 }}>Add as it happens</p>
-                <button className="mt-add" onClick={enterGame}>▶ Game mode</button>
-                <button className="mt-add alt" disabled={!undoTarget} onClick={doUndo}>↩ Undo</button>
-              </div>
-              <div className="mt-grid" style={{ marginBottom: 8 }}>
-                <button className={"mt-big" + (lvTeam === "us" ? " on" : " off")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => { setLvTeam("us"); setLvEvent(null); }}>{usName}</button>
-                <button className={"mt-big" + (lvTeam === "them" ? " on" : " off")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => { setLvTeam("them"); setLvEvent(null); }}>{themName}</button>
-              </div>
-              <div className="mt-grid">
-                {liveEvents.map((ev) => (
-                  <button key={ev.key} className={"mt-big ev" + (lvEvent === ev.key ? " on" : "")} disabled={!evEnabled(ev.key)}
-                    onClick={() => {
-                      // our player events wait for a "Who?" tap; everything else lands straight in the notation
-                      if (lvTeam === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setLvEvent(lvEvent === ev.key ? null : ev.key);
-                      else addLive(ev.key, null);
-                    }}>{ev.label}</button>
-                ))}
-              </div>
-              {phase !== "play" && (
-                <p className="mt-note" style={{ marginTop: 8, marginBottom: 0 }}>
-                  {phase === "pre" ? "Tap Start half at throw-in to open scoring." : phase === "ht" ? "Half time — Start half opens the second half. Subs live in the Lineup tab." : "Full time — match closed. Undo the FT line to keep adding."}
-                </p>
-              )}
-              {lvEvent && lvTeam === "us" && phase === "play" && (
-                <>
-                  <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Who? — tap to add</p>
-                  {whoGrid((p) => addLive(lvEvent, p))}
-                </>
-              )}
-            </div>
-            <div className="mt-row" style={{ marginTop: 14, marginBottom: 6 }}>
+            <div className="mt-row" style={{ marginTop: 0, marginBottom: 6 }}>
               <p className="mt-h" style={{ margin: 0, flex: 1 }}>{notaView === "blocks" ? "Notation — tap a line to edit" : "Raw notation (edit freely — re-parses instantly)"}</p>
               <button className="mt-add alt" onClick={() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNotaView(notaView === "blocks" ? "text" : "blocks"); }}>
                 {notaView === "blocks" ? "Edit as text" : "Blocks"}
@@ -1318,7 +1285,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </>
         )}
       </div>
-      {!(gm || nw) && (
+      {!nw && (
         <div className="mt-foot">Here We Go · {APP_VERSION}</div>
       )}
     </div>
