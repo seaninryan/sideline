@@ -29,12 +29,12 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
   const shareUrl = `${origin}/m/${slug}`;
 
   useEffect(() => {
-    sb.from("matches").select("is_public,short_code,name_display").eq("id", curId).maybeSingle()
+    Promise.resolve(sb.from("matches").select("is_public,short_code,name_display").eq("id", curId).maybeSingle())
       .then(({ data }) => {
         const d = data as { is_public?: boolean; short_code?: string | null; name_display?: NameDisplay } | null;
         if (d) { setIsPublic(!!d.is_public); if (d.short_code) setSlug(d.short_code); if (d.name_display) setNameDisplay(d.name_display); }
         setLoaded(true);
-      });
+      }).catch(() => setLoaded(true));
   }, [curId]);
 
   // idempotent short_code mint (copied from ShareWizard.ensureShortCode)
@@ -54,10 +54,12 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
   };
 
   const applyNameDisplay = async (v: NameDisplay) => {
+    setBusy(true);
     setNameDisplay(v);
     await store.set(curId, { ...record, nameDisplay: v });
     await sb.from("matches").update({ name_display: v }).eq("id", curId);
     onApplied({ nameDisplay: v, isPublic });
+    setBusy(false);
   };
 
   const publish = async () => {
@@ -110,7 +112,7 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
           <p className="mt-note" style={{ margin: "12px 0 4px" }}>Name privacy</p>
           <div className="mt-grid">
             {NAME_OPTS.map((o) => (
-              <button key={o.v} className={"mt-big sm" + (nameDisplay === o.v ? " on" : "")} onClick={() => applyNameDisplay(o.v)}>{o.label}</button>
+              <button key={o.v} className={"mt-big sm" + (nameDisplay === o.v ? " on" : "")} disabled={busy} onClick={() => applyNameDisplay(o.v)}>{o.label}</button>
             ))}
           </div>
           <button className="mt-add danger" style={{ marginTop: 10 }} disabled={busy} onClick={unshare}>🚫 Unshare (make private)</button>
