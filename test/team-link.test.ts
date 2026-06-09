@@ -18,43 +18,49 @@ describe("rosterToNotationLines", () => {
 });
 
 describe("teamLinkPatch", () => {
-  const rec: MatchRecord = { raw: "U13A Hurling @ Old\n12:00\n5 Birdperson", myTeam: "Old" } as any;
-  it("sets ids by home/away, identity, oppRoster, keeps the grade label", () => {
+  const rec: MatchRecord = { raw: "5 Birdperson", myTeam: "Old", label: "U13A Hurling" } as any;
+  it("sets ids by home/away, identity, opponent, oppRoster — leaves raw untouched", () => {
     const p = teamLinkPatch(rec, { usTeam: us, oppTeam: opp, homeAway: "home" });
     expect(p.homeTeamId).toBe("u1");
     expect(p.awayTeamId).toBe("o1");
     expect(p.myTeam).toBe("Racoons");
+    expect(p.opponent).toBe("Wildebeests");
+    expect(p.homeAway).toBe("home");
+    expect(p.label).toBe("U13A Hurling");
     expect(p.colorUs).toBe("#f5c518");
     expect(p.colorThem).toBe("#c0392b");
     expect(p.oppRoster).toEqual(opp.roster);
     expect(p.oppRoster).not.toBe(opp.roster);
-    expect(p.raw.split("\n")[0]).toBe("U13A Hurling v Wildebeests");
+    expect((p as any).raw).toBeUndefined();
   });
-  it("away mapping swaps the ids", () => {
+  it("away mapping swaps the ids and sets homeAway", () => {
     const p = teamLinkPatch(rec, { usTeam: us, oppTeam: opp, homeAway: "away" });
     expect(p.homeTeamId).toBe("o1");
     expect(p.awayTeamId).toBe("u1");
-    expect(p.raw.split("\n")[0]).toBe("U13A Hurling @ Wildebeests");
+    expect(p.homeAway).toBe("away");
   });
-  it("seeds the roster when the notation has none", () => {
+  it("seeds usRoster from the us team when the record has none", () => {
     const p = teamLinkPatch(rec, { usTeam: us, oppTeam: opp, homeAway: "home" });
-    expect(p.raw).toContain("1. Birdperson");
-    expect(p.raw).toContain("Subs:");
+    expect(p.usRoster).toEqual(us.roster);
+    expect(p.usRoster).not.toBe(us.roster);
   });
-  it("keeps an existing hand-entered roster intact (no reseed)", () => {
-    const withRoster: MatchRecord = { raw: "U13A @ Old\n10. Morty | 11. Rick\n12:00\n5 Morty", myTeam: "Old" } as any;
+  it("keeps an existing record roster intact (no reseed)", () => {
+    const existing = { formation: [[10, 11]], players: [
+      { num: 10, name: "Morty", role: "starting" as const }, { num: 11, name: "Rick", role: "starting" as const }] };
+    const withRoster: MatchRecord = { raw: "5 Morty", myTeam: "Old", usRoster: existing } as any;
     const p = teamLinkPatch(withRoster, { usTeam: us, oppTeam: opp, homeAway: "home" });
-    expect(p.raw).toContain("10. Morty | 11. Rick");
-    expect(p.raw).not.toContain("Birdperson");
+    expect(p.usRoster).toEqual(existing);
+    expect(p.usRoster!.players.some((pl) => pl.name === "Birdperson")).toBe(false);
   });
 });
 
 describe("swapHomeAway", () => {
-  it("flips the header symbol and swaps the team ids", () => {
-    const rec: MatchRecord = { raw: "U13A Hurling @ Wildebeests\n12:00", homeTeamId: "o1", awayTeamId: "u1" } as any;
+  it("flips the homeAway field and swaps the team ids", () => {
+    const rec: MatchRecord = { raw: "5 Birdperson", homeAway: "away", homeTeamId: "o1", awayTeamId: "u1" } as any;
     const p = swapHomeAway(rec);
-    expect(p.raw.split("\n")[0]).toBe("U13A Hurling v Wildebeests");
+    expect(p.homeAway).toBe("home");
     expect(p.homeTeamId).toBe("u1");
     expect(p.awayTeamId).toBe("o1");
+    expect((p as any).raw).toBeUndefined();
   });
 });
