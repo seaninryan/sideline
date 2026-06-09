@@ -1,40 +1,50 @@
-export const SAMPLE = `U13A Hurling @ Wildebeests
-                        1 Birdperson
-2.Jerry S | 3. Beth S | 4. Summer
- 5.Squanchy | 6. Mr Poopybutthole | 7. Gearhead
-          8.Snowball | 9. Jessica
-  10.Morty | 11. Rick | 12. Noob Noob
-13. Tammy | 14.Kyle | 15. Zeep
+import type { MatchRecord, TeamRoster } from "@/lib/types";
 
-Subs
-16.
-17. Pencilvester
-18. Sleepy Gary
-Missing:
-20. Snuffles
-
-18:21
-21 Racoons Point? 0 1
-23 Rick free 0 0-2
-24 Rick free 0 0-3
-25 T11 0-1 0-3
-30 Rick goal 0-1 - 1-3
-31 T free  0-2 - 1-3
-32 Rick free 0-2 - 1-4
-33 Morty 0-2 - 1-5
-They swapped 6 and 3
-36 terry 0-3 - 1-5
-37 T free 0-4 - 1-5
-38 Terry goal 1-4 - 1-5
+// Event-only notation (no header / no roster in the text — those live on the record + teams).
+// Every score is a discrete event; totals are COUNTED. Reproduces Racoons 2-6, Wildebeests 2-7.
+export const SAMPLE = `18:21
+23 Rick free
+24 Rick free
+25 Wildebeests 11
+30 Rick goal
+31 Wildebeests free
+32 Rick free
+33 Morty
+37 Wildebeests free
+38 Wildebeests goal
 43 HT
-
 18:50
-59 T free 1-5 - 1-5
-03 rick goal 1-5 - 2-5
-05 T goal 2-5 - 2-5
-Sleepy Gary for zeep
-06 rick free 2-5 - 2-6
-08 free T 2-6 - 2-6
-Pencilvester for Tammy
-10 T free 2-7 - 2-6
-13 FT`;
+51 Wildebeests free
+53 Rick goal
+55 Wildebeests goal
+56 Rick free
+58 Wildebeests
+60 Wildebeests free
+62 Wildebeests
+64 Racoons
+66 FT`;
+
+const RACOONS: TeamRoster = {
+  formation: [[1], [2, 3, 4], [5, 6, 7], [8, 9], [10, 11, 12], [13, 14, 15]],
+  players: [
+    { num: 1, name: "Birdperson", role: "starting" },
+    { num: 2, name: "Jerry S", role: "starting" }, { num: 3, name: "Beth S", role: "starting" }, { num: 4, name: "Summer", role: "starting" },
+    { num: 5, name: "Squanchy", role: "starting" }, { num: 6, name: "Mr Poopybutthole", role: "starting" }, { num: 7, name: "Gearhead", role: "starting" },
+    { num: 8, name: "Snowball", role: "starting" }, { num: 9, name: "Jessica", role: "starting" },
+    { num: 10, name: "Morty", role: "starting" }, { num: 11, name: "Rick", role: "starting" }, { num: 12, name: "Noob Noob", role: "starting" },
+    { num: 13, name: "Tammy", role: "starting" }, { num: 14, name: "Kyle", role: "starting" }, { num: 15, name: "Zeep", role: "starting" },
+    { num: 17, name: "Pencilvester", role: "sub" }, { num: 18, name: "Sleepy Gary", role: "sub" },
+  ],
+};
+
+// The canonical match record the editor seeds with and tests build on.
+export const SAMPLE_RECORD: MatchRecord = {
+  raw: SAMPLE,
+  myTeam: "Racoons", opponent: "Wildebeests", label: "U13A Hurling", homeAway: "away",
+  sport: "hurling", scoringMode: "gaa", autoMode: true,
+  colorUs: "#f5c518", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8",
+  nameDisplay: "full",
+  usRoster: RACOONS,
+  oppRoster: { formation: [], players: [] },
+  matchDate: "2026-06-02T18:21",
+};

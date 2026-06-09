@@ -30,16 +30,20 @@ function resolveSportEmoji(sportKey: string | undefined, headerSport: string, mo
 export function matchRowView(rec: MatchRecord): RowView {
   const sp = (SPORTS as Record<string, { mode: string }>)[rec.sport || ""];
   const scoringMode = sp ? (sp.mode as "gaa" | "goals") : (rec.autoMode ? undefined : rec.scoringMode);
-  const parsed = parseMatch(rec.raw, { myTeam: rec.myTeam, scoringMode });
+  const parsed = parseMatch(rec.raw, {
+    myTeam: rec.myTeam, scoringMode,
+    usRoster: rec.usRoster, oppRoster: rec.oppRoster,
+    label: rec.label, homeAway: rec.homeAway, opponent: rec.opponent,
+  });
   const { header, totals } = parsed;
   const mode = parsed.mode;
 
   const usTotal = gpTotal(totals.us.g, totals.us.p, mode);
   const themTotal = gpTotal(totals.them.g, totals.them.p, mode);
-  const usIsHome = header.homeAway === "home"; // homeAway "" (no opponent line) → us treated as away; fine for a list row
+  const usIsHome = rec.homeAway === "home"; // homeAway "" (no opponent line) → us treated as away; fine for a list row
 
   const usName = rec.myTeam || "My Team";
-  const themName = header.opposition || "Opponent";
+  const themName = rec.opponent || header.opposition || "Opponent";
   const usColors: [string, string] = [rec.colorUs || "#f5c518", rec.colorUs2 || "#1f7a4d"];
   const themColors: [string, string] = [rec.colorThem || "#c0392b", rec.colorThem2 || "#2c5fa8"];
 

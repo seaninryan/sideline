@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { brandPillSVG, buildInfographicSVG } from "@/lib/infographic";
 import { buildModel } from "@/lib/model";
-import { SAMPLE } from "@/lib/sample";
+import { SAMPLE_RECORD } from "@/lib/sample";
 import { BRAND_SITE, BRAND_WORDMARK, BRAND_CHANT } from "@/lib/constants";
 
 describe("brandPillSVG", () => {
@@ -19,7 +19,7 @@ describe("brandPillSVG", () => {
 });
 
 describe("buildInfographicSVG branding", () => {
-  const model = buildModel({ raw: SAMPLE, myTeam: "Racoons", scoringMode: "gaa" });
+  const model = buildModel(SAMPLE_RECORD);
   const { svg } = buildInfographicSVG(model);
   it("carries the brand lockup in the footer", () => {
     expect(svg).toContain(BRAND_WORDMARK);

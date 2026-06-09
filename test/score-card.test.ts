@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { buildScoreCardSVG } from "@/lib/infographic";
 import { buildModel } from "@/lib/model";
-import { SAMPLE } from "@/lib/sample";
+import { SAMPLE_RECORD } from "@/lib/sample";
 import { BRAND_SITE, BRAND_WORDMARK } from "@/lib/constants";
 
 describe("buildScoreCardSVG", () => {
-  const model = buildModel({ raw: SAMPLE, myTeam: "Racoons", scoringMode: "gaa" });
+  const model = buildModel(SAMPLE_RECORD);
   const { svg, width, height } = buildScoreCardSVG(model);
   it("is a 1200x630 landscape SVG", () => {
     expect(width).toBe(1200);

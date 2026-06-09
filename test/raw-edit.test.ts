@@ -66,46 +66,43 @@ describe("deleteEventLine", () => {
 });
 
 // ---- insertEventLine: anchor picks the half, minute places the line ----
+// Event-only notation (no header / roster block): srcLine == raw line index.
 const BLK = [
-  "U13 Hurling @ Tribesmen",            // 0
-  "10. Morty | 11. Rick",               // 1
-  "Subs",                               // 2
-  "17. Pencilvester",                   // 3
-  "18:21",                              // 4  half 1 start (startMin 21)
-  "23 Rick free 0-1 0-0",               // 5  elapsed 2
-  "27 Jack miss pen",                   // 6  elapsed 6 (note)
-  "31 T 0-1 0-1",                       // 7  elapsed 10
-  "51 HT",                              // 8
-  "18:55",                              // 9  half 2 start (startMin 55)
-  "58 T goal 0-1 1-1",                  // 10 elapsed 3
-  "2 Rick 0-2 1-1",                     // 11 elapsed 7 (wrapped past the hour)
+  "18:21",                              // 0  half 1 start (startMin 21)
+  "23 Rick free 0-1 0-0",               // 1  elapsed 2
+  "27 Jack miss pen",                   // 2  elapsed 6 (note)
+  "31 Wildebeests 0-1 0-1",             // 3  elapsed 10
+  "51 HT",                              // 4
+  "18:55",                              // 5  half 2 start (startMin 55)
+  "58 Wildebeests goal 0-1 1-1",        // 6  elapsed 3
+  "2 Rick 0-2 1-1",                     // 7  elapsed 7 (wrapped past the hour)
 ].join("\n");
 
 describe("insertEventLine", () => {
   const at = (r: string, i: number) => r.split("\n")[i];
   it("insert places by minute", () => {
-    const a = insertEventLine(BLK, 5, "29 Morty 0-2 0-1");
-    expect(at(a, 7)).toEqual("29 Morty 0-2 0-1"); // between the 27' and 31' lines
+    const a = insertEventLine(BLK, 1, "29 Morty 0-2 0-1");
+    expect(at(a, 3)).toEqual("29 Morty 0-2 0-1"); // between the 27' and 31' lines
   });
   it("insert tie lands after existing", () => {
-    const b = insertEventLine(BLK, 5, "27 Morty 0-2 0-1");
-    expect(at(b, 7)).toEqual("27 Morty 0-2 0-1"); // after the existing 27' line
+    const b = insertEventLine(BLK, 1, "27 Morty 0-2 0-1");
+    expect(at(b, 3)).toEqual("27 Morty 0-2 0-1"); // after the existing 27' line
   });
   it("insert never crosses HT", () => {
-    const c = insertEventLine(BLK, 5, "49 Morty 0-2 0-1");
-    expect([at(c, 8), at(c, 9)]).toEqual(["49 Morty 0-2 0-1", "51 HT"]);
+    const c = insertEventLine(BLK, 1, "49 Morty 0-2 0-1");
+    expect([at(c, 4), at(c, 5)]).toEqual(["49 Morty 0-2 0-1", "51 HT"]);
   });
   it("insert wraps past the hour", () => {
-    const d = insertEventLine(BLK, 10, "5 Morty 1-1 1-1"); // half 2, elapsed 10 — wraps
-    expect(at(d, 12)).toEqual("5 Morty 1-1 1-1"); // after the 2' line
+    const d = insertEventLine(BLK, 6, "5 Morty 1-1 1-1"); // half 2, elapsed 10 — wraps
+    expect(at(d, 8)).toEqual("5 Morty 1-1 1-1"); // after the 2' line
   });
   it("insert minute-less goes right after anchor", () => {
-    const e = insertEventLine(BLK, 7, "switched Rick to midfield");
-    expect(at(e, 8)).toEqual("switched Rick to midfield");
+    const e = insertEventLine(BLK, 3, "switched Rick to midfield");
+    expect(at(e, 4)).toEqual("switched Rick to midfield");
   });
   it("insert after half-start block", () => {
-    const f = insertEventLine(BLK, 9, "57 Morty 1-1 1-1"); // anchor = half-2 clock line, elapsed 2
-    expect(at(f, 10)).toEqual("57 Morty 1-1 1-1");
+    const f = insertEventLine(BLK, 5, "57 Morty 1-1 1-1"); // anchor = half-2 clock line, elapsed 2
+    expect(at(f, 6)).toEqual("57 Morty 1-1 1-1");
   });
 });
 
@@ -113,20 +110,20 @@ describe("insertEventLine", () => {
 describe("replaceEventLine", () => {
   const at = (r: string, i: number) => r.split("\n")[i];
   it("replace re-sorts on minute change", () => {
-    const a = replaceEventLine(BLK, 7, "25 T 0-1 0-1"); // 31' -> 25' (elapsed 4): moves before the 27' note
-    expect([at(a, 6), at(a, 7)]).toEqual(["25 T 0-1 0-1", "27 Jack miss pen"]);
+    const a = replaceEventLine(BLK, 3, "25 Wildebeests 0-1 0-1"); // 31' -> 25' (elapsed 4): moves before the 27' note
+    expect([at(a, 2), at(a, 3)]).toEqual(["25 Wildebeests 0-1 0-1", "27 Jack miss pen"]);
   });
   it("replace same minute stays put", () => {
-    const b = replaceEventLine(BLK, 5, "23 Rick 0-1 0-0"); // text-only edit, same minute
-    expect(at(b, 5)).toEqual("23 Rick 0-1 0-0");
+    const b = replaceEventLine(BLK, 1, "23 Rick 0-1 0-0"); // text-only edit, same minute
+    expect(at(b, 1)).toEqual("23 Rick 0-1 0-0");
   });
   it("replace marker stays put", () => {
-    const c = replaceEventLine(BLK, 8, "51 HT +3"); // marker: edited in place, never re-sorted
-    expect(at(c, 8)).toEqual("51 HT +3");
+    const c = replaceEventLine(BLK, 4, "51 HT +3"); // marker: edited in place, never re-sorted
+    expect(at(c, 4)).toEqual("51 HT +3");
   });
   it("replace note same minute stays put", () => {
-    const d = replaceEventLine(BLK, 6, "27 Jack miss pen saved"); // still minuted, same minute
-    expect(at(d, 6)).toEqual("27 Jack miss pen saved");
+    const d = replaceEventLine(BLK, 2, "27 Jack miss pen saved"); // still minuted, same minute
+    expect(at(d, 2)).toEqual("27 Jack miss pen saved");
   });
   it("replace out of range is a no-op", () => expect(replaceEventLine(BLK, 99, "x")).toEqual(BLK));
 });
@@ -136,14 +133,14 @@ describe("insertEventLine contract-pinning", () => {
   const at = (r: string, i: number) => r.split("\n")[i];
   it("insert into bare-minute extra-time half", () => {
     // extra time: a third half started by a bare minute line; insert respects its startMin
-    const ET = BLK + "\n70 FT\n75\n78 Rick 1-2 1-1";
-    const g = insertEventLine(ET, 14, "76 Morty 0-3 1-1"); // anchor = the bare "75" half start
-    expect(at(g, 14)).toEqual("76 Morty 0-3 1-1");
+    const ET = BLK + "\n70 FT\n75\n78 Rick 1-2 1-1"; // FT=8, bare-minute start=9, 78'=10
+    const g = insertEventLine(ET, 10, "76 Morty 0-3 1-1"); // anchor = the 78' line in the bare-minute half
+    expect(at(g, 10)).toEqual("76 Morty 0-3 1-1"); // 76' elapsed 1, before the 78' line
   });
   it("insert with post-FT anchor lands before FT", () => {
     // anchoring past FT still keeps the line inside the half (before the FT marker)
-    const h = insertEventLine(BLK + "\n70 FT\nafter-match note", 13, "65 Morty 0-3 1-1");
-    expect(at(h, 12)).toEqual("65 Morty 0-3 1-1");
+    const h = insertEventLine(BLK + "\n70 FT\nafter-match note", 9, "65 Morty 0-3 1-1");
+    expect(at(h, 8)).toEqual("65 Morty 0-3 1-1");
   });
 });
 

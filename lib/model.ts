@@ -10,13 +10,18 @@ export function buildModel(record: MatchRecord): Model {
   const settings = {
     myTeam: r.myTeam,
     scoringMode: (sp ? sp.mode : (r.autoMode ? undefined : r.scoringMode)) as "gaa" | "goals" | undefined,
+    label: r.label,
+    homeAway: r.homeAway,
+    opponent: r.opponent,
+    usRoster: r.usRoster,
+    oppRoster: r.oppRoster,
   };
   const parsed = parseMatch(r.raw, settings);
   const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = sp ? sp.label : header.sport;
   const usName = r.myTeam || "My Team";
-  const themName = header.opposition || "Opposition";
+  const themName = r.opponent || header.opposition || "Opposition";
 
   const timeline: any[] = [];
   scoring.forEach((s: any) => timeline.push({ kind: "score", ...s }));

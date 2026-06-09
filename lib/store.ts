@@ -22,8 +22,10 @@ export async function loadAll() {
 // Derive the promoted columns from a record. `data` (jsonb) stays the source of truth;
 // opponent isn't stored in the record, so parse it from the header.
 function matchCols(data: MatchRecord) {
-  let opp: string | null = null;
-  try { opp = (parseMatch(data.raw, { myTeam: data.myTeam }).opp) || null; } catch {}
+  let opp: string | null = data.opponent || null;
+  if (!opp) {
+    try { opp = (parseMatch(data.raw, { myTeam: data.myTeam, usRoster: data.usRoster, oppRoster: data.oppRoster }).opp) || null; } catch {}
+  }
   return {
     match_date: data.matchDate || data.date || null,
     my_team: data.myTeam || null,
