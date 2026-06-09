@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import MatchRow from "@/components/MatchRow";
@@ -12,7 +12,7 @@ type Filter = "both" | "personal" | "public";
 const PAGE = 20;
 
 export default function Landing({ userId, email }: { userId: string | null; email: string | null }) {
-  const sb = createClient();
+  const sb = useMemo(() => createClient(), []);
   const router = useRouter();
   const now = Date.now();
 
@@ -21,6 +21,9 @@ export default function Landing({ userId, email }: { userId: string | null; emai
   const [feed, setFeed] = useState<Row[]>([]);
   const [more, setMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
+  const moreRef = useRef(true);
+  const offsetRef = useRef(0);
   const sentinel = useRef<HTMLDivElement | null>(null);
 
   // own matches (RLS already scopes to us, but filter by owner so the global
@@ -29,21 +32,27 @@ export default function Landing({ userId, email }: { userId: string | null; emai
     if (!userId) { setOwn([]); return; }
     sb.from("matches").select("id,short_code,is_public,data,updated_at").eq("owner", userId)
       .order("updated_at", { ascending: false })
-      .then(({ data }) => setOwn(((data as Row[]) || [])));
+      .then(({ data, error }) => { if (error) console.warn(error.message); setOwn(((data as Row[]) || [])); });
   }, [userId]);
 
+  // Refs (not state) gate concurrent/again loads so loadFeed's identity only
+  // depends on userId — otherwise the observer reconnects after every page and
+  // can double-fire while the first page is still in view.
   const loadFeed = useCallback(async () => {
-    if (loading || !more) return;
-    setLoading(true);
+    if (loadingRef.current || !moreRef.current) return;
+    loadingRef.current = true; setLoading(true);
     let q = sb.from("matches").select("id,short_code,data,updated_at")
       .eq("is_public", true).order("updated_at", { ascending: false });
     if (userId) q = q.neq("owner", userId); // own public matches already show above
-    const { data } = await q.range(feed.length, feed.length + PAGE - 1);
+    // Offset pagination: fine for v1. If rows shift between pages a boundary row
+    // can duplicate (shares r.id → same React key, harmless) or be skipped.
+    const { data } = await q.range(offsetRef.current, offsetRef.current + PAGE - 1);
     const rows = (data as Row[]) || [];
+    offsetRef.current += rows.length;
     setFeed((f) => [...f, ...rows]);
-    if (rows.length < PAGE) setMore(false);
-    setLoading(false);
-  }, [feed.length, loading, more, userId]);
+    if (rows.length < PAGE) { moreRef.current = false; setMore(false); }
+    loadingRef.current = false; setLoading(false);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadFeed(); /* first page */ }, []); // eslint-disable-line
 
