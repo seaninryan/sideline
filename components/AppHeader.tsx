@@ -10,6 +10,7 @@ import { BRAND_CHANT } from "@/lib/constants";
 export default function AppHeader({
   email = null,
   showNew = false,
+  showTeams = false,
   onNew,
   onSignIn,
   onSignOut,
@@ -18,6 +19,7 @@ export default function AppHeader({
 }: {
   email?: string | null;
   showNew?: boolean;
+  showTeams?: boolean;
   onNew?: () => void;
   onSignIn?: () => void;
   onSignOut?: () => void;
@@ -41,6 +43,7 @@ export default function AppHeader({
           </span>
         </Link>
         {backHref && <Link className="ah-back" href={backHref}>‹ matches</Link>}
+        {showTeams && <Link className="ah-back" href="/teams">Teams</Link>}
         <div className="grow" />
         {showNew && <button className="mt-btn solid" onClick={onNew}>＋ New</button>}
         {children}

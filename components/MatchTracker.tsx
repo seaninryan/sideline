@@ -708,6 +708,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         <AppHeader
           email={userEmail}
           showNew
+          showTeams
           backHref="/"
           onNew={() => router.push("/m/new")}
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
