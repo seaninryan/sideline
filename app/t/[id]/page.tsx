@@ -24,6 +24,14 @@ export default async function TeamRoutePage({ params }: { params: { id: string }
   const team = await fetchTeam(params.id);
   if (!team) notFound();
   const isOwner = !!auth.user && auth.user.id === team.owner;
+  const { data: fx } = await supabase
+    .from("matches")
+    .select("id,short_code,data,match_date,home_team_id,away_team_id")
+    .or(`home_team_id.eq.${team.id},away_team_id.eq.${team.id}`)
+    .eq("is_public", true)
+    .order("match_date", { ascending: false, nullsFirst: false })
+    .limit(50);
+  const fixtures = (fx || []).map((r: any) => ({ id: r.id, href: `/m/${r.short_code || r.id}`, data: r.data, date: r.match_date || r.data?.matchDate || r.data?.date || null }));
   delete (team as any).owner; // don't ship the owner uuid to the public client
-  return <TeamPage team={team} isOwner={isOwner} />;
+  return <TeamPage team={team} isOwner={isOwner} fixtures={fixtures} />;
 }
