@@ -316,3 +316,13 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .ml-priv { font-size: 11px; }
 .ml-priv.public { color: #1f86c8; }
 .ml-priv.private { color: #9aa49a; }
+
+.ml-page { max-width: 760px; margin: 0 auto; padding: 14px; }
+.ml-sechead { display: flex; align-items: center; gap: 12px; margin: 8px 2px 12px; }
+.ml-sechead h3 { margin: 0; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted, #6f7d72); }
+.ml-seg { display: flex; border: 1px solid var(--line, #e4dcc6); border-radius: 8px; overflow: hidden; margin-left: auto; }
+.ml-seg button { background: transparent; color: var(--muted, #6f7d72); border: none; padding: 6px 13px; font: inherit; font-size: 12px; cursor: pointer; }
+.ml-seg button.on { background: #1f7a4d; color: #fff; }
+.ml-note { color: var(--muted, #6f7d72); font-size: 13px; padding: 4px 2px; }
+.ml-empty { text-align: center; padding: 22px; border: 1px dashed var(--line, #e4dcc6); border-radius: 10px; color: var(--muted, #6f7d72); }
+.ml-empty button { margin-top: 10px; }
