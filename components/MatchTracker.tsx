@@ -809,7 +809,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         <label>My team <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
         <label>
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
-            value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => setHeaderField("homeAway", e.target.value)}>
+            value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => {
+              const v = e.target.value;
+              const flipped = (header.homeAway === "home" ? "home" : "away") !== v;
+              setHeaderField("homeAway", v);
+              if (flipped && (homeTeamId || awayTeamId)) { setHomeTeamId(awayTeamId); setAwayTeamId(homeTeamId); }
+            }}>
             <option value="away">Away @</option>
             <option value="home">Home v</option>
           </select>
