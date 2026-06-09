@@ -96,8 +96,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   useEffect(() => { if (curId) setTab(phase === "over" ? "details" : "game"); /* eslint-disable-next-line */ }, [curId]);
   // switching tabs closes any open Advanced editor and resets the game-mode stage
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGmStage({ stage: "team" }); }, [tab]);
-  const [userEmailId, setUserEmailId] = useState("");
-  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserEmailId((data && data.user && data.user.id) || ""); }); }, []);
+  const [userUid, setUserUid] = useState("");
+  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); }); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
@@ -788,7 +788,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
       {!nw && link && curId && (
         <LinkTeams
-          userId={userEmailId}
+          userId={userUid}
           record={recordPayload()}
           currentHomeAway={header.homeAway === "home" ? "home" : "away"}
           onClose={() => setLink(false)}

@@ -18,7 +18,8 @@ export default function LinkTeams({ userId, record, currentHomeAway, onApply, on
   const [teams, setTeams] = useState<TeamRecord[] | null>(null);
   const [usId, setUsId] = useState<string>(record.homeTeamId && record.awayTeamId
     ? (currentHomeAway === "home" ? record.homeTeamId : record.awayTeamId)! : "");
-  const [oppId, setOppId] = useState<string>("");
+  const [oppId, setOppId] = useState<string>(record.homeTeamId && record.awayTeamId
+    ? (currentHomeAway === "home" ? record.awayTeamId : record.homeTeamId)! : "");
   const [homeAway, setHomeAway] = useState<"home" | "away">(currentHomeAway);
 
   useEffect(() => { teamStore.list(userId).then(setTeams); }, [userId]);
