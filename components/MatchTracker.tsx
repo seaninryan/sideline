@@ -19,6 +19,8 @@ import {
 } from "@/lib/util";
 import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
+import LinkTeams from "@/components/LinkTeams";
+import { swapHomeAway } from "@/lib/team-link";
 import AppHeader from "@/components/AppHeader";
 import ScoreHeader from "@/components/ScoreHeader";
 import { useRouter } from "next/navigation";
@@ -94,7 +96,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   useEffect(() => { if (curId) setTab(phase === "over" ? "details" : "game"); /* eslint-disable-next-line */ }, [curId]);
   // switching tabs closes any open Advanced editor and resets the game-mode stage
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGmStage({ stage: "team" }); }, [tab]);
-  useEffect(() => { sb.auth.getUser().then(({ data }) => setUserEmail((data && data.user && data.user.email) || "")); }, []);
+  const [userEmailId, setUserEmailId] = useState("");
+  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserEmailId((data && data.user && data.user.id) || ""); }); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
@@ -115,6 +118,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
   const [share, setShare] = useState(false);
+  const [link, setLink] = useState(false);
+  const [homeTeamId, setHomeTeamId] = useState(null);
+  const [awayTeamId, setAwayTeamId] = useState(null);
+  const [oppRoster, setOppRoster] = useState(null);
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode) }), [raw, myTeam, scoringMode, autoMode, sport]);
@@ -192,7 +199,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, homeTeamId, awayTeamId, oppRoster });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -201,7 +208,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, saved]);
+  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, homeTeamId, awayTeamId, oppRoster, saved]);
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -223,7 +230,17 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
-  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay]);
+  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, homeTeamId, awayTeamId, oppRoster]);
+  // legacy matches (no team links) get a gentle one-time "Link teams?" nudge on open
+  const linkNudged = useRef(false);
+  useEffect(() => { linkNudged.current = false; }, [curId]);
+  useEffect(() => {
+    if (curId && !homeTeamId && !awayTeamId && !linkNudged.current && !nw) {
+      linkNudged.current = true;
+      setSavedMsg("Tip: link this match to teams (🤝) for fixtures + opponent lineup");
+      setTimeout(() => setSavedMsg(""), 4000);
+    }
+  }, [curId, homeTeamId, awayTeamId, nw]);
   // Re-pull the server copy (e.g. edits made on another device) on demand.
   const doResync = async () => {
     if (dirty && curId && !window.confirm("This match has unsaved changes here — load the server copy over them?")) return;
@@ -247,6 +264,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
     setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
     setNameDisplay(d.nameDisplay || "full");
+    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
   const doNew = async () => {
@@ -719,6 +737,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
             </svg>
           </button>
+          <button className="mt-btn" aria-label="Link teams" title="Link teams" onClick={() => { setShare(false); setLink((o) => !o); }}>🤝</button>
           <button className="mt-btn" aria-label="Resync" title="Resync from server" onClick={doResync}>⟳</button>
           <button className={"mt-btn" + (confirmDel ? " danger" : "")} aria-label="Delete match" title={confirmDel ? "Tap again to delete" : "Delete match"} onClick={() => {
             if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
@@ -767,6 +786,21 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         />
       )}
 
+      {!nw && link && curId && (
+        <LinkTeams
+          userId={userEmailId}
+          record={recordPayload()}
+          currentHomeAway={header.homeAway === "home" ? "home" : "away"}
+          onClose={() => setLink(false)}
+          onApply={(p) => {
+            setRaw(p.raw); setMyTeam(p.myTeam);
+            setColorUs(p.colorUs); setColorUs2(p.colorUs2); setColorThem(p.colorThem); setColorThem2(p.colorThem2);
+            setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId); setOppRoster(p.oppRoster);
+            setSavedMsg("Teams linked ✓"); setTimeout(() => setSavedMsg(""), 2000);
+          }}
+        />
+      )}
+
       {/* settings */}
       {!nw && (
       <div className="mt-settings">
@@ -780,6 +814,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             <option value="home">Home v</option>
           </select>
         </label>
+        <button className="mt-btn" title="Swap home/away" onClick={() => {
+          const p = swapHomeAway(recordPayload());
+          setRaw(p.raw); setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId);
+        }}>⇄ Swap</button>
         <label>Opponent <input type="text" value={header.opposition || ""} placeholder="Opponent"
           onChange={(e) => setHeaderField("opposition", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorThem }} onClick={() => setColorPick(colorPick === "them" ? null : "them")} /><button className="mt-swatch" title="Secondary" style={{ background: colorThem2 }} onClick={() => setColorPick(colorPick === "them2" ? null : "them2")} /></label>
         <label>Sport
