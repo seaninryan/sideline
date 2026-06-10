@@ -129,6 +129,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
   const [nwTeams, setNwTeams] = useState([]); // TeamRecord[] loaded when the wizard opens
+  // /m/new mounts the wizard before getUser resolves; once userUid arrives, load teams if the wizard is open
+  useEffect(() => {
+    if (userUid && nw && nwTeams.length === 0) teamStore.list(userUid).then(setNwTeams).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userUid]);
   const [share, setShare] = useState(false);
   const [link, setLink] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState(null);
@@ -434,7 +439,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
   const nwPickUs = (t) => setNw({ ...nw, us: t, sport: t.sport || nw.sport, stage: "opp" });
   const nwCreateUs = async (name) => {
-    if (!userUid || !nw.sport) return; // a new your-team requires a sport (chosen via the sport buttons)
+    if (!userUid) return;
+    if (!nw.sport) { setSavedMsg("Pick a sport first"); setTimeout(() => setSavedMsg(""), 2500); return; } // a new your-team requires a sport
     const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#f5c518", color2: "#1f7a4d" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, us: t, stage: "opp" }); }
   };
