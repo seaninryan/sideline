@@ -21,7 +21,10 @@ import {
 import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
 import LinkTeams from "@/components/LinkTeams";
-import { swapHomeAway } from "@/lib/team-link";
+import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
+import { teamStore } from "@/lib/team-store";
+import { pairingError } from "@/lib/match-sport";
+import TeamPicker from "@/components/TeamPicker";
 import AppHeader from "@/components/AppHeader";
 import ScoreHeader from "@/components/ScoreHeader";
 import { useRouter } from "next/navigation";
@@ -125,6 +128,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
+  const [nwTeams, setNwTeams] = useState([]); // TeamRecord[] loaded when the wizard opens
+  // /m/new mounts the wizard before getUser resolves; once userUid arrives, load teams if the wizard is open
+  useEffect(() => {
+    if (userUid && nw && nwTeams.length === 0) teamStore.list(userUid).then(setNwTeams).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userUid]);
   const [share, setShare] = useState(false);
   const [link, setLink] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState(null);
@@ -151,26 +160,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       });
     }
     return Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 12);
-  }, [saved]);
-
-  // previous teams for the new-match wizard, most recent fixture first.
-  // Parsing just the header line is cheap and reuses the canonical header logic.
-  const prevTeams = useMemo(() => {
-    const recs = Object.keys(cache).map((id) => cache[id] || {})
-      .sort((a, b) => dateKey(b.date, b.savedAt || 0) - dateKey(a.date, a.savedAt || 0));
-    const us = [], opps = [], usSeen = new Set(), oppSeen = new Set();
-    for (const d of recs) {
-      const team = (d.myTeam || "").trim();
-      const label = isPlaceholderLabel(d.label) ? "" : (d.label || "").trim();
-      const uk = squash(team) + "|" + squash(label);
-      if (team && !usSeen.has(uk)) { usSeen.add(uk); us.push({ team, label, colorUs: d.colorUs, colorUs2: d.colorUs2, sport: d.sport || "" }); }
-      const opp = (d.opponent || "").trim();
-      if (opp && !isPlaceholderLabel(opp) && opp.toLowerCase() !== "opponent" && !oppSeen.has(squash(opp))) {
-        oppSeen.add(squash(opp));
-        opps.push({ name: opp, colorThem: d.colorThem, colorThem2: d.colorThem2, sport: d.sport || "" });
-      }
-    }
-    return { us, opps };
   }, [saved]);
 
   // auto-switch handled in parser via score format; effMode = parsed.mode
@@ -435,7 +424,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   };
 
   // the wizard touches nothing until its final step, so Cancel is just setNw(null)
-  const enterNew = () => { setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw({ stage: "date", date: toLocalInput(new Date()), team: "", label: "", sport: null, homeAway: "away", colors: null, oppName: "" }); };
+  const enterNew = () => {
+    setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
+    setNw({ stage: "date", date: toLocalInput(new Date()), label: "", sport: "", homeAway: "away", us: null, opp: null });
+    if (userUid) teamStore.list(userUid).then(setNwTeams).catch(() => setNwTeams([]));
+  };
   const enterShare = () => {
     setMenuOpen(false);
     if (!curId) { setSavedMsg("Save the match first, then share"); setTimeout(() => setSavedMsg(""), 2500); return; }
@@ -444,25 +437,50 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   };
   // build + save the wizard's match directly — recordPayload() would read pre-update state.
   // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
-  const finishNew = async (opp, oppColors, oppSport) => {
-    if (creatingRef.current) return; // double-tap guard — one tap, one match
+  const nwPickUs = (t) => setNw({ ...nw, us: t, sport: t.sport || nw.sport, stage: "opp" });
+  const nwCreateUs = async (name) => {
+    if (!userUid) return;
+    if (!nw.sport) { setSavedMsg("Pick a sport first"); setTimeout(() => setSavedMsg(""), 2500); return; } // a new your-team requires a sport
+    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#f5c518", color2: "#1f7a4d" });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, us: t, stage: "opp" }); }
+  };
+  const nwPickOpp = (t) => setNw({ ...nw, opp: t });
+  const nwCreateOpp = async (name) => {
+    if (!userUid || !nw.sport) return;
+    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#c0392b", color2: "#2c5fa8" });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, opp: t }); }
+  };
+  const nwSetSport = async (s) => {
+    if (!userUid) { setNw({ ...nw, sport: s }); return; }
+    let us = nw.us;
+    if (us && us.sport !== s) {
+      const v = await teamStore.findOrCreate(userUid, { name: us.name, sport: s, color1: us.color1, color2: us.color2 });
+      if (v) { us = v; setNwTeams((xs) => [v, ...xs.filter((x) => x.id !== v.id)]); }
+    }
+    setNw({ ...nw, sport: s, us, opp: null });
+  };
+  const finishNew = async () => {
+    if (creatingRef.current || !nw.us || !nw.opp) return;
+    if (pairingError(nw.us.sport, nw.opp.sport)) return;
     creatingRef.current = true;
     try {
-      const team = nw.team.trim() || "My Team";
-      const newLabel = nw.label.trim() || team;
-      const newHomeAway = nw.homeAway === "home" ? "home" : "away";
-      const newOpp = opp.trim();
-      const newRaw = "";
-      const newSport = nw.sport || oppSport || sport || "";
-      const cu = nw.colors ? nw.colors[0] : colorUs, cu2 = nw.colors ? nw.colors[1] : colorUs2;
-      const ct = oppColors ? oppColors[0] : colorThem, ct2 = oppColors ? oppColors[1] : colorThem2;
-      const mode = SPORTS[newSport] ? SPORTS[newSport].mode : parseMatch(newRaw, { myTeam: team }).mode;
-      setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
-      setLabel(newLabel); setHomeAway(newHomeAway); setOpponent(newOpp); setUsRoster(null); setLegacyRaw(undefined);
-      setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
+      const sportKey = nw.us.sport || nw.opp.sport || "";
+      const mode = SPORTS[sportKey] ? SPORTS[sportKey].mode : "gaa";
+      const patch = teamLinkPatch({ label: nw.label }, { usTeam: nw.us, oppTeam: nw.opp, homeAway: nw.homeAway });
+      const label = (nw.label || "").trim() || nw.us.name;
+      const rec = {
+        raw: "", matchDate: nw.date, date: nw.date, scoringMode: mode, autoMode: true,
+        sport: sportKey || undefined, notationV: 2, nameDisplay: "full", savedAt: Date.now(),
+        ...patch, label,
+      };
+      setRaw(""); setMyTeam(patch.myTeam); setOpponent(patch.opponent); setLabel(label);
+      setHomeAway(patch.homeAway); setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
+      setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster); setLegacyRaw(undefined);
+      setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
+      setSport(sportKey); setScoringMode(mode); setAutoMode(true);
       setMatchDate(nw.date); setNw(null); setTab("game");
       const id = mkId();
-      const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, label: newLabel, homeAway: newHomeAway, opponent: newOpp, notationV: 2, savedAt: Date.now() });
+      const ok = await store.set(id, rec);
       if (ok) { setCurId(id); router.replace(`/m/${id}`); }
       else { setCurId(null); setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
     } finally {
@@ -938,28 +956,22 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                 <div className="mt-grid" style={{ marginTop: 12 }}>
                   <button className="mt-big gm-team" onClick={() => setNw({ ...nw, stage: "us" })}>Next →</button>
                 </div>
-                <button className="mt-add alt" style={{ marginTop: 14 }} onClick={doNew}>Skip — blank match</button>
               </>
             )}
 
             {/* stage 2 — your team? */}
             {nw.stage === "us" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Your team? — picking applies name, colours and sport</p>
-                <div className="mt-grid">
-                  {prevTeams.us.map((t) => (
-                    <button key={t.team + "|" + t.label} className="mt-big nw-team" style={{ background: t.colorUs || "#f5c518", color: contrastOn(t.colorUs || "#f5c518"), borderColor: t.colorUs2 || "var(--line)" }}
-                      onClick={() => setNw({ ...nw, stage: "opp", team: t.team, label: t.label || t.team, sport: t.sport || null, colors: [t.colorUs || colorUs, t.colorUs2 || colorUs2] })}>
-                      {SPORTS[t.sport] ? SPORTS[t.sport].emoji + " " : ""}{t.team}{t.label && squash(t.label) !== squash(t.team) ? <span className="sub"> · {t.label}</span> : null}
-                    </button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Your team — pick a saved team or create one</p>
+                <div className="mt-row" style={{ marginBottom: 8 }}>
+                  <input className="nw-in" placeholder="grade/label — e.g. U13A Championship" value={nw.label} onChange={(e) => setNw({ ...nw, label: e.target.value })} />
+                </div>
+                <div className="mt-grid nw-sports">
+                  {Object.entries(SPORTS).map(([k, s]) => (
+                    <button key={k} className={"mt-big" + (nw.sport === k ? " on" : " off")} onClick={() => setNw({ ...nw, sport: k })}>{s.emoji} {s.label}</button>
                   ))}
                 </div>
-                <p className="mt-note" style={{ margin: "12px 0 4px" }}>…or a new team</p>
-                <div className="mt-row">
-                  <input className="nw-in" placeholder="team name" value={nw.team} onChange={(e) => setNw({ ...nw, team: e.target.value })} />
-                  <input className="nw-in" placeholder="grade/label (optional)" value={nw.label} onChange={(e) => setNw({ ...nw, label: e.target.value })} />
-                  <button className="mt-add" disabled={!nw.team.trim()} onClick={() => setNw({ ...nw, stage: "opp", sport: null, colors: null })}>Next →</button>
-                </div>
+                <TeamPicker teams={nwTeams} side="us" onPick={nwPickUs} onCreate={nwCreateUs} />
                 <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
               </>
             )}
@@ -971,21 +983,22 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                   <button className={"mt-big" + (nw.homeAway === "home" ? " on" : " off")} onClick={() => setNw({ ...nw, homeAway: "home" })}>Home v</button>
                   <button className={"mt-big" + (nw.homeAway === "away" ? " on" : " off")} onClick={() => setNw({ ...nw, homeAway: "away" })}>Away @</button>
                 </div>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Against? — picking applies their colours</p>
-                <div className="mt-grid">
-                  {prevTeams.opps.map((o) => (
-                    <button key={o.name} className="mt-big nw-team" style={{ background: o.colorThem || "#c0392b", color: contrastOn(o.colorThem || "#c0392b"), borderColor: o.colorThem2 || "var(--line)" }}
-                      onClick={() => finishNew(o.name, [o.colorThem || colorThem, o.colorThem2 || colorThem2], o.sport || null)}>
-                      {o.name}
-                    </button>
-                  ))}
+                <div className="mt-row" style={{ marginBottom: 8, alignItems: "center" }}>
+                  <span className="mt-note" style={{ margin: 0, flex: 1 }}>Sport: {nw.sport && SPORTS[nw.sport] ? `${SPORTS[nw.sport].emoji} ${SPORTS[nw.sport].label}` : "—"}</span>
+                  <div className="nw-sports-mini">
+                    {Object.entries(SPORTS).map(([k, s]) => (
+                      <button key={k} className={"mt-add" + (nw.sport === k ? "" : " alt")} onClick={() => nwSetSport(k)}>{s.emoji}</button>
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-note" style={{ margin: "12px 0 4px" }}>…or a new opponent</p>
-                <div className="mt-row">
-                  <input className="nw-in" placeholder="opponent" value={nw.oppName} onChange={(e) => setNw({ ...nw, oppName: e.target.value })} />
-                  <button className="mt-add" disabled={!nw.oppName.trim()} onClick={() => finishNew(nw.oppName, null, null)}>Create →</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Opponent — {nw.opp ? <b>{nw.opp.name}</b> : "pick or create"}</p>
+                {nw.sport
+                  ? <TeamPicker teams={nwTeams} sport={nw.sport} side="them" onPick={nwPickOpp} onCreate={nwCreateOpp} />
+                  : <p className="mt-note" style={{ margin: 0 }}>Pick a sport above first — it scopes the opponent list.</p>}
+                <div className="mt-grid" style={{ marginTop: 12 }}>
+                  <button className="mt-big gm-team" disabled={!nw.us || !nw.opp || !!pairingError(nw.us && nw.us.sport, nw.opp && nw.opp.sport)} onClick={finishNew}>Create match →</button>
                 </div>
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "us" })}>← Back</button>
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "us", opp: null })}>← Back</button>
               </>
             )}
           </div>
