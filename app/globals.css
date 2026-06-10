@@ -377,9 +377,40 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .te { max-width: 620px; margin: 0 auto; }
 .te-field { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-weight: 600; }
 .te-field .mt-inp, .te-field .mt-sel { flex: 1; }
+/* the editor sits on the light page, so its fields need dark-on-white (not the dark top-bar styling) */
+.te .mt-inp, .te .mt-sel { background: #fff; color: var(--ink); border: 1px solid var(--line); cursor: text; }
+.te .mt-sel { cursor: pointer; }
 .te-pick { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-left: 4px; }
 .te-pitch { border-radius: 10px; padding: 14px 8px; }
 .te-slot { cursor: pointer; }
+
+/* RosterPitch (v54) — shared formation pitch + inline name/number edit + swap */
+.rp-pitch { border-radius: 10px; padding: 14px 8px; }
+.rp-tools { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.rp-hint { font-family: var(--font-oswald); font-size: 12px; color: #8fb0a3; }
+.rp-target { flex: none; align-self: center; background: rgba(245,197,24,.16); border: 1px dashed #f5c518; color: #f5c518; font-family: var(--font-oswald); cursor: pointer; width: 30px; height: 30px; border-radius: 50%; font-size: 16px; line-height: 1; }
+.rp-target:hover { background: rgba(245,197,24,.3); }
+.rp-target.wide { width: auto; height: auto; border-radius: 16px; padding: 7px 16px; font-size: 13px; }
+.rp-target.sm { width: auto; height: auto; border-radius: 13px; padding: 3px 10px; font-size: 11px; margin-left: 8px; vertical-align: middle; }
+.rp-newline { min-height: 44px; border: 1px dashed rgba(245,197,24,.4); border-radius: 9px; margin: 8px 12px; justify-content: center; }
+.rp-line { margin: 8px 0; align-items: flex-start; }
+.rp-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 88px; background: transparent; border: 0; padding: 4px; border-radius: 9px; cursor: default; }
+.rp-slot.ed { cursor: pointer; }
+.rp-slot.ed:hover { background: rgba(255,255,255,.08); }
+.rp-slot.picked { background: rgba(245,197,24,.22); outline: 2px solid #f5c518; }
+.rp-slot .nm { font-family: var(--font-oswald); font-weight: 500; font-size: 13px; color: #eaf3ee; text-align: center; line-height: 1.15; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
+.rp-subhead { text-align: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8fb0a3; margin: 12px 0 2px; }
+.rp-edit { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 132px; background: rgba(0,0,0,.28); border-radius: 9px; padding: 8px 6px; }
+.rp-edit .rp-num { width: 48px; text-align: center; font-size: 15px; padding: 6px; border-radius: 7px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.rp-edit .rp-name { width: 100%; font-size: 14px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.rp-edit-btns { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+.rp-edit-btns .mt-add { padding: 5px 9px; font-size: 12px; }
+
+/* on/off switch */
+.sw { width: 46px; height: 26px; border-radius: 14px; border: 1px solid #c2b894; background: #d8cfb8; position: relative; cursor: pointer; flex: none; padding: 0; transition: background .15s; }
+.sw.on { background: #1f7a4d; border-color: #1f7a4d; }
+.sw-k { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+.sw.on .sw-k { left: 22px; }
 .tl-list { max-width: 760px; margin: 0 auto; }
 .tl-row { display: flex; align-items: center; gap: 12px; background: var(--card, #fff); border: 1px solid var(--line, #e4dcc6); border-radius: 10px; padding: 11px 14px; margin-bottom: 9px; cursor: pointer; text-decoration: none; color: inherit; }
 .tl-row:hover { border-color: #1f7a4d; }
