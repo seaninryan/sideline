@@ -1,7 +1,7 @@
 "use client";
 import { createClient } from "@/lib/supabase/client";
 import { genShortCode } from "@/lib/short-code";
-import type { TeamRecord, TeamRoster } from "@/lib/types";
+import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
 import { teamMatchKey } from "@/lib/match-sport";
 import { templateForSport } from "@/lib/team-templates";
 import { mkId } from "@/lib/util";
@@ -11,13 +11,15 @@ const sb = createClient();
 interface TeamRow {
   id: string; owner?: string; short_code?: string | null;
   name: string; color1?: string | null; color2?: string | null;
-  sport?: string | null; roster: TeamRoster; updated_at?: string;
+  sport?: string | null; roster: TeamRoster;
+  is_public?: boolean | null; name_display?: NameDisplay | null; updated_at?: string;
 }
 
 const toRecord = (r: TeamRow): TeamRecord => ({
   id: r.id, owner: r.owner, short_code: r.short_code ?? null,
   name: r.name, color1: r.color1 ?? undefined, color2: r.color2 ?? undefined,
-  sport: r.sport ?? undefined, roster: r.roster, updated_at: r.updated_at,
+  sport: r.sport ?? undefined, roster: r.roster,
+  is_public: !!r.is_public, name_display: r.name_display ?? "full", updated_at: r.updated_at,
 });
 
 // idempotent short_code mint (mirrors ShareSheet.ensureShortCode)
@@ -69,6 +71,27 @@ export const teamStore = {
   },
   async del(id: string): Promise<boolean> {
     const { error } = await sb.from("teams").delete().eq("id", id);
+    return !error;
+  },
+  // Global feed of public teams (own + others), newest first. Offset-paginated.
+  async listPublic({ offset = 0, limit = 5 }: { offset?: number; limit?: number } = {}): Promise<TeamRecord[]> {
+    const { data, error } = await sb.from("teams").select("*").eq("is_public", true)
+      .order("updated_at", { ascending: false }).range(offset, offset + limit - 1);
+    if (error) { console.warn("public teams failed", error.message); return []; }
+    return (data as TeamRow[] || []).map(toRecord);
+  },
+  // Make a team public with a name-privacy setting (mints a short_code if needed).
+  async publish(id: string, nameDisplay: NameDisplay): Promise<boolean> {
+    await ensureShortCode(id);
+    const { error } = await sb.from("teams").update({ is_public: true, name_display: nameDisplay }).eq("id", id);
+    return !error;
+  },
+  async unpublish(id: string): Promise<boolean> {
+    const { error } = await sb.from("teams").update({ is_public: false }).eq("id", id);
+    return !error;
+  },
+  async setNameDisplay(id: string, v: NameDisplay): Promise<boolean> {
+    const { error } = await sb.from("teams").update({ name_display: v }).eq("id", id);
     return !error;
   },
 };

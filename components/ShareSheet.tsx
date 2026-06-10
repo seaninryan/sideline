@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { store } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { genShortCode } from "@/lib/short-code";
+import { teamsToPublish } from "@/lib/team-link";
 import type { MatchRecord, NameDisplay } from "@/lib/types";
 
 const NAME_OPTS: { v: NameDisplay; label: string }[] = [
@@ -53,11 +54,16 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
     } catch { return curId; }
   };
 
+  // Linked teams (both sides — incl. the opponent, which is one of our records).
+  const teamIds = teamsToPublish(record);
+
   const applyNameDisplay = async (v: NameDisplay) => {
     setBusy(true);
     setNameDisplay(v);
     await store.set(curId, { ...record, nameDisplay: v });
     await sb.from("matches").update({ name_display: v }).eq("id", curId);
+    // keep the (already public) linked teams' name privacy in sync
+    if (isPublic && teamIds.length) await sb.from("teams").update({ name_display: v }).in("id", teamIds);
     onApplied({ nameDisplay: v, isPublic });
     setBusy(false);
   };
@@ -68,6 +74,8 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
     const code = await ensureShortCode();
     setSlug(code);
     await sb.from("matches").update({ is_public: true, name_display: nameDisplay }).eq("id", curId);
+    // sharing a match makes its teams public too (sticky — unshare won't undo this)
+    if (teamIds.length) await sb.from("teams").update({ is_public: true, name_display: nameDisplay }).in("id", teamIds);
     setIsPublic(true);
     onApplied({ nameDisplay, isPublic: true });
     setBusy(false);

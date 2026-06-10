@@ -5,9 +5,14 @@ import { templateForSport } from "@/lib/team-templates";
 import { renamePlayer, renumberPlayer, addPlayer, removePlayer } from "@/lib/team-roster";
 import { mkId, contrastOn } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
-import type { TeamRecord, TeamRoster } from "@/lib/types";
+import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
 
 const EMPTY: TeamRoster = { formation: [], players: [] };
+const NAME_OPTS: { v: NameDisplay; label: string }[] = [
+  { v: "full", label: "Full" },
+  { v: "initials", label: "Initials" },
+  { v: "none", label: "None" },
+];
 
 export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord | null; onDone: () => void }) {
   const [id] = useState(() => initial?.id || mkId());
@@ -19,6 +24,29 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
   const [edit, setEdit] = useState<{ num: number; name: string; num2: string } | null>(null);
   const [pick, setPick] = useState<null | "c1" | "c2">(null);
   const [busy, setBusy] = useState(false);
+
+  // sharing (existing teams only)
+  const [isPub, setIsPub] = useState(!!initial?.is_public);
+  const [nameDisp, setNameDisp] = useState<NameDisplay>(initial?.name_display || "full");
+  const [shortCode, setShortCode] = useState<string | null>(initial?.short_code || null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const origin = typeof location !== "undefined" ? location.origin : "";
+  const shareUrl = shortCode ? `${origin}/t/${shortCode}` : "";
+
+  const doPublish = async () => {
+    setShareBusy(true);
+    await teamStore.publish(id, nameDisp);
+    const fresh = await teamStore.get(id);
+    setShortCode(fresh?.short_code || null);
+    setIsPub(true); setShareBusy(false);
+  };
+  const doUnpublish = async () => { setShareBusy(true); await teamStore.unpublish(id); setIsPub(false); setShareBusy(false); };
+  const changeNameDisp = async (v: NameDisplay) => {
+    setNameDisp(v);
+    if (isPub) { setShareBusy(true); await teamStore.setNameDisplay(id, v); setShareBusy(false); }
+  };
+  const copyLink = () => { navigator.clipboard?.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   const byNum = (n: number) => roster.players.find((p) => p.num === n);
   const subs = roster.players.filter((p) => p.role === "sub");
@@ -115,6 +143,36 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
       <div className="mt-row" style={{ marginTop: 14 }}>
         <button className="mt-add" disabled={!name.trim() || busy} onClick={save}>{busy ? "Saving…" : "Save team"}</button>
       </div>
+
+      {initial && (
+        <div className="mt-live" style={{ marginTop: 16 }}>
+          <span className="mt-h" style={{ margin: 0 }}>Sharing</span>
+          {!isPub ? (
+            <>
+              <p className="mt-note" style={{ margin: "10px 0 4px" }}>Player names on the public page:</p>
+              <div className="mt-grid">
+                {NAME_OPTS.map((o) => (
+                  <button key={o.v} className={"mt-big sm" + (nameDisp === o.v ? " on" : "")} onClick={() => setNameDisp(o.v)}>{o.label}</button>
+                ))}
+              </div>
+              <button className="mt-add" style={{ marginTop: 10 }} disabled={shareBusy} onClick={doPublish}>{shareBusy ? "Publishing…" : "🌐 Make public & get link"}</button>
+            </>
+          ) : (
+            <>
+              <p className="mt-note" style={{ margin: "10px 0 4px" }}>Public link</p>
+              <input className="mt-inp" readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%" }} />
+              <button className="mt-add" style={{ marginTop: 6 }} onClick={copyLink}>{copied ? "Copied ✓" : "🔗 Copy public link"}</button>
+              <p className="mt-note" style={{ margin: "12px 0 4px" }}>Name privacy</p>
+              <div className="mt-grid">
+                {NAME_OPTS.map((o) => (
+                  <button key={o.v} className={"mt-big sm" + (nameDisp === o.v ? " on" : "")} disabled={shareBusy} onClick={() => changeNameDisp(o.v)}>{o.label}</button>
+                ))}
+              </div>
+              <button className="mt-add danger" style={{ marginTop: 10 }} disabled={shareBusy} onClick={doUnpublish}>🚫 Make private</button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

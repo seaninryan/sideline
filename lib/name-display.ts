@@ -1,4 +1,4 @@
-import type { Model, NameDisplay } from "@/lib/types";
+import type { Model, NameDisplay, TeamRoster } from "@/lib/types";
 
 export function redactName(name: string, num: number | undefined, mode: NameDisplay): string {
   if (mode === "full" || !name) return name;
@@ -7,6 +7,13 @@ export function redactName(name: string, num: number | undefined, mode: NameDisp
     return parts.map((w) => w[0].toUpperCase() + ".").join("");
   }
   return num != null ? `#${num}` : "Player";
+}
+
+// Redact a team roster's player names for a public team page (the formation is
+// just shirt numbers, so only player names need touching). `full` is a no-op.
+export function redactRoster(roster: TeamRoster, mode: NameDisplay): TeamRoster {
+  if (mode === "full") return roster;
+  return { ...roster, players: roster.players.map((p) => ({ ...p, name: redactName(p.name, p.num, mode) })) };
 }
 
 export function applyNameDisplay(model: Model, mode: NameDisplay): Model {

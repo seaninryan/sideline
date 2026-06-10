@@ -1,5 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { redactName, applyNameDisplay } from "@/lib/name-display";
+import { redactName, applyNameDisplay, redactRoster } from "@/lib/name-display";
+import type { TeamRoster } from "@/lib/types";
+
+describe("redactRoster", () => {
+  const roster: TeamRoster = {
+    formation: [[1, 2]],
+    players: [
+      { num: 1, name: "Rick Sanchez", role: "starting" },
+      { num: 2, name: "Morty", role: "starting" },
+      { num: 16, name: "", role: "sub" },
+    ],
+  };
+  it("full is a no-op (same object)", () => expect(redactRoster(roster, "full")).toBe(roster));
+  it("initials redacts player names, keeps formation", () => {
+    const r = redactRoster(roster, "initials");
+    expect(r.players.map((p) => p.name)).toEqual(["R.S.", "M.", ""]);
+    expect(r.formation).toEqual([[1, 2]]);
+  });
+  it("none uses shirt numbers (blank names stay blank, as in matches)", () => {
+    const r = redactRoster(roster, "none");
+    expect(r.players.map((p) => p.name)).toEqual(["#1", "#2", ""]);
+  });
+});
 
 describe("redactName", () => {
   it("full keeps the name", () => expect(redactName("Rick Sanchez", undefined, "full")).toBe("Rick Sanchez"));
