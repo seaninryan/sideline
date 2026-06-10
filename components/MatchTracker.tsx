@@ -362,7 +362,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // build a notation line for an event; live entry passes the wall clock,
   // the insert forms pass their stepper minute and their own team toggle
   const buildEventLine = (ev, team, player, min) => {
-    const who = team === "them" ? "T" : player && player !== "unknown" ? player.name : (myTeam.trim() || "My Team");
+    const themTok = themName || "Opposition";
+    const usTok = (myTeam || "").trim() || "My Team";
+    const who = team === "them"
+      ? (player && player !== "unknown" ? (player.num ? `${themTok} ${player.num}` : themTok) : themTok)
+      : (player && player !== "unknown" ? player.name : usTok);
     switch (ev) {
       case "goal": return `${min} ${who} goal`;
       case "point": return `${min} ${who}`;
@@ -373,7 +377,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       case "og": return `${min} ${who} own goal`;
       case "yellow": return `${min} ${who} yellow card`;
       case "red": return `${min} ${who} red card`;
-      case "corner": return team === "them" ? `${min} T corner` : `${min} corner`;
+      case "corner": return team === "them" ? `${min} ${themTok} corner` : `${min} ${usTok} corner`;
       case "ht": return `${min} HT`;
       case "ft": return `${min} FT`;
       case "half": return `${new Date().getHours()}:${pad2(parseInt(min, 10) % 60)}`;
@@ -381,21 +385,28 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     }
   };
   const liveLine = (ev, player, team = lvTeam) => buildEventLine(ev, team, player, String(new Date().getMinutes()));
-  const whoGrid = (onPick) => (
-    <>
-      {liveRows.map((row, ri) => (
-        <div key={ri} className="mt-frow">
-          {row.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => onPick(p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
-        </div>
-      ))}
-      {subs.length > 0 && (
-        <div className="mt-frow" style={{ borderTop: "1px dashed var(--line)", paddingTop: 8 }}>
-          {subs.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => onPick(p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
-        </div>
-      )}
-      <div className="mt-frow"><button className="mt-big sm" onClick={() => onPick("unknown")}>Unknown</button></div>
-    </>
-  );
+  const whoGrid = (onPick, team = "us") => {
+    // them: build rows/bench from the opponent roster (when populated); us: our roster
+    const rows = team === "them"
+      ? ((oppRoster && oppRoster.formation && oppRoster.formation.length ? oppRoster.formation : chunk((oppRoster?.players || []).filter((p) => p.role !== "sub").map((p) => p.num), 3)).map((row) => row.map((n) => (oppRoster?.players || []).find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length))
+      : liveRows;
+    const bench = team === "them" ? (oppRoster?.players || []).filter((p) => p.role === "sub") : subs;
+    return (
+      <>
+        {rows.map((row, ri) => (
+          <div key={ri} className="mt-frow">
+            {row.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => onPick(p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
+          </div>
+        ))}
+        {bench.length > 0 && (
+          <div className="mt-frow" style={{ borderTop: "1px dashed var(--line)", paddingTop: 8 }}>
+            {bench.map((p) => <button key={p.num + p.name} className="mt-big sm" onClick={() => onPick(p)}>{p.num ? `${p.num}. ` : ""}{p.name}</button>)}
+          </div>
+        )}
+        <div className="mt-frow"><button className="mt-big sm" onClick={() => onPick("unknown")}>Unknown</button></div>
+      </>
+    );
+  };
   const addLive = (ev, player, team = lvTeam) => {
     if (!evEnabled(ev)) return; // e.g. FT tapped while a "Who?" pick was pending
     const l = liveLine(ev, player, team);
@@ -1026,7 +1037,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                   {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
                     <button key={ev.key} className="mt-big ev" onClick={() => {
                       // our player events wait for a "Who?" tap; everything else lands straight in the notation
-                      if (gmStage.team === "us" && LIVE_PLAYER_EVENTS.includes(ev.key)) setGmStage({ ...gmStage, stage: "who", ev: ev.key });
+                      if (LIVE_PLAYER_EVENTS.includes(ev.key) && (gmStage.team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) setGmStage({ ...gmStage, stage: "who", ev: ev.key });
                       else { addLive(ev.key, null, gmStage.team); setGmStage({ stage: "team" }); }
                     }}>{ev.label}</button>
                   ))}
@@ -1039,7 +1050,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {phase !== "over" && gmStage.stage === "who" && (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{liveEvents.find((ev) => ev.key === gmStage.ev).label} — who?</p>
-                {whoGrid((p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "team" }); })}
+                {whoGrid((p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "team" }); }, gmStage.team)}
                 <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "event", team: gmStage.team })}>← Back</button>
               </>
             )}
