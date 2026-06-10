@@ -17,6 +17,7 @@ export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
   return {
     ...model,
     usScorers: (model.usScorers || []).map(fixScorer),
+    themScorers: (model.themScorers || []).map(fixScorer),
     starters: (model.starters || []).map(fixPlayer),
     subs: (model.subs || []).map(fixPlayer),
     missing: (model.missing || []).map(fixPlayer),

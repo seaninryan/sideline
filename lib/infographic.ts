@@ -154,6 +154,19 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   });
   y += 16;
 
+  // ---- opponent scorers ----
+  if (m.themScorers && m.themScorers.length) {
+    body.push(T(P, y, `SCORERS · ${(m.themName || "").toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
+    y += 14;
+    m.themScorers.forEach((s: any) => {
+      body.push(L(P, y + 17, P + CW, y + 17, "#ece3cb", 1));
+      body.push(T(P, y + 12, `${s.num ? s.num + ". " : ""}${s.name}`, 13, INK, { w: 600 }));
+      body.push(T(P + CW, y + 12, `${m.effMode === "goals" ? s.g : `${s.g}-${s.p}`}${s.frees ? `  (${s.frees}f)` : ""}`, 13, PITCH, { w: 700, a: "end" }));
+      y += 23;
+    });
+    y += 16;
+  }
+
   // who was involved in subs (for lineup arrows)
   const subOnSet = new Set<number>(), subOffSet = new Set<number>();
   (m.timeline || []).forEach((t: any) => { if (t.kind === "sub") { if (t.onNum != null) subOnSet.add(t.onNum); if (t.offNum != null) subOffSet.add(t.offNum); } });

@@ -27,4 +27,22 @@ describe("applyNameDisplay", () => {
     const model: any = { usScorers: [{ name: "Rick Sanchez" }] };
     expect(applyNameDisplay(model, "full").usScorers[0].name).toBe("Rick Sanchez");
   });
+  it("redacts themScorers names with initials mode", () => {
+    const model: any = {
+      usScorers: [],
+      themScorers: [{ name: "Jerry Smith", num: 5 }],
+      starters: [], subs: [], missing: [], timeline: [],
+    };
+    const out = applyNameDisplay(model, "initials");
+    expect(out.themScorers[0].name).toBe("J.S.");
+  });
+  it("redacts themScorers names with none mode", () => {
+    const model: any = {
+      usScorers: [],
+      themScorers: [{ name: "Beth Smith", num: 7 }],
+      starters: [], subs: [], missing: [], timeline: [],
+    };
+    const out = applyNameDisplay(model, "none");
+    expect(out.themScorers[0].name).toBe("#7");
+  });
 });
