@@ -357,3 +357,11 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .tp-flag { width: 30px; height: 30px; border-radius: 7px; flex: none; }
 .tp-fixtures { color: var(--muted, #6f7d72); text-align: center; padding: 20px; border: 1px dashed var(--line, #e4dcc6); border-radius: 10px; margin: 14px; }
 .sh-lead { margin-top: 4px; font-size: 11px; font-weight: 800; letter-spacing: .5px; color: #14532d; background: #c9f0d6; border-radius: 6px; padding: 3px 9px; }
+
+/* new-match wizard: bigger date inputs + team picker */
+.nw-date input { font-size: 18px; padding: 12px 14px; flex: 1; }
+.nw-sports { margin-bottom: 10px; }
+.nw-sports-mini { display: flex; gap: 6px; }
+.tp .tp-search { width: 100%; font-size: 16px; padding: 11px 12px; margin-bottom: 10px; }
+.tp .tp-list { margin-bottom: 8px; }
+.tp .tp-create { width: 100%; }
