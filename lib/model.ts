@@ -1,5 +1,6 @@
 import { parseMatch } from "@/lib/parser";
-import { fmtScore, fmtDateDow, gpTotal } from "@/lib/util";
+import { fmtDateDow, gpTotal } from "@/lib/util";
+import { htScore } from "@/lib/half-time";
 import { SPORTS } from "@/lib/constants";
 import type { MatchRecord, Model } from "@/lib/types";
 
@@ -42,10 +43,7 @@ export function buildModel(record: MatchRecord): Model {
   // (it does the fallback itself, so the model stays a faithful echo of the notation).
   const formationRows = parsed.formationRows && parsed.formationRows.length ? parsed.formationRows : [];
 
-  const h1 = series.filter((p: any) => p.half === 1 && p.usScore);
-  const ht = h1.length
-    ? `${h1[h1.length - 1].usScore} – ${h1[h1.length - 1].themScore}`
-    : `${fmtScore(0, 0, effMode)} – ${fmtScore(0, 0, effMode)}`;
+  const ht = htScore(series, effMode);
 
   return {
     grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
