@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import BrandFooter from "@/components/BrandFooter";
+import SportIcon from "@/components/SportIcon";
 import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
 import { SPORTS } from "@/lib/constants";
@@ -22,17 +24,21 @@ export default function TeamPage({ team, isOwner, fixtures = [] }: { team: TeamR
 
   return (
     <div className="pm-root mt-root">
-      <AppHeader email={email} showNew={!!email} showTeams={!!email}
-        onNew={() => router.push("/m/new")}
+      <AppHeader
+        email={email}
         onSignIn={async () => { await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${location.origin}/auth/callback` } }); }}
-        onSignOut={async () => { await sb.auth.signOut(); router.refresh(); }}>
-        {isOwner && <button className="mt-btn" onClick={() => router.push("/teams")}>Edit</button>}
-      </AppHeader>
+        onSignOut={async () => { await sb.auth.signOut(); router.refresh(); }}
+        primary={isOwner ? <button className="mt-btn" onClick={() => router.push("/teams")}>Edit</button> : null}
+        menuItems={email ? [
+          { label: "＋ New", onClick: () => router.push("/m/new") },
+          { label: "👥 Teams", onClick: () => router.push("/teams") },
+        ] : []}
+      />
 
       <div className="tp-id">
         <span className="tp-flag" style={{ background: `linear-gradient(135deg, ${c1} 50%, ${c2} 50%)` }} />
         <div><div className="mt-h" style={{ margin: 0 }}>{team.name}</div>
-          <div className="mt-note" style={{ margin: 0 }}>{team.sport && SPORTS[team.sport] ? `${SPORTS[team.sport].emoji} ${SPORTS[team.sport].label}` : "Team"}</div></div>
+          <div className="mt-note" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 5 }}>{team.sport && SPORTS[team.sport] ? <><SportIcon sport={team.sport} size={14} />{SPORTS[team.sport].label}</> : "Team"}</div></div>
       </div>
 
       {team.roster.formation.length > 0 && (
@@ -57,6 +63,7 @@ export default function TeamPage({ team, isOwner, fixtures = [] }: { team: TeamR
           ? <div className="tp-fixtures">No public fixtures involving this team yet.</div>
           : fixtures.map((f) => <MatchRow key={f.id} record={f.data} href={f.href} date={relativeDate(f.date || undefined, now)} />)}
       </div>
+      <BrandFooter />
     </div>
   );
 }

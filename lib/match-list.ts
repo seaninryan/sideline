@@ -9,9 +9,19 @@ export interface RowView {
   homeStr: string;
   awayStr: string;
   winner: "home" | "away" | "draw";
+  sport: string;
   sportEmoji: string;
   homeColors: [string, string];
   awayColors: [string, string];
+}
+
+// Resolved sport key (one of SPORTS): an explicit key wins, else a sport named
+// in the header, else goals-mode implies soccer. "" when unknown.
+export function resolveSportKey(sportKey: string | undefined, headerSport: string, mode: string): string {
+  if (sportKey && SPORTS[sportKey]) return sportKey;
+  const entry = Object.entries(SPORTS).find(([, s]) => s.label === headerSport);
+  if (entry) return entry[0];
+  return mode === "goals" ? "soccer" : "";
 }
 
 // Sport glyph: an explicit sport key wins, else a sport named in the header,
@@ -59,6 +69,7 @@ export function matchRowView(rec: MatchRecord): RowView {
     homeStr: usIsHome ? totals.us.str : totals.them.str,
     awayStr: usIsHome ? totals.them.str : totals.us.str,
     winner,
+    sport: resolveSportKey(rec.sport, header.sport, mode),
     sportEmoji: resolveSportEmoji(rec.sport, header.sport, mode),
     homeColors: usIsHome ? usColors : themColors,
     awayColors: usIsHome ? themColors : usColors,
@@ -67,21 +78,36 @@ export function matchRowView(rec: MatchRecord): RowView {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// Human "2h ago" / "Yesterday" / short-date, given an explicit `now` (testable).
+const dayStartOf = (ms: number) => { const x = new Date(ms); return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+
+// True when the match is scheduled on a future calendar day (a fixture).
+export function isUpcoming(iso: string | undefined, now: number): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  if (isNaN(t)) return false;
+  return dayStartOf(t) > dayStartOf(now);
+}
+
+// Human "2h ago" / "Yesterday" / "Tomorrow" / short-date, given an explicit
+// `now` (testable). Future dates read as fixtures, not "just now".
 export function relativeDate(iso: string | undefined, now: number): string {
   if (!iso) return "";
   const t = Date.parse(iso);
   if (isNaN(t)) return "";
+  const d = new Date(t);
+  const days = Math.round((dayStartOf(now) - dayStartOf(t)) / 86400000); // +ve past, -ve future
+  if (days < 0) { // a future calendar day
+    if (days === -1) return "Tomorrow";
+    if (days > -7) return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    return fmtDateShort(iso);
+  }
+  if (t > now) return "Later today"; // future, but same calendar day
   const diff = now - t;
   const min = Math.floor(diff / 60000);
   if (min < 1) return "just now";
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
-  const d = new Date(t);
-  const nd = new Date(now);
-  const dayStart = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const days = Math.round((dayStart(nd) - dayStart(d)) / 86400000);
   if (days === 1) return "Yesterday";
   if (days < 7) return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
   return fmtDateShort(iso);

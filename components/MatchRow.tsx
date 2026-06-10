@@ -2,34 +2,41 @@
 import React from "react";
 import Link from "next/link";
 import { matchRowView } from "@/lib/match-list";
+import SportIcon from "@/components/SportIcon";
 import type { MatchRecord } from "@/lib/types";
 
 // One row in a match list. Winner emphasis: the losing side is dimmed (`lose`),
-// the winner stays full strength (`win`), a draw is neutral (`neu`).
-export default function MatchRow({ record, href, date, privacy = null }: {
+// the winner stays full strength (`win`), a draw is neutral (`neu`). Each side
+// is an equal-width cell hugging the centre dash, so a long name ellipsises on
+// its own side instead of pushing the score across the divider.
+export default function MatchRow({ record, href, date, privacy = null, upcoming = false }: {
   record: MatchRecord;
   href: string;
   date: string;
   privacy?: "public" | "private" | null;
+  upcoming?: boolean;
 }) {
   const v = matchRowView(record);
   const cls = (side: "home" | "away") => (v.winner === "draw" ? "neu" : v.winner === side ? "win" : "lose");
   const flag = (c: [string, string]) => `linear-gradient(135deg, ${c[0]} 50%, ${c[1]} 50%)`;
   return (
-    <Link className="ml-row" href={href}>
-      <span className="ml-sport">{v.sportEmoji || "•"}</span>
+    <Link className={"ml-row" + (upcoming ? " upcoming" : "")} href={href}>
+      <span className="ml-sport"><SportIcon sport={v.sport} size={18} /></span>
       <span className="ml-teams">
-        <span className={"ml-flag " + cls("home")} style={{ background: flag(v.homeColors) }} />
-        <span className={"ml-name " + cls("home")}>{v.homeName}</span>
-        <span className={"ml-score " + cls("home")}>{v.homeStr}</span>
+        <span className="ml-side home">
+          <span className={"ml-flag " + cls("home")} style={{ background: flag(v.homeColors) }} />
+          <span className={"ml-name " + cls("home")}>{v.homeName}</span>
+          <span className={"ml-score " + cls("home")}>{v.homeStr}</span>
+        </span>
         <span className="ml-dash">–</span>
-        <span className={"ml-score " + cls("away")}>{v.awayStr}</span>
-        <span className={"ml-name " + cls("away")}>{v.awayName}</span>
-        <span className={"ml-flag " + cls("away")} style={{ background: flag(v.awayColors) }} />
+        <span className="ml-side away">
+          <span className={"ml-score " + cls("away")}>{v.awayStr}</span>
+          <span className={"ml-name " + cls("away")}>{v.awayName}</span>
+          <span className={"ml-flag " + cls("away")} style={{ background: flag(v.awayColors) }} />
+        </span>
       </span>
-      <span className="grow" />
       <span className="ml-meta">
-        <span className="ml-date">{date}</span>
+        <span className={"ml-date" + (upcoming ? " upcoming" : "")}>{upcoming ? `📅 ${date}` : date}</span>
         {privacy && <span className={"ml-priv " + privacy}>{privacy === "public" ? "◉ public" : "🔒 private"}</span>}
       </span>
     </Link>

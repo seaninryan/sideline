@@ -3,13 +3,13 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScoreChart from "@/components/ScoreChart";
 import AppHeader from "@/components/AppHeader";
+import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
 import { buildInfographicSVG } from "@/lib/infographic";
 import { svgToPng } from "@/lib/svg-to-png.client";
-import { BRAND_SITE, BRAND_SITE_URL, BRAND_CHANT } from "@/lib/constants";
 import type { Model } from "@/lib/types";
 
 export default function PublicMatch({ model }: { model: Model }) {
@@ -51,18 +51,18 @@ export default function PublicMatch({ model }: { model: Model }) {
     <div className="pm-root mt-root">
       <AppHeader
         email={email}
-        showNew={!!email}
-        onNew={() => router.push("/m/new")}
         onSignIn={async () => { await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${location.origin}/auth/callback` } }); }}
         onSignOut={async () => { await sb.auth.signOut(); router.refresh(); }}
-      >
-        <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={() => setShare((o) => !o)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-            <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
-          </svg>
-        </button>
-      </AppHeader>
+        primary={
+          <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={() => setShare((o) => !o)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+            </svg>
+          </button>
+        }
+        menuItems={email ? [{ label: "＋ New", onClick: () => router.push("/m/new") }] : []}
+      />
       {share && (
         <div className="mt-live" style={{ marginTop: 0 }}>
           <div className="mt-row"><span className="mt-h" style={{ margin: 0, flex: 1 }}>Share</span><button className="mt-add alt" onClick={() => setShare(false)}>✕ Close</button></div>
@@ -234,16 +234,7 @@ export default function PublicMatch({ model }: { model: Model }) {
       )}
 
       {/* brand footer */}
-      <footer className="pm-foot">
-        <svg width="56" height="32" viewBox="0 0 128 70" aria-hidden="true">
-          <rect x="4" y="8" width="120" height="54" rx="27" fill="#0c3b2a" stroke="#f5c518" strokeWidth="4" />
-          <text x="64" y="48" fontSize="34" textAnchor="middle" style={{ fontFamily: "var(--font-bebas), sans-serif" }}>
-            <tspan fill="#f4efe1">HW</tspan><tspan fill="#f5c518">G</tspan>
-          </text>
-        </svg>
-        <a href={BRAND_SITE_URL}>{BRAND_SITE}</a>
-        <div className="pm-chant">{BRAND_CHANT}</div>
-      </footer>
+      <BrandFooter />
     </div>
   );
 }
