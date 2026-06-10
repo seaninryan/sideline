@@ -19,8 +19,8 @@ export async function loadAll() {
   });
 }
 
-// Derive the promoted columns from a record. `data` (jsonb) stays the source of truth;
-// opponent isn't stored in the record, so parse it from the header.
+// Derive the promoted columns from a record. `data` (jsonb) stays the source of truth.
+// `opponent` lives on the record now; fall back to a legacy header parse only if absent.
 function matchCols(data: MatchRecord) {
   let opp: string | null = data.opponent || null;
   if (!opp) {
