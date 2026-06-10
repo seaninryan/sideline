@@ -173,12 +173,7 @@ describe("subs", () => {
     const sub = r.notes.find((n: any) => n.type === "sub");
     expect(sub).toMatchObject({ on: "17 Pencilvester", off: "10 Morty" });
   });
-  // BUG: a "<number> <name>" sub ref leaves onNum/offNum null. subRef() only resolves
-  // a bare number or a name; it never strips a leading shirt number off "17 Pencilvester"
-  // / "10 Morty", so the roster numbers aren't recovered. The retired parser resolved
-  // these (parser.test.ts "numbered sub resolves by number" expected onNum/offNum), and
-  // the design (§Subs: "onNum/offNum resolved against the roster") still wants it.
-  it.skip("a numbered sub resolves on/off by shirt number [BUG: not resolved]", () => {
+  it("a numbered sub resolves on/off by shirt number", () => {
     const r = parseEvents("18:00\n43 17 Pencilvester for 10 Morty", gaa);
     const sub = r.notes.find((n: any) => n.type === "sub");
     expect(sub).toMatchObject({ onNum: 17, offNum: 10 });

@@ -120,6 +120,15 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     const t = (txt || "").trim();
     const r = who(t);
     if (r.side) return { side: r.side, num: r.num };
+    // "12 Rick" / "17 Pencilvester" — peel a leading shirt number and resolve the
+    // name; prefer the roster number, fall back to the written one (the design's
+    // "onNum/offNum resolved against the roster").
+    const numName = t.match(/^(\d{1,2})\s+(.+)$/);
+    if (numName) {
+      const r2 = who(numName[2].trim());
+      if (r2.side) return { side: r2.side, num: r2.num ?? parseInt(numName[1], 10) };
+      return { side: null, num: parseInt(numName[1], 10) };
+    }
     const numOnly = t.match(/^(\d{1,2})$/);
     if (numOnly) return { side: null, num: parseInt(numOnly[1], 10) };
     return { side: null, num: null };
