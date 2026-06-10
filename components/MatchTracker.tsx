@@ -18,7 +18,7 @@ import {
   gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
   fmtDate, fmtDateShort, toLocalInput, dateKey, MONTHS, pad2,
 } from "@/lib/util";
-import { APP_VERSION, PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
+import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
 import LinkTeams from "@/components/LinkTeams";
 import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
@@ -26,6 +26,7 @@ import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
 import TeamPicker from "@/components/TeamPicker";
 import AppHeader from "@/components/AppHeader";
+import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import { useRouter } from "next/navigation";
 
@@ -761,25 +762,32 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       {!nw && (
         <AppHeader
           email={userEmail}
-          showNew
-          showTeams
           backHref="/"
-          onNew={() => router.push("/m/new")}
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
-        >
-          <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={enterShare}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-              <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
-            </svg>
-          </button>
-          <button className="mt-btn" aria-label="Link teams" title="Link teams" onClick={() => { setShare(false); setLink((o) => !o); }}>🤝</button>
-          <button className="mt-btn" aria-label="Resync" title="Resync from server" onClick={doResync}>⟳</button>
-          <button className={"mt-btn" + (confirmDel ? " danger" : "")} aria-label="Delete match" title={confirmDel ? "Tap again to delete" : "Delete match"} onClick={() => {
-            if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
-            setConfirmDel(false); doDelete();
-          }}>🗑</button>
-        </AppHeader>
+          primary={
+            <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={enterShare}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+              </svg>
+            </button>
+          }
+          menuItems={[
+            { label: "＋ New", onClick: () => router.push("/m/new") },
+            { label: "👥 Teams", onClick: () => router.push("/teams") },
+            { label: "🤝 Link teams", onClick: () => { setShare(false); setLink((o) => !o); } },
+            { label: "🔄 Resync", onClick: doResync },
+            {
+              label: confirmDel ? "Tap again to delete" : "🗑 Delete",
+              danger: confirmDel,
+              keepOpen: !confirmDel,
+              onClick: () => {
+                if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
+                setConfirmDel(false); doDelete();
+              },
+            },
+          ]}
+        />
       )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
@@ -1382,9 +1390,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </>
         )}
       </div>
-      {!nw && (
-        <div className="mt-foot">Here We Go · {APP_VERSION}</div>
-      )}
+      {!nw && <BrandFooter />}
     </div>
   );
 }

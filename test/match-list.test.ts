@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchRowView, relativeDate } from "@/lib/match-list";
+import { matchRowView, relativeDate, isUpcoming } from "@/lib/match-list";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import type { MatchRecord } from "@/lib/types";
 
@@ -47,4 +47,16 @@ describe("relativeDate", () => {
   it("empty input → empty string", () => expect(relativeDate("", now)).toBe(""));
   it("invalid date → empty string", () => expect(relativeDate("not-a-date", now)).toBe(""));
   it("just now under a minute", () => expect(relativeDate("2026-06-09T11:59:30", now)).toBe("just now"));
+  it("tomorrow", () => expect(relativeDate("2026-06-10T15:00:00", now)).toBe("Tomorrow"));
+  it("future this week → weekday + date", () => expect(relativeDate("2026-06-12T15:00:00", now)).toMatch(/Jun/));
+  it("far future → short date", () => expect(relativeDate("2026-08-01T15:00:00", now)).toMatch(/Aug/));
+  it("later today (future, same day)", () => expect(relativeDate("2026-06-09T18:00:00", now)).toBe("Later today"));
+});
+
+describe("isUpcoming", () => {
+  const now = Date.parse("2026-06-09T12:00:00");
+  it("a future calendar day is upcoming", () => expect(isUpcoming("2026-06-10T09:00:00", now)).toBe(true));
+  it("today is not upcoming (already started)", () => expect(isUpcoming("2026-06-09T18:00:00", now)).toBe(false));
+  it("a past day is not upcoming", () => expect(isUpcoming("2026-06-08T09:00:00", now)).toBe(false));
+  it("empty / invalid → false", () => { expect(isUpcoming("", now)).toBe(false); expect(isUpcoming("nope", now)).toBe(false); });
 });

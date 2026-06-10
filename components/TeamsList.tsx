@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import BrandFooter from "@/components/BrandFooter";
+import SportIcon from "@/components/SportIcon";
 import TeamEditor from "@/components/TeamEditor";
 import { teamStore } from "@/lib/team-store";
 import { createClient } from "@/lib/supabase/client";
@@ -18,7 +20,12 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [userId]);
 
   const header = (
-    <AppHeader email={email} showNew showTeams backHref="/" onNew={() => router.push("/m/new")} onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }} />
+    <AppHeader
+      email={email}
+      backHref="/"
+      onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
+      primary={<button className="mt-btn solid" onClick={() => router.push("/m/new")}>＋ New</button>}
+    />
   );
 
   if (editing) {
@@ -28,6 +35,7 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
         <div className="ml-page">
           <TeamEditor initial={editing === "new" ? null : editing} onDone={() => { setEditing(null); reload(); }} />
         </div>
+        <BrandFooter />
       </div>
     );
   }
@@ -43,10 +51,11 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
             <div className="tl-row" key={t.id} onClick={() => setEditing(t)}>
               <span className="tl-flag" style={{ background: `linear-gradient(135deg, ${t.color1 || "#888"} 50%, ${t.color2 || "#555"} 50%)` }} />
               <span className="tl-name">{t.name}</span>
-              <span className="tl-meta">{t.sport && SPORTS[t.sport] ? SPORTS[t.sport].emoji + " " : ""}{t.roster.players.length} players</span>
+              <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players</span>
             </div>
           ))}
       </div>
+      <BrandFooter />
     </div>
   );
 }
