@@ -1,5 +1,5 @@
 // Shown in the footer at the bottom of the app — bump on every deployed change so a stale cached page is obvious.
-export const APP_VERSION = "v53";
+export const APP_VERSION = "v54";
 
 // Brand lockup — shared across the public page, the poster image, and the OG card.
 export const BRAND_HOME = "/";                       // home link target (relative — portable across prod/preview/localhost)

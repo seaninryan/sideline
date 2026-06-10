@@ -39,6 +39,13 @@ export function teamLinkPatch(
   };
 }
 
+// The team ids a match publish should also flip public (both sides — the
+// opponent team is one of the owner's records too). De-duped, nulls dropped.
+export function teamsToPublish(record: MatchRecord): string[] {
+  const ids = [record.homeTeamId, record.awayTeamId].filter((x): x is string => !!x);
+  return Array.from(new Set(ids));
+}
+
 // Swap which side is home: flip the record's homeAway field and swap the team ids. No raw rewrite.
 export function swapHomeAway(record: MatchRecord) {
   const flipped: "home" | "away" = (record.homeAway === "home") ? "away" : "home";

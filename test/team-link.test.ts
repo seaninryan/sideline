@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { rosterToNotationLines, teamLinkPatch, swapHomeAway } from "@/lib/team-link";
+import { rosterToNotationLines, teamLinkPatch, swapHomeAway, teamsToPublish } from "@/lib/team-link";
 import type { MatchRecord, TeamRecord } from "@/lib/types";
+
+describe("teamsToPublish", () => {
+  const base = { raw: "" } as MatchRecord;
+  it("returns both linked team ids", () =>
+    expect(teamsToPublish({ ...base, homeTeamId: "a", awayTeamId: "b" })).toEqual(["a", "b"]));
+  it("drops nulls/missing", () =>
+    expect(teamsToPublish({ ...base, homeTeamId: "a", awayTeamId: null })).toEqual(["a"]));
+  it("de-dupes when both ids match", () =>
+    expect(teamsToPublish({ ...base, homeTeamId: "a", awayTeamId: "a" })).toEqual(["a"]));
+  it("empty when no teams linked", () => expect(teamsToPublish(base)).toEqual([]));
+});
 
 const us: TeamRecord = { id: "u1", name: "Racoons", color1: "#f5c518", color2: "#1f7a4d", sport: "hurling",
   roster: { formation: [[1], [2, 3]], players: [

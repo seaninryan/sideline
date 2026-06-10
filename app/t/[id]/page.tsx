@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/util";
+import { redactRoster } from "@/lib/name-display";
 import TeamPage from "@/components/TeamPage";
 import type { TeamRecord } from "@/lib/types";
 
@@ -32,6 +33,8 @@ export default async function TeamRoutePage({ params }: { params: { id: string }
     .order("match_date", { ascending: false, nullsFirst: false })
     .limit(50);
   const fixtures = (fx || []).map((r: any) => ({ id: r.id, href: `/m/${r.short_code || r.id}`, data: r.data, date: r.match_date || r.data?.matchDate || r.data?.date || null }));
+  // public viewers see player names redacted per the team's name_display; the owner sees full
+  if (!isOwner) team.roster = redactRoster(team.roster, team.name_display || "full");
   delete (team as any).owner; // don't ship the owner uuid to the public client
   return <TeamPage team={team} isOwner={isOwner} fixtures={fixtures} />;
 }

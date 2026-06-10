@@ -88,5 +88,7 @@ export interface TeamRecord {
   color2?: string;
   sport?: string;
   roster: TeamRoster;
+  is_public?: boolean;
+  name_display?: NameDisplay;
   updated_at?: string;
 }
