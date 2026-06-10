@@ -41,7 +41,7 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker initialId wizard>`.
   - `PublicMatch.tsx` — read-only public match render; carries the `<AppHeader>` with a visitor Share (copy link + share-as-image built client-side from the model).
   - `ShareWizard.tsx` — legacy publish wizard, superseded by `ShareSheet` (unused; retained for reference).
-- **`test/`** — Vitest suites (189 tests total, 1 skipped, across all files): `parse-events.test.ts` (the event-only parser behavioural suite), `migrate-notation.test.ts` (legacy→event-only migration + header/roster lift), `team-roster.test.ts`, `util.test.ts`, `raw-edit.test.ts`, `model.test.ts` (canonical `SAMPLE_RECORD` finals), `name-display.test.ts`, `score-card.test.ts`, `score-header.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-view.test.ts`, `short-code.test.ts`, `team-link.test.ts`, `team-templates.test.ts`, `smoke.test.ts`.
+- **`test/`** — Vitest suites (189 tests total, across all files): `parse-events.test.ts` (the event-only parser behavioural suite), `migrate-notation.test.ts` (legacy→event-only migration + header/roster lift), `team-roster.test.ts`, `util.test.ts`, `raw-edit.test.ts`, `model.test.ts` (canonical `SAMPLE_RECORD` finals), `name-display.test.ts`, `score-card.test.ts`, `score-header.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-view.test.ts`, `short-code.test.ts`, `team-link.test.ts`, `team-templates.test.ts`, `smoke.test.ts`.
 - **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
 - **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
 - **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
@@ -56,7 +56,7 @@ Node 20 is required (`nvm use 20`).
 npm install
 npm run dev      # → http://localhost:3000
 npm run build    # production build
-npm test         # Vitest (189 tests, 1 skipped)
+npm test         # Vitest (189 tests)
 ```
 
 After any parser change, run `npm test` and confirm the canonical `SAMPLE_RECORD` (event-only `raw` + structured Racoons/Wildebeests rosters) produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 5 (us), 0 warnings. The finals are asserted in `test/model.test.ts` (via `SAMPLE_RECORD`); the parser's per-behaviour coverage lives in `test/parse-events.test.ts`. Totals are **counted from the tagged events** — there is no written-score/column-vote machinery any more.
@@ -112,7 +112,7 @@ Key decisions (preserve these when modifying):
 - **Name matching — exact beats fuzzy:** `findPlayer` scans a roster for an exact (squashed) full-name match before first-name shorthand — with "Cathal" and "Cathal N" both rostered, each reference resolves to its own entry regardless of roster order (affects subs, scorer credit, cards). First-name shorthand still works when unambiguous within a team.
 - **Misses & stoppages are notes:** a minute line with no score token and a miss/stoppage keyword (`miss/missed/wide/saved/blocked/short/water`) is a note, not a score (`10 Jack miss pen`, `46 Water Break`).
 - **Set-piece points:** `'65` (hurling) / `'45` (football) on a scoring line sets `setPiece` — a pill in the timeline, `('65)` in chart/infographic labels, not counted as a free. The apostrophe form is canonical (a **bare trailing** `65` peels as a score token instead); a bare `45`/`65` **mid-line** still flags.
-- **Subs can carry a minute:** `43 Rick for Morty` parses as a sub at 43', not a score (even a bare-number `40 11 for 10`). Sub notes resolve `onNum`/`offNum` against the rosters for lineup styling. (Known gap: a `<number> <name>` ref like `17 Pencilvester` does **not** recover the shirt number into `onNum`/`offNum` — see the skipped BUG test in `parse-events.test.ts`.)
+- **Subs can carry a minute:** `43 Rick for Morty` parses as a sub at 43', not a score (even a bare-number `40 11 for 10`). Sub notes resolve `onNum`/`offNum` against the rosters for lineup styling — a `<number> <name>` ref like `17 Pencilvester` peels the leading shirt number and resolves the name (preferring the roster number).
 - **Added time:** halves run in multiples of 5, so an HT/FT line with a minute deduces added time (`elapsed % 5`) shown as a ⏱ `+N added` timeline entry. Override in notation with `28 HT +6` or a standalone `+6` line after the marker (`+0` suppresses it).
 - **Cards & corners:** `23 Morty yellow card` / `70 Wildebeests 7 red card` (the bare `red`/`yellow` form without `card` also works) are sided notes (type `card`, with roster `num` when matched). A **team-qualified** corner `31 Racoons corner` / `44 Wildebeests corner` is a sided `corner` note; a **bare** `corner` (no team) is a plain note.
 - **Own goals:** `min who own goal` (or `og`) scores for the *other* side; the scorer entry reads "own goal (name)" and the scoring item carries `og`/`ogNum`. With the `goal` word it's an own goal; bare `og` with no `goal` word is an own **point**.
