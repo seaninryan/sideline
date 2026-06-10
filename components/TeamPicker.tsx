@@ -1,47 +1,57 @@
 "use client";
 import React, { useState } from "react";
 import type { TeamRecord } from "@/lib/types";
-import { SPORTS } from "@/lib/constants";
-import { contrastOn } from "@/lib/util";
+import SportIcon from "@/components/SportIcon";
 import { filterTeams } from "@/lib/match-sport";
 
-// Type-ahead team picker. `sport` (when set) scopes suggestions to that sport.
-// Picking an existing team → onPick; a typed name with no exact match → onCreate.
+const RECENT = 5;
+
+// Type-ahead team picker as a compact list. `sport` (when set) scopes
+// suggestions; `exclude` drops one team id (e.g. the already-picked side).
+// With no query it shows the most-recent teams (+ "Show more"); typing filters
+// across all of them. A typed name with no exact match offers "Create '…'".
 export default function TeamPicker({
-  teams, sport, side, onPick, onCreate,
+  teams, sport, side, exclude, onPick, onCreate,
 }: {
   teams: TeamRecord[];
   sport?: string;
   side: "us" | "them";
+  exclude?: string | null;
   onPick: (t: TeamRecord) => void;
   onCreate: (name: string) => void;
 }) {
   const [q, setQ] = useState("");
-  const matches = filterTeams(teams, q, sport).slice(0, 12);
-  const exact = matches.some((t) => t.name.trim().toLowerCase() === q.trim().toLowerCase());
+  const [expanded, setExpanded] = useState(false);
+
+  const all = filterTeams(teams, q, sport).filter((t) => t.id !== exclude);
+  const shown = q.trim() ? all : (expanded ? all : all.slice(0, RECENT));
+  const exact = all.some((t) => t.name.trim().toLowerCase() === q.trim().toLowerCase());
   const fallback = side === "us" ? ["#f5c518", "#1f7a4d"] : ["#c0392b", "#2c5fa8"];
+
   return (
     <div className="tp">
       <input
         className="nw-in tp-search"
-        placeholder="Search or type a new team…"
+        placeholder="Search teams, or type a new name…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         autoFocus
       />
-      <div className="mt-grid tp-list">
-        {matches.map((t) => {
-          const c1 = t.color1 || fallback[0];
-          const c2 = t.color2 || fallback[1];
-          return (
-            <button key={t.id} className="mt-big nw-team" style={{ background: c1, color: contrastOn(c1), borderColor: c2 }} onClick={() => onPick(t)}>
-              {t.sport && SPORTS[t.sport] ? SPORTS[t.sport].emoji + " " : ""}{t.name}
-            </button>
-          );
-        })}
+      <div className="tp-list">
+        {shown.map((t) => (
+          <button key={t.id} className="tp-row" onClick={() => onPick(t)}>
+            <span className="tp-flag" style={{ background: `linear-gradient(135deg, ${t.color1 || fallback[0]} 50%, ${t.color2 || fallback[1]} 50%)` }} />
+            <span className="tp-name">{t.name}</span>
+            {t.sport && <SportIcon sport={t.sport} size={16} />}
+          </button>
+        ))}
+        {!shown.length && <p className="mt-note" style={{ margin: "6px 2px" }}>No matching teams.</p>}
       </div>
+      {!q.trim() && !expanded && all.length > RECENT && (
+        <button className="tp-more" onClick={() => setExpanded(true)}>Show all {all.length} teams</button>
+      )}
       {q.trim() && !exact && (
-        <button className="mt-add tp-create" onClick={() => onCreate(q.trim())}>+ Create "{q.trim()}"</button>
+        <button className="mt-add tp-create" onClick={() => onCreate(q.trim())}>+ Create &quot;{q.trim()}&quot;</button>
       )}
     </div>
   );
