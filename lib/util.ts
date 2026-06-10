@@ -24,8 +24,11 @@ export const contrastOn = (hex: string): string => {
   return 0.299 * r + 0.587 * g + 0.114 * b > 145 ? "#11241b" : "#ffffff";
 };
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const WEEKDAYS_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const pad2 = (n: number): string => String(n).padStart(2, "0");
 export const toLocalInput = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 export const fmtDate = (s: string): string => { if (!s) return ""; const d = new Date(s); if (isNaN(d.getTime())) return ""; return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 export const fmtDateShort = (s: string): string => { if (!s) return ""; const d = new Date(s); if (isNaN(d.getTime())) return ""; return `${d.getDate()} ${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`; };
+// weekday-led, e.g. "Tuesday 10 Jun, 15:30"
+export const fmtDateDow = (s: string): string => { if (!s) return ""; const d = new Date(s); if (isNaN(d.getTime())) return ""; return `${WEEKDAYS_LONG[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 export const dateKey = (s: string | undefined, fb?: number): number => { const d = s ? Date.parse(s) : NaN; return isNaN(d) ? (fb || 0) : d; };
