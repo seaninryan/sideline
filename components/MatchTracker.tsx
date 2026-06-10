@@ -986,7 +986,9 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                   </div>
                 </div>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Opponent — {nw.opp ? <b>{nw.opp.name}</b> : "pick or create"}</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} side="them" onPick={nwPickOpp} onCreate={nwCreateOpp} />
+                {nw.sport
+                  ? <TeamPicker teams={nwTeams} sport={nw.sport} side="them" onPick={nwPickOpp} onCreate={nwCreateOpp} />
+                  : <p className="mt-note" style={{ margin: 0 }}>Pick a sport above first — it scopes the opponent list.</p>}
                 <div className="mt-grid" style={{ marginTop: 12 }}>
                   <button className="mt-big gm-team" disabled={!nw.us || !nw.opp || !!pairingError(nw.us && nw.us.sport, nw.opp && nw.opp.sport)} onClick={finishNew}>Create match →</button>
                 </div>
