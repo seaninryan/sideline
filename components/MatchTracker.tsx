@@ -25,6 +25,7 @@ import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
 import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
 import TeamPicker from "@/components/TeamPicker";
+import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
@@ -427,7 +428,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // the wizard touches nothing until its final step, so Cancel is just setNw(null)
   const enterNew = () => {
     setMenuOpen(false); setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
-    setNw({ stage: "date", date: toLocalInput(new Date()), label: "", sport: "", homeAway: "away", us: null, opp: null });
+    setNw({ stage: "date", date: toLocalInput(new Date()), sport: "", home: null, away: null });
     if (userUid) teamStore.list(userUid).then(setNwTeams).catch(() => setNwTeams([]));
   };
   const enterShare = () => {
@@ -436,39 +437,29 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null);
     setShare(true);
   };
-  // build + save the wizard's match directly — recordPayload() would read pre-update state.
-  // Sport precedence: your team's pick wins; the opponent's only fills a gap; else keep current.
-  const nwPickUs = (t) => setNw({ ...nw, us: t, sport: t.sport || nw.sport, stage: "opp" });
-  const nwCreateUs = async (name) => {
-    if (!userUid) return;
-    if (!nw.sport) { setSavedMsg("Pick a sport first"); setTimeout(() => setSavedMsg(""), 2500); return; } // a new your-team requires a sport
+  // Wizard now picks a Home team then an Away team (sport is chosen on stage 1).
+  // Internally Home → us, Away → them (homeAway:"home") so the engine is unchanged.
+  const nwPickHome = (t) => setNw({ ...nw, home: t, stage: "away" });
+  const nwCreateHome = async (name) => {
+    if (!userUid || !nw.sport) return;
     const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#f5c518", color2: "#1f7a4d" });
-    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, us: t, stage: "opp" }); }
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, home: t, stage: "away" }); }
   };
-  const nwPickOpp = (t) => setNw({ ...nw, opp: t });
-  const nwCreateOpp = async (name) => {
+  const nwPickAway = (t) => setNw({ ...nw, away: t });
+  const nwCreateAway = async (name) => {
     if (!userUid || !nw.sport) return;
     const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#c0392b", color2: "#2c5fa8" });
-    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, opp: t }); }
-  };
-  const nwSetSport = async (s) => {
-    if (!userUid) { setNw({ ...nw, sport: s }); return; }
-    let us = nw.us;
-    if (us && us.sport !== s) {
-      const v = await teamStore.findOrCreate(userUid, { name: us.name, sport: s, color1: us.color1, color2: us.color2 });
-      if (v) { us = v; setNwTeams((xs) => [v, ...xs.filter((x) => x.id !== v.id)]); }
-    }
-    setNw({ ...nw, sport: s, us, opp: null });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, away: t }); }
   };
   const finishNew = async () => {
-    if (creatingRef.current || !nw.us || !nw.opp) return;
-    if (pairingError(nw.us.sport, nw.opp.sport)) return;
+    if (creatingRef.current || !nw.home || !nw.away) return;
+    if (pairingError(nw.home.sport, nw.away.sport)) return;
     creatingRef.current = true;
     try {
-      const sportKey = nw.us.sport || nw.opp.sport || "";
+      const sportKey = nw.sport || nw.home.sport || nw.away.sport || "";
       const mode = SPORTS[sportKey] ? SPORTS[sportKey].mode : "gaa";
-      const patch = teamLinkPatch({ label: nw.label }, { usTeam: nw.us, oppTeam: nw.opp, homeAway: nw.homeAway });
-      const label = (nw.label || "").trim() || nw.us.name;
+      const patch = teamLinkPatch({ label: "" }, { usTeam: nw.home, oppTeam: nw.away, homeAway: "home" });
+      const label = nw.home.name;
       const rec = {
         raw: "", matchDate: nw.date, date: nw.date, scoringMode: mode, autoMode: true,
         sport: sportKey || undefined, notationV: 2, nameDisplay: "full", savedAt: Date.now(),
@@ -789,6 +780,13 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           ]}
         />
       )}
+      {nw && (
+        <AppHeader
+          email={userEmail}
+          backHref="/"
+          onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
+        />
+      )}
       {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
       {!nw && modal && (
@@ -947,66 +945,70 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
       <div className="mt-body">
         {view === "new" && (
-          <div className="mt-game">
-            <div className="mt-row" style={{ marginBottom: 12 }}>
-              <span className="mt-h" style={{ margin: 0, flex: 1 }}>New match{nw.stage === "us" ? " — your team" : nw.stage === "opp" ? " — opposition" : ""}</span>
+          <div className="mt-game nw">
+            <div className="mt-row" style={{ marginBottom: 8 }}>
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nw.stage === "home" ? "Home team" : nw.stage === "away" ? "Away team" : "New match"}</span>
               <button className="mt-add alt" onClick={() => router.push("/")}>✕ Cancel</button>
             </div>
 
-            {/* stage 1 — when? */}
+            {(() => {
+              const idx = nw.stage === "date" ? 0 : nw.stage === "home" ? 1 : 2;
+              return (
+                <div className="nw-steps" aria-label={`Step ${idx + 1} of 3`}>
+                  {[0, 1, 2].map((i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <span className={"nw-bar" + (i <= idx ? " done" : "")} />}
+                      <span className={"nw-dot" + (i === idx ? " on" : i < idx ? " done" : "")}>{i + 1}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* stage 1 — when + sport */}
             {nw.stage === "date" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>When? — defaults to now</p>
+                <p className="nw-prompt">First, choose when the match will be</p>
                 <div className="mt-row nw-date">
                   <input type="date" value={nw.date.slice(0, 10)} onChange={(e) => e.target.value && setNw({ ...nw, date: `${e.target.value}T${nw.date.slice(11, 16)}` })} />
                   <input type="time" value={nw.date.slice(11, 16)} onChange={(e) => e.target.value && setNw({ ...nw, date: `${nw.date.slice(0, 10)}T${e.target.value}` })} />
                 </div>
-                <div className="mt-grid" style={{ marginTop: 12 }}>
-                  <button className="mt-big gm-team" onClick={() => setNw({ ...nw, stage: "us" })}>Next →</button>
-                </div>
-              </>
-            )}
-
-            {/* stage 2 — your team? */}
-            {nw.stage === "us" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Your team — pick a saved team or create one</p>
-                <div className="mt-row" style={{ marginBottom: 8 }}>
-                  <input className="nw-in" placeholder="grade/label — e.g. U13A Championship" value={nw.label} onChange={(e) => setNw({ ...nw, label: e.target.value })} />
-                </div>
-                <div className="mt-grid nw-sports">
+                {(() => { const d = new Date(nw.date); return isNaN(d.getTime()) ? null : <p className="nw-dow">{d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</p>; })()}
+                <p className="nw-prompt" style={{ marginTop: 18 }}>…and which sport</p>
+                <div className="nw-sports">
                   {Object.entries(SPORTS).map(([k, s]) => (
-                    <button key={k} className={"mt-big" + (nw.sport === k ? " on" : " off")} onClick={() => setNw({ ...nw, sport: k })}>{s.emoji} {s.label}</button>
+                    <button key={k} className={"nw-sport" + (nw.sport === k ? " on" : "")} onClick={() => setNw({ ...nw, sport: k, home: null, away: null })}>
+                      <SportIcon sport={k} size={22} /> <span>{s.label}</span>
+                    </button>
                   ))}
                 </div>
-                <TeamPicker teams={nwTeams} side="us" onPick={nwPickUs} onCreate={nwCreateUs} />
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
+                <div className="nw-nav">
+                  <span className="grow" />
+                  <button className="nw-link" disabled={!nw.sport} onClick={() => setNw({ ...nw, stage: "home" })}>Next →</button>
+                </div>
               </>
             )}
 
-            {/* stage 3 — against? (picking an opponent finishes the wizard) */}
-            {nw.stage === "opp" && (
+            {/* stage 2 — home team */}
+            {nw.stage === "home" && (
               <>
-                <div className="mt-grid" style={{ marginBottom: 10 }}>
-                  <button className={"mt-big" + (nw.homeAway === "home" ? " on" : " off")} onClick={() => setNw({ ...nw, homeAway: "home" })}>Home v</button>
-                  <button className={"mt-big" + (nw.homeAway === "away" ? " on" : " off")} onClick={() => setNw({ ...nw, homeAway: "away" })}>Away @</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
+                <TeamPicker teams={nwTeams} sport={nw.sport} side="us" onPick={nwPickHome} onCreate={nwCreateHome} />
+                <div className="nw-nav">
+                  <button className="nw-link" onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
                 </div>
-                <div className="mt-row" style={{ marginBottom: 8, alignItems: "center" }}>
-                  <span className="mt-note" style={{ margin: 0, flex: 1 }}>Sport: {nw.sport && SPORTS[nw.sport] ? `${SPORTS[nw.sport].emoji} ${SPORTS[nw.sport].label}` : "—"}</span>
-                  <div className="nw-sports-mini">
-                    {Object.entries(SPORTS).map(([k, s]) => (
-                      <button key={k} className={"mt-add" + (nw.sport === k ? "" : " alt")} onClick={() => nwSetSport(k)}>{s.emoji}</button>
-                    ))}
-                  </div>
+              </>
+            )}
+
+            {/* stage 3 — away team (Create finishes) */}
+            {nw.stage === "away" && (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the away team{nw.away ? <> — <b>{nw.away.name}</b></> : ", or create one"}.</p>
+                <TeamPicker teams={nwTeams} sport={nw.sport} side="them" exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
+                <div className="nw-nav">
+                  <button className="nw-link" onClick={() => setNw({ ...nw, stage: "home", away: null })}>← Back</button>
+                  <button className="mt-big gm-team" style={{ flex: 1, marginLeft: 10 }} disabled={!nw.home || !nw.away} onClick={finishNew}>Create match →</button>
                 </div>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Opponent — {nw.opp ? <b>{nw.opp.name}</b> : "pick or create"}</p>
-                {nw.sport
-                  ? <TeamPicker teams={nwTeams} sport={nw.sport} side="them" onPick={nwPickOpp} onCreate={nwCreateOpp} />
-                  : <p className="mt-note" style={{ margin: 0 }}>Pick a sport above first — it scopes the opponent list.</p>}
-                <div className="mt-grid" style={{ marginTop: 12 }}>
-                  <button className="mt-big gm-team" disabled={!nw.us || !nw.opp || !!pairingError(nw.us && nw.us.sport, nw.opp && nw.opp.sport)} onClick={finishNew}>Create match →</button>
-                </div>
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setNw({ ...nw, stage: "us", opp: null })}>← Back</button>
               </>
             )}
           </div>
@@ -1390,7 +1392,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </>
         )}
       </div>
-      {!nw && <BrandFooter />}
+      <BrandFooter />
     </div>
   );
 }
