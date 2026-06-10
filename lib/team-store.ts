@@ -2,6 +2,9 @@
 import { createClient } from "@/lib/supabase/client";
 import { genShortCode } from "@/lib/short-code";
 import type { TeamRecord, TeamRoster } from "@/lib/types";
+import { teamMatchKey } from "@/lib/match-sport";
+import { templateForSport } from "@/lib/team-templates";
+import { mkId } from "@/lib/util";
 
 const sb = createClient();
 
@@ -50,6 +53,19 @@ export const teamStore = {
     if (error) { console.warn("team save failed", error.message); return null; }
     await ensureShortCode(t.id);
     return t.id;
+  },
+  // Find a team by (sport, name) for this owner, or create one with the sport's
+  // template roster. Never mutates an existing team. Returns the TeamRecord (or null on save failure).
+  async findOrCreate(
+    userId: string,
+    { name, sport, color1, color2 }: { name: string; sport: string; color1?: string; color2?: string },
+  ): Promise<TeamRecord | null> {
+    const want = teamMatchKey(name, sport);
+    const existing = (await this.list(userId)).find((t) => teamMatchKey(t.name, t.sport) === want);
+    if (existing) return existing;
+    const rec: TeamRecord = { id: mkId(), name: name.trim(), sport, color1, color2, roster: templateForSport(sport) };
+    const id = await this.set(rec);
+    return id ? rec : null;
   },
   async del(id: string): Promise<boolean> {
     const { error } = await sb.from("teams").delete().eq("id", id);
