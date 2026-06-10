@@ -47,4 +47,5 @@ export const SAMPLE_RECORD: MatchRecord = {
   usRoster: RACOONS,
   oppRoster: { formation: [], players: [] },
   matchDate: "2026-06-02T18:21",
+  notationV: 2,
 };

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { parseMatch } from "@/lib/parser";
+import { backfillNotation } from "@/lib/migrate-notation";
 import type { MatchRecord } from "@/lib/types";
 
 const sb = createClient();
@@ -17,6 +18,17 @@ export async function loadAll() {
   (data || []).forEach((r: { id: string; data: MatchRecord } | null) => {
     if (r && r.id) cache[r.id] = r.data;
   });
+  // One-time durable backfill: legacy records (no notationV) are migrated to
+  // event-only and persisted. Event-only-origin records carry notationV:2 and
+  // are skipped (so their seeded usRoster is never clobbered). Resilient: one
+  // bad record must not abort the load.
+  const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV !== 2);
+  await Promise.allSettled(ids.map(async (id) => {
+    try {
+      const migrated = backfillNotation(cache[id]);
+      if (migrated !== cache[id]) { cache[id] = migrated; await store.set(id, migrated); }
+    } catch (e) { console.warn("backfill failed for", id, e); }
+  }));
 }
 
 // Derive the promoted columns from a record. `data` (jsonb) stays the source of truth.

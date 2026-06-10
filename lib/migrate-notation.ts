@@ -82,7 +82,6 @@ export function migrateLegacyNotation(
   // Idempotent guard
   if (record.notationV === 2) return record;
 
-  const { teamBName } = opts;
   const lines = record.raw.split("\n");
 
   // Find the index of the first clock line (HH:MM)
@@ -133,10 +132,21 @@ export function migrateLegacyNotation(
   // Parse the roster block into a TeamRoster snapshot
   const usRoster = parseRosterBlock(rosterLines);
 
+  // Best available opponent name for rewriting T<n>/bare-T refs: an explicitly
+  // passed teamBName wins, then the lifted header opponent, then the record's
+  // existing opponent, finally a generic fallback (used only for the rewrite).
+  const effectiveOpp =
+    (opts.teamBName && opts.teamBName.trim()) || headerOpponent || record.opponent || "Opposition";
+
   // Rewrite opponent refs in every event line
-  const newEventLines = eventLines.map((l) => rewriteOpponentRefs(l, teamBName));
+  const newEventLines = eventLines.map((l) => rewriteOpponentRefs(l, effectiveOpp));
 
   const newRaw = newEventLines.join("\n");
+
+  // Prefer the lifted header opponent, else the passed name, else the record's
+  // existing opponent. Don't persist the generic placeholder.
+  const resolvedOpponent =
+    headerOpponent ?? (opts.teamBName && opts.teamBName.trim() ? opts.teamBName.trim() : record.opponent) ?? undefined;
 
   return {
     ...record,
@@ -146,8 +156,13 @@ export function migrateLegacyNotation(
     notationV: 2,
     ...(headerLabel !== undefined && { label: headerLabel }),
     ...(headerHomeAway !== undefined && { homeAway: headerHomeAway }),
-    ...(headerOpponent !== undefined || teamBName
-      ? { opponent: headerOpponent ?? teamBName }
-      : {}),
+    ...(resolvedOpponent !== undefined && { opponent: resolvedOpponent }),
   };
+}
+
+// Backfill a single record loaded from storage: migrate legacy → event-only,
+// deriving team names from the record itself. Idempotent (notationV===2 → same ref).
+export function backfillNotation(rec: MatchRecord): MatchRecord {
+  if (rec.notationV === 2) return rec;
+  return migrateLegacyNotation(rec, { teamAName: rec.myTeam || "My Team", teamBName: rec.opponent || "" });
 }

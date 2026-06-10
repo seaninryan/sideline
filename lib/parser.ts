@@ -18,7 +18,7 @@ export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
   let { label, homeAway, opponent, usRoster, oppRoster } = settings;
   let events = raw;
   if (isLegacy(raw)) {
-    const m = migrateLegacyNotation({ raw } as any, { teamAName: settings.myTeam || "My Team", teamBName: settings.opponent || "Opponent" });
+    const m = migrateLegacyNotation({ raw } as any, { teamAName: settings.myTeam || "My Team", teamBName: settings.opponent || "" });
     events = m.raw;
     usRoster = usRoster || m.usRoster;
     label = label ?? m.label;

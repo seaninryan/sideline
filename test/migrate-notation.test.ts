@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { migrateLegacyNotation } from "@/lib/migrate-notation";
+import { migrateLegacyNotation, backfillNotation } from "@/lib/migrate-notation";
 
 it("strips roster, rewrites T<n>→opp, builds usRoster, keeps legacyRaw, sets notationV", () => {
   const legacy = "U13A Hurling @ Wildebeests\n10. Morty | 11. Rick\nSubs:\n16. Sub\n18:00\n5 Morty goal\n9 T11 goal\n12 Morty\n44 T corner";
@@ -40,4 +40,29 @@ it("lifts the legacy header into label/homeAway/opponent", () => {
   expect(away.raw.split("\n")[0]).toMatch(/^18:00/);
   const home = migrateLegacyNotation({ raw: "Senior v Rovers\n12:00\n5 Morty goal" } as any, { teamAName: "Racoons", teamBName: "Rovers" });
   expect(home).toMatchObject({ label: "Senior", homeAway: "home", opponent: "Rovers" });
+});
+
+it("rewrites T<n>/bare-T using the header opponent when teamBName is empty", () => {
+  const rec = migrateLegacyNotation(
+    { raw: "U13A @ Foxes\n10. A\n18:00\n5 T goal\n6 T11 free" } as any,
+    { teamAName: "Us", teamBName: "" }
+  );
+  expect(rec.raw).toMatch(/Foxes goal/);
+  expect(rec.raw).toMatch(/Foxes 11 free/);
+  expect(rec.opponent).toBe("Foxes");
+});
+
+it("backfillNotation migrates a legacy record and is idempotent at notationV 2", () => {
+  const legacy = {
+    raw: "U13A Hurling @ Wildebeests\n10. Morty | 11. Rick\n18:00\n5 Morty goal\n9 T11 goal",
+    myTeam: "Racoons", opponent: "Wildebeests",
+  } as any;
+  const migrated = backfillNotation(legacy);
+  expect(migrated.notationV).toBe(2);
+  expect(migrated.usRoster?.players.length).toBeGreaterThan(0);
+  expect(migrated.raw).toMatch(/Wildebeests 11 goal/);
+  expect(migrated.raw.split("\n")[0]).toMatch(/^18:00/);
+
+  const already = { raw: "18:00\n5 Morty goal", notationV: 2, myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  expect(backfillNotation(already)).toBe(already);
 });

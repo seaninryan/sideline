@@ -80,6 +80,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [homeAway, setHomeAway] = useState(SAMPLE_RECORD.homeAway || "away");
   const [opponent, setOpponent] = useState(SAMPLE_RECORD.opponent || "");
   const [usRoster, setUsRoster] = useState(SAMPLE_RECORD.usRoster || null);
+  const [legacyRaw, setLegacyRaw] = useState(undefined);
   const [tab, setTab] = useState("details");
   const [matchDate, setMatchDate] = useState(SAMPLE_RECORD.matchDate || "2026-06-02T18:21");
   const [curId, setCurId] = useState(null);
@@ -203,7 +204,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, notationV: 2, ...(legacyRaw ? { legacyRaw } : {}) });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -212,7 +213,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, saved]);
+  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, saved]);
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -268,7 +269,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
     setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
     setNameDisplay(d.nameDisplay || "full");
-    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || ""); setUsRoster(d.usRoster || null);
+    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || ""); setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
     setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
@@ -278,11 +279,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const newRaw = "";
     const date = toLocalInput(new Date());
     const id = mkId();
-    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, myTeam: team, scoringMode: "gaa", autoMode: true, colorUs, colorUs2, colorThem, colorThem2, label: "", homeAway: "away", opponent: "", savedAt: Date.now() });
+    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, myTeam: team, scoringMode: "gaa", autoMode: true, colorUs, colorUs2, colorThem, colorThem2, label: "", homeAway: "away", opponent: "", notationV: 2, savedAt: Date.now() });
     if (ok) {
       // route transition is in-place (same /m/[id] route → no remount), so reflect the new match locally
       setRaw(newRaw); setMatchDate(date); setMyTeam(team);
-      setLabel(""); setHomeAway("away"); setOpponent(""); setUsRoster(null);
+      setLabel(""); setHomeAway("away"); setOpponent(""); setUsRoster(null); setLegacyRaw(undefined);
       setScoringMode("gaa"); setAutoMode(true); setCurId(id); setNw(null); setTab("game");
       router.replace(`/m/${id}`);
     } else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
@@ -457,11 +458,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       const ct = oppColors ? oppColors[0] : colorThem, ct2 = oppColors ? oppColors[1] : colorThem2;
       const mode = SPORTS[newSport] ? SPORTS[newSport].mode : parseMatch(newRaw, { myTeam: team }).mode;
       setRaw(newRaw); setMyTeam(team); setSport(newSport); setAutoMode(true); setScoringMode(mode);
-      setLabel(newLabel); setHomeAway(newHomeAway); setOpponent(newOpp); setUsRoster(null);
+      setLabel(newLabel); setHomeAway(newHomeAway); setOpponent(newOpp); setUsRoster(null); setLegacyRaw(undefined);
       setColorUs(cu); setColorUs2(cu2); setColorThem(ct); setColorThem2(ct2);
       setMatchDate(nw.date); setNw(null); setTab("game");
       const id = mkId();
-      const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, label: newLabel, homeAway: newHomeAway, opponent: newOpp, savedAt: Date.now() });
+      const ok = await store.set(id, { raw: newRaw, matchDate: nw.date, date: nw.date, myTeam: team, scoringMode: mode, autoMode: true, sport: newSport || undefined, colorUs: cu, colorUs2: cu2, colorThem: ct, colorThem2: ct2, label: newLabel, homeAway: newHomeAway, opponent: newOpp, notationV: 2, savedAt: Date.now() });
       if (ok) { setCurId(id); router.replace(`/m/${id}`); }
       else { setCurId(null); setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
     } finally {
