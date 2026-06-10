@@ -5,6 +5,7 @@ import ScoreChart from "@/components/ScoreChart";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
+import StatGrid from "@/components/StatGrid";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
@@ -97,12 +98,12 @@ export default function PublicMatch({ model }: { model: Model }) {
       {/* stats 2x2 */}
       <section className="pm-sec">
         <p className="pm-label">Match stats</p>
-        <div className="pm-stats">
-          <div className="pm-stat"><b>{m.ht || "—"}</b><span>Half-time</span></div>
-          <div className="pm-stat"><b>{m.leadChanges}</b><span>Lead changes</span></div>
-          <div className="pm-stat"><b>{m.timesLevel}</b><span>Times level</span></div>
-          <div className="pm-stat"><b>{m.maxLead}</b><span>Biggest lead{m.maxLeadSide ? ` · ${(m.maxLeadSide === "us" ? usShort : themShort)}` : ""}</span></div>
-        </div>
+        <StatGrid stats={[
+          { k: "Half-time", v: m.ht || "—" },
+          { k: "Lead changes", v: m.leadChanges },
+          { k: "Times level", v: m.timesLevel },
+          { k: `Biggest lead${m.maxLeadSide ? ` · ${m.maxLeadSide === "us" ? usShort : themShort}` : ""}`, v: m.maxLead },
+        ]} />
       </section>
 
       {/* chart */}

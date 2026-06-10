@@ -29,16 +29,14 @@ import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
+import StatGrid from "@/components/StatGrid";
+import { htScore } from "@/lib/half-time";
 import { useRouter } from "next/navigation";
 
 const sb = createClient();
 
 // --- editor-local helpers (not extracted to lib; copied verbatim from index.html) ---
 
-// StatCard (index.html 1080-1083)
-function StatCard({ k, v }) {
-  return <div className="mt-stat"><div className="v">{v}</div><div className="k">{k}</div></div>;
-}
 
 // ChartTip (index.html 1084-1095)
 function ChartTip({ active, payload }) {
@@ -633,8 +631,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
   const doExport = () => {
     if (modal && modal.kind === "share") { setModal(null); return; }
-    const h1 = parsed.series.filter((p) => p.half === 1 && p.usScore);
-    const ht = h1.length ? `${h1[h1.length - 1].usScore} – ${h1[h1.length - 1].themScore}` : `${fmtScore(0, 0, effMode)} – ${fmtScore(0, 0, effMode)}`;
+    const ht = htScore(parsed.series, effMode);
     const model = {
       grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
       usName, themName, dateStr: matchDate ? fmtDate(matchDate) : "",
@@ -1117,23 +1114,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                 <span> {parsed.warnings.map((w) => `${w.minute}' — ${w.msg}`).join("; ")}.</span>
               </div>
             )}
-            <div className="mt-stats">
-              <StatCard k="Half-time" v={(() => {
-                let g = 0, p = 0, tg = 0, tp = 0;
-                parsed.scoring.filter((s) => s.half === 1).forEach((s) => s.side === "us" ? (s.type === "goal" ? g++ : p++) : (s.type === "goal" ? tg++ : tp++));
-                return `${fmtScore(g, p, effMode)} – ${fmtScore(tg, tp, effMode)}`;
-              })()} />
-              <StatCard k="Lead changes" v={parsed.leadChanges} />
-              <StatCard k="Times level" v={parsed.timesLevel} />
-              <StatCard k={`Biggest lead${parsed.maxLeadSide ? " · " + (parsed.maxLeadSide === "us" ? usName : themName) : ""}`} v={parsed.maxLead} />
-              <StatCard k={usScorers.length > 1 && gpTotal(usScorers[1].g, usScorers[1].p, effMode) === gpTotal(usScorers[0].g, usScorers[0].p, effMode) ? "Top scorers" : "Top scorer"} v={(() => {
-                if (!usScorers.length) return "—";
-                const top = gpTotal(usScorers[0].g, usScorers[0].p, effMode);
-                const ties = usScorers.filter((s) => gpTotal(s.g, s.p, effMode) === top);
-                const fmt = (s) => `${s.name.split(" ")[0]} ${effMode === "goals" ? s.g : `${s.g}-${s.p}`}`;
-                return ties.slice(0, 3).map(fmt).join(" · ") + (ties.length > 3 ? ` +${ties.length - 3}` : "");
-              })()} />
-            </div>
+            <StatGrid stats={[
+              { k: "Half-time", v: htScore(parsed.series, effMode) },
+              { k: "Lead changes", v: parsed.leadChanges },
+              { k: "Times level", v: parsed.timesLevel },
+              { k: `Biggest lead${parsed.maxLeadSide ? " · " + (parsed.maxLeadSide === "us" ? usName : themName) : ""}`, v: parsed.maxLead },
+            ]} />
 
             <p className="mt-h">Score progression</p>
             <div style={{ width: "100%" }}>
