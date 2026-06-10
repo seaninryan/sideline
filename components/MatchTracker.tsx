@@ -10,8 +10,9 @@ import { buildInfographicSVG } from "@/lib/infographic";
 import { svgToPng } from "@/lib/svg-to-png.client";
 import {
   deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
-  eventLineMinute, swapRosterNums, renumRoster, rosterEnd,
+  eventLineMinute, rosterEnd,
 } from "@/lib/raw-edit";
+import { swapPositions, renumberPlayer, renamePlayer } from "@/lib/team-roster";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import {
   gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
@@ -111,6 +112,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [swapFirst, setSwapFirst] = useState(null); // {num, name}
   const [renumTarget, setRenumTarget] = useState(null); // {num, name}
   const [newNum, setNewNum] = useState("");
+  const [newName, setNewName] = useState("");
 
   // live entry: team -> event -> (player); each tap that completes an event adds it straight away
   const [lvTeam, setLvTeam] = useState("us");
@@ -327,16 +329,16 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setSubPick(subPick && subPick.role === "on" && subPick.num === p.num ? null : { role: "on", ...p });
   };
   // lineup tools route every tap through here; default falls through to the sub flow
-  const resetLineupModes = () => { setLineupMode(null); setSwapFirst(null); setRenumTarget(null); setNewNum(""); setSubPick(null); };
+  const resetLineupModes = () => { setLineupMode(null); setSwapFirst(null); setRenumTarget(null); setNewNum(""); setNewName(""); setSubPick(null); };
   const tapPlayer = (p, where) => {
     if (lineupMode === "swap") {
       if (!swapFirst) return setSwapFirst(p);
       if (swapFirst.num === p.num) return setSwapFirst(null);
-      setRaw((r) => swapRosterNums(r, swapFirst.num, p.num));
+      setUsRoster((r) => r ? swapPositions(r, swapFirst.num, p.num) : r);
       setSavedMsg(`Swapped ${swapFirst.name || swapFirst.num} & ${p.name || p.num}`); setTimeout(() => setSavedMsg(""), 2500);
       return resetLineupModes();
     }
-    if (lineupMode === "renum") { setRenumTarget(p); setNewNum(String(p.num)); return; }
+    if (lineupMode === "renum") { setRenumTarget(p); setNewNum(String(p.num)); setNewName(p.name || ""); return; }
     return where === "pitch" ? tapPitch(p) : tapBench(p);
   };
   const renumValid = (() => {
@@ -345,8 +347,14 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   })();
   const applyRenum = () => {
     if (!renumValid) return;
-    setRaw((r) => renumRoster(r, renumTarget.num, parseInt(newNum, 10)));
-    setSavedMsg(`${renumTarget.name || renumTarget.num} now wears ${newNum}`); setTimeout(() => setSavedMsg(""), 2500);
+    const nn = parseInt(newNum, 10), name = newName.trim();
+    setUsRoster((r) => {
+      if (!r) return r;
+      let next = renumberPlayer(r, renumTarget.num, nn);
+      next = renamePlayer(next, nn, name); // rename targets the new number (renumber ran first)
+      return next;
+    });
+    setSavedMsg(`${name || nn} now wears ${nn}`); setTimeout(() => setSavedMsg(""), 2500);
     resetLineupModes();
   };
   // live entry: build the notation line; the minute is always the wall clock now
@@ -1151,8 +1159,9 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {renumTarget ? (
               <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
                 <div className="mt-row">
-                  <span className="mt-h" style={{ margin: 0 }}>New number for {renumTarget.num}. {renumTarget.name}</span>
-                  <input style={{ width: 56 }} value={newNum} onChange={(e) => setNewNum(e.target.value.replace(/\D/g, ""))} />
+                  <span className="mt-h" style={{ margin: 0 }}>Edit {renumTarget.num}. {renumTarget.name}</span>
+                  <input style={{ width: 56 }} value={newNum} onChange={(e) => setNewNum(e.target.value.replace(/\D/g, ""))} placeholder="No." />
+                  <input style={{ flex: 1, minWidth: 120 }} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" />
                   {!renumValid && newNum && <span className="mt-note" style={{ margin: 0 }}>taken</span>}
                   <button className="mt-add" disabled={!renumValid} onClick={applyRenum}>OK</button>
                   <button className="mt-add alt" onClick={resetLineupModes}>Cancel</button>
@@ -1170,7 +1179,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             ) : lineupMode === "renum" ? (
               <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
                 <div className="mt-row">
-                  <span className="mt-h" style={{ margin: 0 }}>Change number — tap the player wearing a different number</span>
+                  <span className="mt-h" style={{ margin: 0 }}>Edit player — tap a player to change their number or name</span>
                   <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={resetLineupModes}>Cancel</button>
                 </div>
               </div>
@@ -1187,7 +1196,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               <div className="mt-row" style={{ marginTop: 8 }}>
                 <p className="mt-note" style={{ margin: 0, flex: 1, minWidth: 180 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
                 <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("swap"); }}>Reshuffle</button>
-                <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("renum"); }}>Change number</button>
+                <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("renum"); }}>Edit player</button>
               </div>
             )}
             {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => {

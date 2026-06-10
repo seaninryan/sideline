@@ -1,51 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseMatch } from "@/lib/parser";
-import { swapRosterNums, renumRoster, eventLineMinute, deleteEventLine, insertEventLine, replaceEventLine } from "@/lib/raw-edit";
+import { eventLineMinute, deleteEventLine, insertEventLine, replaceEventLine } from "@/lib/raw-edit";
 import { mkId, remapImport } from "@/lib/util";
-
-// ---- roster edits (reshuffle / change number) ----
-describe("roster edits", () => {
-  const RAW = "U13 Hurling @ Tribesmen\n10.Morty | 11. Rick\n  12. Summer | 13. Jerry\nSubs\n17. Pencilvester\n18:21\n23 Rick free 0-1 0-0\n";
-  it("swap same row", () => {
-    const swapped = swapRosterNums(RAW, 10, 11);
-    expect(parseMatch(swapped, {}).formationRows[0]).toEqual([11, 10]);
-  });
-  it("swap keeps names with numbers", () => {
-    const swapped = swapRosterNums(RAW, 10, 11);
-    expect(/11\. Rick\s*\|\s*10\.Morty/.test(swapped.split("\n")[1])).toEqual(true);
-  });
-  it("swap pitch<->sub: sub starts", () => {
-    const cross = swapRosterNums(RAW, 10, 17);
-    const pc = parseMatch(cross, {});
-    expect(pc.formationRows[0]).toEqual([17, 11]);
-  });
-  it("swap pitch<->sub: starter benched", () => {
-    const cross = swapRosterNums(RAW, 10, 17);
-    const pc = parseMatch(cross, {});
-    expect(pc.roster.find((r: any) => r.num === 10).role).toEqual("sub");
-  });
-  it("swap preserves other rows", () => {
-    const cross = swapRosterNums(RAW, 10, 17);
-    expect(cross.split("\n")[2]).toEqual("  12. Summer | 13. Jerry");
-  });
-  it("swap unknown num is a no-op", () => expect(swapRosterNums(RAW, 10, 99)).toEqual(RAW));
-  it("renum changes the number", () => {
-    const renum = renumRoster(RAW, 11, 21);
-    const pr = parseMatch(renum, {});
-    expect(pr.roster.find((r: any) => r.name === "Rick").num).toEqual(21);
-  });
-  it("renum updates formation row", () => {
-    const renum = renumRoster(RAW, 11, 21);
-    const pr = parseMatch(renum, {});
-    expect(pr.formationRows[0]).toEqual([10, 21]);
-  });
-  it("renum leaves scoring lines alone", () => {
-    const renum = renumRoster(RAW, 11, 21);
-    const pr = parseMatch(renum, {});
-    expect(pr.scoring[0].scorer).toEqual("Rick");
-  });
-  it("renum unknown num is a no-op", () => expect(renumRoster(RAW, 99, 5)).toEqual(RAW));
-});
 
 // ---- notation-block helpers ----
 describe("eventLineMinute", () => {

@@ -1,39 +1,8 @@
 import { squash } from "@/lib/util";
 import { parseMatch } from "@/lib/parser";
 
-/* ---- roster edits on the raw notation (lineup tab tools) ---- */
+/* ---- roster bounds helper (still used elsewhere) ---- */
 export const rosterEnd = (lines: string[]): number => { const e = lines.findIndex((l) => /^\s*\d{1,2}:\d{2}\s*$/.test(l)); return e === -1 ? lines.length : e; };
-const locRoster = (lines: string[], end: number, num: number) => {
-  for (let li = 1; li < end; li++) {
-    if (/^(subs?\b|missing)/i.test(lines[li].trim())) continue;
-    const chunks = lines[li].split("|");
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const m = chunks[ci].trim().match(/^(\d{1,2})\s*[.)]?\s*/);
-      if (m && parseInt(m[1], 10) === num) return { li, ci };
-    }
-  }
-  return null;
-};
-// swap two players' slots (works across formation rows and the Subs section)
-export function swapRosterNums(raw: string, numA: number, numB: number): string {
-  const lines = raw.split("\n"), end = rosterEnd(lines);
-  const a = locRoster(lines, end, numA), b = locRoster(lines, end, numB);
-  if (!a || !b) return raw;
-  const ca = lines[a.li].split("|"), cb = a.li === b.li ? ca : lines[b.li].split("|");
-  const t = ca[a.ci]; ca[a.ci] = cb[b.ci]; cb[b.ci] = t;
-  lines[a.li] = ca.join("|"); lines[b.li] = cb.join("|");
-  return lines.join("\n");
-}
-// change a player's shirt number in place
-export function renumRoster(raw: string, num: number, newNum: number): string {
-  const lines = raw.split("\n"), end = rosterEnd(lines);
-  const a = locRoster(lines, end, num);
-  if (!a) return raw;
-  const ch = lines[a.li].split("|");
-  ch[a.ci] = ch[a.ci].replace(/\d{1,2}/, String(newNum));
-  lines[a.li] = ch.join("|");
-  return lines.join("\n");
-}
 
 /* ---- event-line edits on the raw notation (notation blocks) ---- */
 // Lines that are structure, not events: half-start clocks, bare minutes,

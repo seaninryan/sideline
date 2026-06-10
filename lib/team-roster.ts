@@ -24,6 +24,44 @@ export function renumberPlayer(r: TeamRoster, oldNum: number, newNum: number): T
   return c;
 }
 
+// locate a number's cell in the formation grid, else null
+const findCell = (formation: number[][], num: number): { ri: number; ci: number } | null => {
+  for (let ri = 0; ri < formation.length; ri++) {
+    const ci = formation[ri].indexOf(num);
+    if (ci !== -1) return { ri, ci };
+  }
+  return null;
+};
+
+// swap two players' spots, mirroring the old raw reshuffle.
+// starter<->starter: swap their formation cells.
+// starter<->sub: the sub takes the starter's cell and the two exchange role.
+// sub<->sub: swap their relative order in players.
+export function swapPositions(r: TeamRoster, numA: number, numB: number): TeamRoster {
+  const c = clone(r);
+  const pa = c.players.find((p) => p.num === numA);
+  const pb = c.players.find((p) => p.num === numB);
+  if (!pa || !pb || numA === numB) return c;
+  const ca = findCell(c.formation, numA);
+  const cb = findCell(c.formation, numB);
+  if (ca && cb) { // both starters: swap cell values
+    c.formation[ca.ri][ca.ci] = numB;
+    c.formation[cb.ri][cb.ci] = numA;
+  } else if (ca || cb) { // one starter, one sub: sub takes the cell, roles exchange
+    const cell = ca || cb!;
+    const subNum = ca ? numB : numA; // the one not in the formation
+    c.formation[cell.ri][cell.ci] = subNum;
+    pa.role = pa.role === "starting" ? "sub" : "starting";
+    pb.role = pb.role === "starting" ? "sub" : "starting";
+  } else { // both subs: swap their order in the players array
+    const ia = c.players.indexOf(pa);
+    const ib = c.players.indexOf(pb);
+    c.players[ia] = pb;
+    c.players[ib] = pa;
+  }
+  return c;
+}
+
 export function addPlayer(r: TeamRoster, role: "starting" | "sub"): TeamRoster {
   const c = clone(r);
   const num = nextFreeNum(c);
