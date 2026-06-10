@@ -2,6 +2,15 @@ import type { MatchRecord, TeamRoster } from "@/lib/types";
 
 const CLOCK_RE = /^\s*\d{1,2}:\d{2}\s*$/;
 
+const isClock = (l: string) => /^\s*\d{1,2}:\d{2}\s*$/.test(l);
+const isMinuteLead = (l: string) => /^\s*\d{1,2}\b/.test(l);
+// legacy = has a `T<n>` scorer OR a first non-empty line that is neither a clock nor a minute-leading event (i.e. a header line)
+export const isLegacy = (raw: string) => {
+  if (/\bT\d/.test(raw)) return true;
+  const f = raw.split("\n").find((l) => l.trim());
+  return !!f && !isClock(f) && !isMinuteLead(f);
+};
+
 /**
  * Parse the legacy roster block (lines between the header and the first clock
  * line) into a TeamRoster snapshot.
@@ -129,8 +138,13 @@ export function migrateLegacyNotation(
     rosterLines.push(l);
   }
 
-  // Parse the roster block into a TeamRoster snapshot
-  const usRoster = parseRosterBlock(rosterLines);
+  // Parse the roster block into a TeamRoster snapshot. Never let a parsed-empty
+  // roster clobber an already-populated roster on the record (belt-and-suspenders
+  // against an event-only record that slips past the backfill gate).
+  const parsedRoster = parseRosterBlock(rosterLines);
+  const usRoster = parsedRoster.players.length
+    ? parsedRoster
+    : (record.usRoster && record.usRoster.players && record.usRoster.players.length ? record.usRoster : parsedRoster);
 
   // Best available opponent name for rewriting T<n>/bare-T refs: an explicitly
   // passed teamBName wins, then the lifted header opponent, then the record's
@@ -164,5 +178,7 @@ export function migrateLegacyNotation(
 // deriving team names from the record itself. Idempotent (notationV===2 → same ref).
 export function backfillNotation(rec: MatchRecord): MatchRecord {
   if (rec.notationV === 2) return rec;
+  // event-only raw that just lacks the stamp → mark it, never migrate (avoids wiping a seeded roster)
+  if (!isLegacy(rec.raw || "")) return { ...rec, notationV: 2 };
   return migrateLegacyNotation(rec, { teamAName: rec.myTeam || "My Team", teamBName: rec.opponent || "" });
 }

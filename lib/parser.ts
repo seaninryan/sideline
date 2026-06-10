@@ -1,18 +1,9 @@
 import { parseEvents, TeamArg } from "@/lib/parse-events";
-import { migrateLegacyNotation } from "@/lib/migrate-notation";
+import { migrateLegacyNotation, isLegacy } from "@/lib/migrate-notation";
 import type { ParsedMatch, Settings } from "@/lib/types";
 
 export const isPlaceholderLabel = (s?: string): boolean =>
   ["", "new match", "my team", "match"].includes((s || "").trim().toLowerCase());
-
-const isClock = (l: string) => /^\s*\d{1,2}:\d{2}\s*$/.test(l);
-const isMinuteLead = (l: string) => /^\s*\d{1,2}\b/.test(l);
-// legacy = has a `T<n>` scorer OR a first non-empty line that is neither a clock nor a minute-leading event (i.e. a header line)
-const isLegacy = (raw: string) => {
-  if (/\bT\d/.test(raw)) return true;
-  const f = raw.split("\n").find((l) => l.trim());
-  return !!f && !isClock(f) && !isMinuteLead(f);
-};
 
 export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
   let { label, homeAway, opponent, usRoster, oppRoster } = settings;

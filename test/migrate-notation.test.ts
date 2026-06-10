@@ -66,3 +66,38 @@ it("backfillNotation migrates a legacy record and is idempotent at notationV 2",
   const already = { raw: "18:00\n5 Morty goal", notationV: 2, myTeam: "Racoons", opponent: "Wildebeests" } as any;
   expect(backfillNotation(already)).toBe(already);
 });
+
+it("backfillNotation stamps an event-only record without migrating (roster intact)", () => {
+  const usRoster = { formation: [[10, 11]], players: [{ num: 10, name: "Morty", role: "starting" }, { num: 11, name: "Rick", role: "starting" }] };
+  const rec = {
+    raw: "18:00\n5 Morty goal",
+    usRoster,
+    myTeam: "Racoons", opponent: "Wildebeests",
+  } as any;
+  const out = backfillNotation(rec);
+  expect(out.notationV).toBe(2);
+  // roster unchanged — not wiped by a roster-block parse:
+  expect(out.usRoster).toEqual(usRoster);
+  expect(out.usRoster?.players.length).toBe(2);
+  // raw not migrated (first line untouched):
+  expect(out.raw).toBe("18:00\n5 Morty goal");
+  // no legacyRaw stamped (no migration happened):
+  expect(out.legacyRaw).toBeUndefined();
+});
+
+it("Defense 2: migrateLegacyNotation never replaces a populated usRoster with an empty one", () => {
+  // legacy signal (header + T<n>) but NO roster block; record already carries players
+  const usRoster = { formation: [[7]], players: [{ num: 7, name: "Summer", role: "starting" }] };
+  const rec = {
+    raw: "U13A @ Foxes\n18:00\n5 T9 goal",
+    usRoster,
+    myTeam: "Racoons", opponent: "Foxes",
+  } as any;
+  const out = migrateLegacyNotation(rec, { teamAName: "Racoons", teamBName: "Foxes" });
+  expect(out.notationV).toBe(2);
+  // populated roster preserved (parsed roster block was empty):
+  expect(out.usRoster).toEqual(usRoster);
+  expect(out.usRoster?.players.length).toBe(1);
+  // events still migrated:
+  expect(out.raw).toMatch(/Foxes 9 goal/);
+});
