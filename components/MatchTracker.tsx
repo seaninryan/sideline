@@ -868,7 +868,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         const [val, setVal, label] = map[colorPick];
         const sw = (c) => (
           <button key={c} className={"mt-swatch big" + (c === (val || "").toLowerCase() ? " on" : "")}
-            style={{ background: c }} onClick={() => setVal(c)} title={c} />
+            style={{ background: c }} onClick={() => { setVal(c); setColorPick(null); }} title={c} />
         );
         return (
           <div className="mt-live" style={{ marginTop: 0 }}>

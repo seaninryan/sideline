@@ -63,7 +63,7 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE_RECORD
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v50**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v52**.
 
 ## Architecture
 
@@ -149,6 +149,7 @@ Key decisions (preserve these when modifying):
 ### UI decisions worth keeping
 
 - Share/Backup are **inline panels** under the top bar, with the top-bar buttons acting as toggles — a fixed overlay didn't receive taps in mobile webviews.
+- The colour picker (the `colorPick` inline panel) **closes when a preset swatch is tapped** (`setVal(c); setColorPick(null)`); the Advanced exact-colour `<input type="color">` keeps the **Done** button (closing on every drag-change would be unusable).
 - `ScoreChart` is a dependency-free inline-SVG component (step lines, gridlines, HT marker, goal dots); don't reintroduce a chart library.
 
 ## Known limitations / next steps
