@@ -1,5 +1,5 @@
 import { parseMatch } from "@/lib/parser";
-import { fmtScore, fmtDate, gpTotal } from "@/lib/util";
+import { fmtScore, fmtDateDow, gpTotal } from "@/lib/util";
 import { SPORTS } from "@/lib/constants";
 import type { MatchRecord, Model } from "@/lib/types";
 
@@ -49,7 +49,7 @@ export function buildModel(record: MatchRecord): Model {
 
   return {
     grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
-    usName, themName, dateStr: r.matchDate ? fmtDate(r.matchDate) : "",
+    usName, themName, dateStr: r.matchDate ? fmtDateDow(r.matchDate) : "",
     totals, result, effMode, ht,
     leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
     maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,

@@ -1,23 +1,10 @@
 "use client";
 import React, { useState } from "react";
 import { renamePlayer, setNumber, removePlayer, swapPositions, movePlayer } from "@/lib/team-roster";
-import { contrastOn } from "@/lib/util";
+import Jersey from "@/components/Jersey";
 import type { TeamRoster } from "@/lib/types";
 
 type Player = TeamRoster["players"][number];
-
-// A team-jersey shirt with the shirt number on it.
-function Jersey({ num, c1, c2, size = 46 }: { num: number; c1: string; c2: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" style={{ display: "block" }}>
-      <path
-        d="M17 6 C19 9 29 9 31 6 L37 8 L47 15 L41 25 L35 21 L35 43 L13 43 L13 21 L7 25 L1 15 L11 8 Z"
-        fill={c1} stroke={c2} strokeWidth="2.5" strokeLinejoin="round"
-      />
-      <text x="24" y="34" textAnchor="middle" fontSize="16" fontFamily="var(--font-bebas), sans-serif" fill={contrastOn(c1)}>{num}</text>
-    </svg>
-  );
-}
 
 // Shared formation pitch. Read-only by default; with `editable`, tap a jersey to
 // edit its name + number in place (rename / renumber — a clashing number bumps

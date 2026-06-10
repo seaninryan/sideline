@@ -16,7 +16,7 @@ import { swapPositions, renumberPlayer, renamePlayer } from "@/lib/team-roster";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import {
   gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
-  fmtDate, fmtDateShort, toLocalInput, dateKey, MONTHS, pad2,
+  fmtDate, fmtDateShort, fmtDateDow, toLocalInput, dateKey, MONTHS, pad2,
 } from "@/lib/util";
 import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
@@ -130,6 +130,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
   const [nw, setNw] = useState(null);
+  const [showDetails, setShowDetails] = useState(false); // the date/teams/sport panel is collapsed behind "Edit details"
   const [nwTeams, setNwTeams] = useState([]); // TeamRecord[] loaded when the wizard opens
   // /m/new mounts the wizard before getUser resolves; once userUid arrives, load teams if the wizard is open
   useEffect(() => {
@@ -847,8 +848,31 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         />
       )}
 
-      {/* settings */}
-      {!nw && (
+      {/* score header (shared with the public page) — the editor adds an Edit-details toggle on the panel */}
+      {!nw && (() => {
+        const usIsHome = header.homeAway === "home";
+        const usTotal = gpTotal(totals.us.g, totals.us.p, effMode);
+        const themTotal = gpTotal(totals.them.g, totals.them.p, effMode);
+        return (
+          <ScoreHeader
+            homeName={usIsHome ? usName : themName}
+            awayName={usIsHome ? themName : usName}
+            homeStr={usIsHome ? totals.us.str : totals.them.str}
+            awayStr={usIsHome ? totals.them.str : totals.us.str}
+            homeColors={usIsHome ? [colorUs, colorUs2] : [colorThem, colorThem2]}
+            awayColors={usIsHome ? [colorThem, colorThem2] : [colorUs, colorUs2]}
+            grade={header.label || sportLabel || ""}
+            dateStr={matchDate ? fmtDateDow(matchDate) : ""}
+            homeTotal={usIsHome ? usTotal : themTotal}
+            awayTotal={usIsHome ? themTotal : usTotal}
+            phase={phase}
+            action={<button className="sh-edit" onClick={() => { setShowDetails((o) => !o); if (showDetails) setColorPick(null); }}>{showDetails ? "▾ Hide" : "✎ Edit"}</button>}
+          />
+        );
+      })()}
+
+      {/* match details panel — drops below the scoreboard */}
+      {!nw && showDetails && (
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
@@ -884,7 +908,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       </div>
       )}
 
-      {!nw && colorPick && (() => {
+      {!nw && showDetails && colorPick && (() => {
         const map = {
           us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
           them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
@@ -909,28 +933,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Advanced — exact colour
               <input type="color" value={val} onChange={(e) => setVal(e.target.value)} style={{ marginLeft: 8, verticalAlign: "middle" }} /></p>
           </div>
-        );
-      })()}
-
-      {/* score header (shared with the public page) */}
-      {!nw && (() => {
-        const usIsHome = header.homeAway === "home";
-        const usTotal = gpTotal(totals.us.g, totals.us.p, effMode);
-        const themTotal = gpTotal(totals.them.g, totals.them.p, effMode);
-        return (
-          <ScoreHeader
-            homeName={usIsHome ? usName : themName}
-            awayName={usIsHome ? themName : usName}
-            homeStr={usIsHome ? totals.us.str : totals.them.str}
-            awayStr={usIsHome ? totals.them.str : totals.us.str}
-            homeColors={usIsHome ? [colorUs, colorUs2] : [colorThem, colorThem2]}
-            awayColors={usIsHome ? [colorThem, colorThem2] : [colorUs, colorUs2]}
-            grade={header.label || sportLabel || ""}
-            dateStr={matchDate ? fmtDate(matchDate) : ""}
-            homeTotal={usIsHome ? usTotal : themTotal}
-            awayTotal={usIsHome ? themTotal : usTotal}
-            phase={phase}
-          />
         );
       })()}
 

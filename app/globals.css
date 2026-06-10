@@ -363,14 +363,17 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .ml-empty button { margin-top: 10px; }
 
 /* --- Shared ScoreHeader (v47) --- */
-.sh { background: #0c3b2a; color: #f4efe1; border-radius: 10px; padding: 14px; }
-.sh-meta { display: flex; justify-content: space-between; color: #cfe3d8; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 12px; }
+/* square top so it slides up flush under the (same-green) header; rounded bottom */
+.sh { background: #0c3b2a; color: #f4efe1; border-radius: 0 0 10px 10px; padding: 14px; position: relative; }
+.sh-action { position: absolute; top: 10px; right: 10px; }
+.sh-edit { font-family: var(--font-oswald); font-size: 12px; background: rgba(255,255,255,.12); color: #f4efe1; border: 1px solid rgba(255,255,255,.28); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.sh-edit:hover { background: rgba(255,255,255,.22); }
+.sh-meta { text-align: center; color: #cfe3d8; font-size: 12.5px; letter-spacing: .5px; margin-bottom: 14px; padding: 0 54px; }
 .sh-row { display: flex; align-items: flex-start; justify-content: center; gap: 12px; }
-.sh-team { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
-.sh-flag { display: flex; } .sh-flag i { width: 13px; height: 18px; display: block; }
-.sh-nm { font-weight: 700; font-size: 15px; }
-.sh-sc { font-weight: 800; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
-.sh-dash { color: #cfe3d8; font-size: 24px; align-self: center; }
+.sh-team { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+.sh-nm { font-weight: 700; font-size: 17px; }
+.sh-sc { font-weight: 800; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
+.sh-dash { color: #cfe3d8; font-size: 30px; align-self: center; }
 .sh-tie { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #8a6d1a; background: #fdf0c8; border-radius: 6px; padding: 4px 10px; }
 
 /* --- Teams (v48) --- */
