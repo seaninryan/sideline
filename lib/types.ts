@@ -4,6 +4,11 @@ export interface Settings {
   myTeam?: string;
   scoringMode?: "gaa" | "goals";
   sport?: string;
+  label?: string;
+  homeAway?: "home" | "away";
+  opponent?: string;
+  usRoster?: TeamRoster;
+  oppRoster?: TeamRoster;
 }
 
 export interface MatchRecord {
@@ -22,6 +27,12 @@ export interface MatchRecord {
   homeTeamId?: string | null;
   awayTeamId?: string | null;
   oppRoster?: TeamRoster;
+  usRoster?: TeamRoster;
+  label?: string;
+  homeAway?: "home" | "away";
+  opponent?: string;
+  legacyRaw?: string;
+  notationV?: number;
   savedAt?: number;
 }
 

@@ -1,16 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { matchRowView, relativeDate } from "@/lib/match-list";
-import { SAMPLE } from "@/lib/sample";
+import { SAMPLE_RECORD } from "@/lib/sample";
 import type { MatchRecord } from "@/lib/types";
 
-const rec: MatchRecord = {
-  raw: SAMPLE, myTeam: "Racoons", sport: "hurling", autoMode: true,
-  colorUs: "#f5c518", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8",
-};
+const rec: MatchRecord = SAMPLE_RECORD;
 
 describe("matchRowView", () => {
   const v = matchRowView(rec);
-  // SAMPLE header is "U13A Hurling @ Wildebeests" → Racoons are AWAY, so home = Wildebeests.
+  // SAMPLE_RECORD has homeAway "away" → Racoons are AWAY, so home = Wildebeests.
   it("orders home team (opponent here) on the home side", () => {
     expect(v.homeName).toBe("Wildebeests");
     expect(v.awayName).toBe("Racoons");

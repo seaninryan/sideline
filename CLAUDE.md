@@ -16,7 +16,8 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `m/[id]/page.tsx` — **dual-mode** match page (SSR): fetches the row through RLS (no `is_public` filter) and branches via `resolveMatchView` — owner → `<EditorApp initialId>` (the editor), public non-owner → `<PublicMatch>` read-only (with `applyNameDisplay`), else 404. The `new` sentinel (`/m/new`) renders `<EditorApp wizard>` (the create flow), redirecting to `/` if signed out.
   - `m/[id]/opengraph-image.tsx` — OG score-card PNG (1200×630) rendered server-side via `@resvg/resvg-js` + `buildScoreCardSVG`.
 - **`lib/`** — pure, typed, unit-tested logic:
-  - `parser.ts` — `parseMatch` (the full parser).
+  - `parse-events.ts` — `parseEvents` (the event-only two-team engine) + `resolveWho`.
+  - `parser.ts` — `parseMatch` (thin adapter over `parseEvents`, mapping A/B → us/them).
   - `raw-edit.ts` — roster + event-line helpers (`replaceEventLine`, `deleteEventLine`, `insertEventLine`, `placeEventLineByMinute`).
   - `infographic.ts` — `buildInfographicSVG` (full portrait poster) + `buildScoreCardSVG` (compact OG card).
   - `model.ts` — `buildModel`: rebuilds the infographic/page model from a stored record; used server-side by `/m/[id]`.
@@ -40,7 +41,7 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker initialId wizard>`.
   - `PublicMatch.tsx` — read-only public match render; carries the `<AppHeader>` with a visitor Share (copy link + share-as-image built client-side from the model).
   - `ShareWizard.tsx` — legacy publish wizard, superseded by `ShareSheet` (unused; retained for reference).
-- **`test/`** — Vitest suites (168 tests total across all files): `parser.test.ts` (full regression suite), `util.test.ts`, `raw-edit.test.ts`, `model.test.ts`, `name-display.test.ts`, `score-card.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-view.test.ts`, `smoke.test.ts`.
+- **`test/`** — Vitest suites (189 tests total, across all files): `parse-events.test.ts` (the event-only parser behavioural suite), `migrate-notation.test.ts` (legacy→event-only migration + header/roster lift), `team-roster.test.ts`, `util.test.ts`, `raw-edit.test.ts`, `model.test.ts` (canonical `SAMPLE_RECORD` finals), `name-display.test.ts`, `score-card.test.ts`, `score-header.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-view.test.ts`, `short-code.test.ts`, `team-link.test.ts`, `team-templates.test.ts`, `smoke.test.ts`.
 - **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
 - **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
 - **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
@@ -55,14 +56,14 @@ Node 20 is required (`nvm use 20`).
 npm install
 npm run dev      # → http://localhost:3000
 npm run build    # production build
-npm test         # Vitest (168 tests)
+npm test         # Vitest (189 tests)
 ```
 
-After any parser change, run `npm test` and confirm the canonical `SAMPLE` with `{myTeam:"Racoons"}` produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 6 (us), 0 warnings. This is asserted in `test/parser.test.ts`.
+After any parser change, run `npm test` and confirm the canonical `SAMPLE_RECORD` (event-only `raw` + structured Racoons/Wildebeests rosters) produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 5 (us), 0 warnings. The finals are asserted in `test/model.test.ts` (via `SAMPLE_RECORD`); the parser's per-behaviour coverage lives in `test/parse-events.test.ts`. Totals are **counted from the tagged events** — there is no written-score/column-vote machinery any more.
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v46**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v50**.
 
 ## Architecture
 
@@ -92,33 +93,35 @@ The app is **list-first**. `/` renders `<Landing>`: signed-in users see "Your ma
 - **`name_display`** (`'full' | 'initials' | 'none'`, default `'full'`) replaces the old `hide_names bool`. `initials` renders first initials of each name part; `none` falls back to shirt number or "Player".
 - **Shared brand lockup.** One source per idiom: `brandPillSVG(x,y,scale)` (`lib/infographic.ts`) draws the HWG pill for the two rasterised images (poster footer + OG card); `<BrandHeader>` (`components/BrandHeader.tsx`) is the HTML brand block (pill + wordmark + chant) used by `PublicMatch` and `SignIn`, linking home via `BRAND_HOME` (`/`). Brand strings (`BRAND_SITE`, `BRAND_SITE_URL`, `BRAND_WORDMARK`, `BRAND_CHANT`) live in `lib/constants.ts`. The brand-as-home link is on public surfaces only — the editor top bar keeps its own inline logo, unchanged.
 
-### Parser (`parseMatch`) — `lib/parser.ts`
+### Parser — `lib/parse-events.ts` (engine) + `lib/parser.ts` (adapter)
 
-Input is plain text:
+**Event-only, two-team model.** `parseEvents(raw, { teamA, teamB, scoringMode? })` is the core engine; `lib/parser.ts` is a thin adapter mapping the two stable sides **A/B → us/them** for the legacy `ParsedMatch` shape. The notation is a pure event timeline — **no header line and no roster block** (those moved onto the match record + the two linked teams' structured rosters, `usRoster`/`oppRoster`). The header-lift / roster-lift out of legacy notation is handled by `migrateLegacyNotation` and covered by `test/migrate-notation.test.ts`.
 
-- **Header (first line):** `<grade/label> @ <Opp>`; `@` = away, `v`/`vs` = home.
-- **Roster block** (before the first clock line): each line is a formation row, players split on `|` (e.g. `10. Morty | 11. Rick`). `Subs` / `Missing:` headers switch role. Formation rows are preserved exactly as written (supports 13-a-side etc.).
+Input is plain text (events only):
+
 - **Halves:** an `HH:MM` line starts a half; scoring lines then use just the wall-clock minute (wraps past the hour). A bare minute-only line also starts a new half when HT is omitted; a bare `HT`/`FT` line is a half marker.
-- **Scoring line:** `min scorer [free|goal] [written-score]`. Opposition scorer = `T`/`T11`; roster names = us; an unrostered name → opposition; team name (matched against settings `myTeam`) → us, unattributed.
-- **Subs:** `X for Y`. Any other non-numeric line is a note.
+- **Scoring line:** `min <who> [goal|free|'65|'45|own goal|...] [optional score-token]`. The `<who>` resolves against **both** rosters (see resolution order below). A trailing score token is display sugar only — totals are **counted from the events**, never read from a written score.
+- **Subs:** `min X for Y` (` for ` is the discriminator); a minute-less `X for Y` also works.
+- **Notes:** any non-matching line, plus minuted miss/stoppage lines (below).
 
 Key decisions (preserve these when modifying):
 
-- **Sport detection:** explicit sport in the header wins (`soccer` → goals; `hurl/camog/gaelic/gaa/football` → GAA); then score shape — any line with **two** score tokens (`0-2 1-3`) is GAA, while hyphen scores that only appear **one per line** (`2-1` = whole scoreboard) are a soccer running score (unless `point`/`pt` appears); else any internal hyphen → GAA; else goals-only.
-- **Name matching — exact beats fuzzy:** `matchPlayer` scans the whole roster for an exact (squashed) full-name match before trying first-name shorthand or first-word matching — with "Cathal" and "Cathal N" both rostered, each reference resolves to its own entry regardless of roster order (affects subs, scorer credit, cards, own goals). First-name shorthand still works when unambiguous; two players sharing a first name need the initial or shirt number to disambiguate.
-- **Misses & stoppages are notes:** a minute line with no written score and a miss/stoppage keyword (`miss/missed/wide/saved/blocked/short/water`) is a note, not a score (`10 Jack miss pen`, `46 Water Break`). With a written score attached, the written score still rules.
-- **Set-piece points:** `'65` (hurling) / `'45` (football) on a scoring line sets `setPiece` — a pill in the timeline, `('65)` in chart/infographic labels, not counted as a free. The apostrophe form is canonical (a bare trailing `65` peels as a written-score token); bare `45`/`65` still flags mid-line.
-- **Subs can carry a minute:** `43 Rick for Morty` (or `43 12 Rick for 6 Morty`) parses as a sub at 43', not a score. The lineup tab generates these (tap player → pick replacement). Sub notes resolve `onNum`/`offNum` against the roster for lineup styling.
-- **Added time:** halves run in multiples of 5, so an HT/FT line with a minute deduces added time (`elapsed % 5`) shown as a ⏱ `+N added` timeline entry. Override in notation with `32 HT +6` or a standalone `+6` line after the marker (`+0` suppresses it).
-- **Cards & corners:** `23 Morty yellow card` / `70 T red` are sided notes (type `card`, with roster `num` when matched); `31 corner` (us) / `44 T corner` (them) are type `corner`. The timeline shows card glyphs and per-team corner ordinals; the lineup marks cards and own goals on players.
-- **Own goals:** `min who own goal` (or `og`) scores for the *other* side; the scorer entry reads "Own goal (name)" and the scoring item carries `og`/`ogNum` for the lineup marker.
-- **Written score is source of truth:** if ≥ half the scoring lines carry a written running score, totals/chart come from the written cumulative score. Two tokens = GAA (one per team); in goals mode a **single** `a-b` token is the whole home-away scoreboard (`writtenCols`). Goal vs point is inferred from the score jump (a 3-point jump with no "goal" word = a goal). A column-vote on "sure" rows (rostered name or `T`) decides which written column is "us" — this handles home/away order automatically. Without written scores (live entry) it falls back to keyword goal/point counting. A reconciliation warning fires only when a written score *drops* (likely typo).
-- **Stats computed:** leadChanges, timesLevel, maxLead/maxLeadSide, half-time score, chart series, goalDots, htLine.
+- **Who resolution (order):** (1) **player name** matched across **both** rosters (the matched player's team sets the side); (2) **`<Team> <number>`** → that team's player (name from its roster, else just the number); (3) **`<Team>`** alone → that team, **team-level/unattributed** event (counts for the team, credits no named scorer). A player-name match beats a team match. A bare name on **both** teams is **ambiguous** → `side:null`, not counted, emits a warning (add a team qualifier, e.g. `Wildebeests Rick`). An unknown token is **unresolved** → `side:null`, not counted, warns. Sides are **stable A/B**, independent of venue; the caller maps to us/them or home/away for display.
+- **Sport / scoring mode is a setting**, not inferred from score shape — `settings.scoringMode` (`gaa`/`goals`) is passed in from the record. (`detectedMode` is still computed from score shape as a fallback when no mode is given, but the editor always passes one.)
+- **Goal-vs-point inference:** the `goal` keyword (or goals mode) makes a goal; a bare scoring line is a point.
+- **Name matching — exact beats fuzzy:** `findPlayer` scans a roster for an exact (squashed) full-name match before first-name shorthand — with "Cathal" and "Cathal N" both rostered, each reference resolves to its own entry regardless of roster order (affects subs, scorer credit, cards). First-name shorthand still works when unambiguous within a team.
+- **Misses & stoppages are notes:** a minute line with no score token and a miss/stoppage keyword (`miss/missed/wide/saved/blocked/short/water`) is a note, not a score (`10 Jack miss pen`, `46 Water Break`).
+- **Set-piece points:** `'65` (hurling) / `'45` (football) on a scoring line sets `setPiece` — a pill in the timeline, `('65)` in chart/infographic labels, not counted as a free. The apostrophe form is canonical (a **bare trailing** `65` peels as a score token instead); a bare `45`/`65` **mid-line** still flags.
+- **Subs can carry a minute:** `43 Rick for Morty` parses as a sub at 43', not a score (even a bare-number `40 11 for 10`). Sub notes resolve `onNum`/`offNum` against the rosters for lineup styling — a `<number> <name>` ref like `17 Pencilvester` peels the leading shirt number and resolves the name (preferring the roster number).
+- **Added time:** halves run in multiples of 5, so an HT/FT line with a minute deduces added time (`elapsed % 5`) shown as a ⏱ `+N added` timeline entry. Override in notation with `28 HT +6` or a standalone `+6` line after the marker (`+0` suppresses it).
+- **Cards & corners:** `23 Morty yellow card` / `70 Wildebeests 7 red card` (the bare `red`/`yellow` form without `card` also works) are sided notes (type `card`, with roster `num` when matched). A **team-qualified** corner `31 Racoons corner` / `44 Wildebeests corner` is a sided `corner` note; a **bare** `corner` (no team) is a plain note.
+- **Own goals:** `min who own goal` (or `og`) scores for the *other* side; the scorer entry reads "own goal (name)" and the scoring item carries `og`/`ogNum`. With the `goal` word it's an own goal; bare `og` with no `goal` word is an own **point**.
+- **Stats computed (counted from the per-team cumulative series):** leadChanges, timesLevel, maxLead/maxLeadSide, chart series, goalDots (each carries its side), htLine.
 
 ### Notation blocks (Notation tab)
 
-- The Notation tab renders the raw text as tappable blocks (one per event line; the preamble — header + roster — is a single Lineup block that expands to a mini textarea). Blocks are a **view over `raw`** — no block model is stored; the old textarea lives behind the "Edit as text" toggle.
-- Edits go through pure helpers in `lib/raw-edit.ts`: `replaceEventLine` / `deleteEventLine` / `insertEventLine` (+ shared `placeEventLineByMinute`). A line whose leading minute changes is re-placed within its own half ordered by elapsed minute (wall-clock wrap, ties land last, never crossing the half's HT/FT marker). Structure lines (clock, bare minute, HT/FT, `+N`) never move. `parseMatch` stamps `srcLine` (index into `raw.split("\n")`) on scoring/notes/halfMarks to classify blocks.
+- The Notation tab renders the raw text as tappable blocks (one per event line). The notation is event-only now — the lineup is edited via the structured `usRoster` on the Lineup tab, not a preamble block. Blocks are a **view over `raw`** — no block model is stored; the old textarea lives behind the "Edit as text" toggle.
+- Edits go through pure helpers in `lib/raw-edit.ts`: `replaceEventLine` / `deleteEventLine` / `insertEventLine` (+ shared `placeEventLineByMinute`). A line whose leading minute changes is re-placed within its own half ordered by elapsed minute (wall-clock wrap, ties land last, never crossing the half's HT/FT marker). Structure lines (clock, bare minute, HT/FT, `+N`) never move. `parseEvents` stamps `srcLine` (index into `raw.split("\n")`) on scoring/notes/halfMarks to classify blocks.
 - "+ Insert after" opens a type chooser (Score/Sub/Card/Corner/Note) → guided forms reusing the live-entry buttons (`buildEventLine`, `whoGrid`), with a live preview of the exact notation line. The anchor block picks the half and default minute; placement is by minute. The Note form warns when a minuted keyword-less note would parse as a score.
 - One editor open at a time: any raw mutation path (live append, undo, resync, match switch, view toggle) closes open block/insert/lineup editors to avoid stale line indices. Block delete needs a confirming second tap (auto-disarms after 3.5s).
 

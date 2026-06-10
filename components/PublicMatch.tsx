@@ -124,6 +124,18 @@ export default function PublicMatch({ model }: { model: Model }) {
         ))}
       </section>
 
+      {/* opponent scorers */}
+      {m.themScorers && m.themScorers.length > 0 && (
+        <section className="pm-sec">
+          <p className="pm-label">Scorers · {(m.themName || "").toUpperCase()}</p>
+          {m.themScorers.map((s: any, i: number) => (
+            <div className="pm-scorer" key={i}>
+              <span>{s.num ? `${s.num}. ` : ""}{s.name}</span><b>{scoreText(s)}</b>
+            </div>
+          ))}
+        </section>
+      )}
+
       {/* lineup — pitch when we have formation rows, else a flat starters list */}
       {((m.formationRows && m.formationRows.length > 0) || (m.starters && m.starters.length > 0)) && (
         <section className="pm-sec">

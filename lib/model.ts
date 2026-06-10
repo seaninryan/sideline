@@ -10,13 +10,18 @@ export function buildModel(record: MatchRecord): Model {
   const settings = {
     myTeam: r.myTeam,
     scoringMode: (sp ? sp.mode : (r.autoMode ? undefined : r.scoringMode)) as "gaa" | "goals" | undefined,
+    label: r.label,
+    homeAway: r.homeAway,
+    opponent: r.opponent,
+    usRoster: r.usRoster,
+    oppRoster: r.oppRoster,
   };
   const parsed = parseMatch(r.raw, settings);
   const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = sp ? sp.label : header.sport;
   const usName = r.myTeam || "My Team";
-  const themName = header.opposition || "Opposition";
+  const themName = r.opponent || header.opposition || "Opposition";
 
   const timeline: any[] = [];
   scoring.forEach((s: any) => timeline.push({ kind: "score", ...s }));
@@ -25,6 +30,9 @@ export function buildModel(record: MatchRecord): Model {
 
   const usScorers = scorers
     .filter((s: any) => s.side === "us")
+    .sort((a: any, b: any) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const themScorers = scorers
+    .filter((s: any) => s.side === "them")
     .sort((a: any, b: any) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
   const starters = roster.filter((p: any) => p.role === "starting");
   const subs = roster.filter((p: any) => p.role === "sub");
@@ -46,7 +54,7 @@ export function buildModel(record: MatchRecord): Model {
     leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
     maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
     series, goalDots, htLine, halfMarks,
-    usScorers, formationRows, starters, subs, missing, timeline,
+    usScorers, themScorers, formationRows, starters, subs, missing, timeline,
     colorUs: r.colorUs || "#f5c518", colorUs2: r.colorUs2 || "#1f7a4d",
     colorThem: r.colorThem || "#c0392b", colorThem2: r.colorThem2 || "#2c5fa8",
     nameDisplay: r.nameDisplay || "full",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renamePlayer, renumberPlayer, addPlayer, removePlayer } from "@/lib/team-roster";
+import { renamePlayer, renumberPlayer, addPlayer, removePlayer, swapPositions } from "@/lib/team-roster";
 import type { TeamRoster } from "@/lib/types";
 
 const base = (): TeamRoster => ({
@@ -59,5 +59,57 @@ describe("removePlayer", () => {
     const r = removePlayer(base(), 1);
     expect(r.players.some((p) => p.num === 1)).toBe(false);
     expect(r.formation).toEqual([[2, 3]]);
+  });
+});
+
+describe("swapPositions", () => {
+  it("starter<->starter swaps the cells, leaves players untouched", () => {
+    const r = swapPositions(base(), 2, 3);
+    expect(r.formation).toEqual([[1], [3, 2]]);
+    // num/name/role unchanged
+    expect(r.players.find((p) => p.num === 2)!).toEqual({ num: 2, name: "RB", role: "starting" });
+    expect(r.players.find((p) => p.num === 3)!).toEqual({ num: 3, name: "CB", role: "starting" });
+  });
+  it("starter<->starter across rows", () => {
+    const r = swapPositions(base(), 1, 3);
+    expect(r.formation).toEqual([[3], [2, 1]]);
+  });
+  it("starter<->sub: sub takes the cell and roles exchange", () => {
+    const r = swapPositions(base(), 2, 12); // 2 is a starter, 12 is a sub
+    expect(r.formation).toEqual([[1], [12, 3]]);
+    expect(r.players.find((p) => p.num === 2)!.role).toBe("sub");
+    expect(r.players.find((p) => p.num === 12)!.role).toBe("starting");
+    // names/nums unchanged
+    expect(r.players.find((p) => p.num === 2)!.name).toBe("RB");
+    expect(r.players.find((p) => p.num === 12)!.name).toBe("Bench");
+  });
+  it("starter<->sub regardless of argument order", () => {
+    const r = swapPositions(base(), 12, 2); // sub first
+    expect(r.formation).toEqual([[1], [12, 3]]);
+    expect(r.players.find((p) => p.num === 2)!.role).toBe("sub");
+    expect(r.players.find((p) => p.num === 12)!.role).toBe("starting");
+  });
+  it("sub<->sub swaps bench order", () => {
+    const two = (): TeamRoster => ({
+      formation: [[1]],
+      players: [
+        { num: 1, name: "GK", role: "starting" },
+        { num: 12, name: "B1", role: "sub" },
+        { num: 13, name: "B2", role: "sub" },
+      ],
+    });
+    const r = swapPositions(two(), 12, 13);
+    expect(r.formation).toEqual([[1]]);
+    const subOrder = r.players.filter((p) => p.role === "sub").map((p) => p.num);
+    expect(subOrder).toEqual([13, 12]);
+  });
+  it("unknown num is a no-op clone", () => {
+    expect(swapPositions(base(), 2, 99)).toEqual(base());
+    expect(swapPositions(base(), 99, 2)).toEqual(base());
+  });
+  it("does not mutate the input", () => {
+    const b = base();
+    swapPositions(b, 2, 3);
+    expect(b.formation).toEqual([[1], [2, 3]]);
   });
 });
