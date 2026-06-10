@@ -62,6 +62,39 @@ export function swapPositions(r: TeamRoster, numA: number, numB: number): TeamRo
   return c;
 }
 
+// Set a player's number to toNum. If another player already wears toNum, that
+// player is bumped to the lowest free number (so numbers stay unique).
+export function setNumber(r: TeamRoster, fromNum: number, toNum: number): TeamRoster {
+  if (fromNum === toNum || toNum < 1 || toNum > 99) return clone(r);
+  let c = clone(r);
+  if (c.players.some((p) => p.num === toNum)) {
+    const used = new Set(c.players.map((p) => p.num));
+    used.delete(toNum); // the clashing player vacates toNum
+    let free = 1; while (free === toNum || used.has(free)) free++;
+    c = renumberPlayer(c, toNum, free); // bump the clashing player to the lowest free number
+  }
+  return renumberPlayer(c, fromNum, toNum);
+}
+
+// Move a player to a different formation row, a new row, or the subs bench.
+// target: a row index (0-based, as currently displayed) | "new" | "subs".
+export function movePlayer(r: TeamRoster, num: number, target: number | "new" | "subs"): TeamRoster {
+  const c = clone(r);
+  const p = c.players.find((x) => x.num === num);
+  if (!p) return c;
+  let formation = c.formation.map((row) => row.filter((n) => n !== num)); // pull from its current row
+  if (target === "subs") {
+    p.role = "sub";
+  } else {
+    p.role = "starting";
+    if (target === "new") formation.push([num]);
+    else if (typeof target === "number" && target >= 0 && target < formation.length) formation[target] = [...formation[target], num];
+    else formation.push([num]);
+  }
+  c.formation = formation.filter((row) => row.length > 0);
+  return c;
+}
+
 export function addPlayer(r: TeamRoster, role: "starting" | "sub"): TeamRoster {
   const c = clone(r);
   const num = nextFreeNum(c);

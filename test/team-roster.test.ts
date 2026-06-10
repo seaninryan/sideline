@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renamePlayer, renumberPlayer, addPlayer, removePlayer, swapPositions } from "@/lib/team-roster";
+import { renamePlayer, renumberPlayer, addPlayer, removePlayer, swapPositions, setNumber, movePlayer } from "@/lib/team-roster";
 import type { TeamRoster } from "@/lib/types";
 
 const base = (): TeamRoster => ({
@@ -10,6 +10,39 @@ const base = (): TeamRoster => ({
     { num: 3, name: "CB", role: "starting" },
     { num: 12, name: "Bench", role: "sub" },
   ],
+});
+
+describe("setNumber", () => {
+  it("changes a number when free", () => {
+    const r = setNumber(base(), 1, 5);
+    expect(r.players.find((p) => p.num === 5)!.name).toBe("GK");
+    expect(r.formation[0]).toEqual([5]);
+  });
+  it("bumps the clashing player to the lowest free number", () => {
+    // 2 → 3 collides with CB(3); CB should move to lowest free (4)
+    const r = setNumber(base(), 2, 3);
+    expect(r.players.find((p) => p.name === "RB")!.num).toBe(3);
+    expect(r.players.find((p) => p.name === "CB")!.num).toBe(4);
+    expect(new Set(r.players.map((p) => p.num)).size).toBe(4); // still unique
+  });
+  it("no-op when from == to", () => expect(setNumber(base(), 2, 2)).toEqual(base()));
+});
+
+describe("movePlayer", () => {
+  it("moves a starter to another line", () => {
+    const r = movePlayer(base(), 1, 1); // GK(1) from line 0 → line 1
+    expect(r.formation).toEqual([[2, 3, 1]]); // old line 0 emptied & dropped
+  });
+  it("moves a starter to the bench", () => {
+    const r = movePlayer(base(), 2, "subs");
+    expect(r.players.find((p) => p.num === 2)!.role).toBe("sub");
+    expect(r.formation.flat()).not.toContain(2);
+  });
+  it("moves a sub onto a new line as a starter", () => {
+    const r = movePlayer(base(), 12, "new");
+    expect(r.players.find((p) => p.num === 12)!.role).toBe("starting");
+    expect(r.formation[r.formation.length - 1]).toEqual([12]);
+  });
 });
 
 describe("renamePlayer", () => {

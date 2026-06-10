@@ -1,10 +1,11 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { teamStore } from "@/lib/team-store";
 import { templateForSport } from "@/lib/team-templates";
-import { renamePlayer, renumberPlayer, addPlayer, removePlayer } from "@/lib/team-roster";
-import { mkId, contrastOn } from "@/lib/util";
+import { addPlayer } from "@/lib/team-roster";
+import { mkId } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
+import RosterPitch from "@/components/RosterPitch";
 import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
 
 const EMPTY: TeamRoster = { formation: [], players: [] };
@@ -21,35 +22,19 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
   const [color2, setColor2] = useState(initial?.color2 || "#1f7a4d");
   const [sport, setSport] = useState(initial?.sport || "");
   const [roster, setRoster] = useState<TeamRoster>(initial?.roster || EMPTY);
-  const [edit, setEdit] = useState<{ num: number; name: string; num2: string } | null>(null);
   const [pick, setPick] = useState<null | "c1" | "c2">(null);
-  const [busy, setBusy] = useState(false);
 
   // sharing (existing teams only)
   const [isPub, setIsPub] = useState(!!initial?.is_public);
   const [nameDisp, setNameDisp] = useState<NameDisplay>(initial?.name_display || "full");
-  const [shortCode, setShortCode] = useState<string | null>(initial?.short_code || null);
   const [shareBusy, setShareBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const origin = typeof location !== "undefined" ? location.origin : "";
-  const shareUrl = shortCode ? `${origin}/t/${shortCode}` : "";
 
-  const doPublish = async () => {
-    setShareBusy(true);
-    await teamStore.publish(id, nameDisp);
-    const fresh = await teamStore.get(id);
-    setShortCode(fresh?.short_code || null);
-    setIsPub(true); setShareBusy(false);
-  };
+  const doPublish = async () => { setShareBusy(true); await teamStore.publish(id, nameDisp); setIsPub(true); setShareBusy(false); };
   const doUnpublish = async () => { setShareBusy(true); await teamStore.unpublish(id); setIsPub(false); setShareBusy(false); };
   const changeNameDisp = async (v: NameDisplay) => {
     setNameDisp(v);
     if (isPub) { setShareBusy(true); await teamStore.setNameDisplay(id, v); setShareBusy(false); }
   };
-  const copyLink = () => { navigator.clipboard?.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); };
-
-  const byNum = (n: number) => roster.players.find((p) => p.num === n);
-  const subs = roster.players.filter((p) => p.role === "sub");
 
   const chooseSport = (s: string) => {
     setSport(s);
@@ -58,23 +43,16 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
     setRoster(templateForSport(s));
   };
 
-  const openSlot = (num: number) => { const p = byNum(num); setEdit({ num, name: p?.name || "", num2: String(num) }); };
-  const applySlot = () => {
-    if (!edit) return;
-    let r = renamePlayer(roster, edit.num, edit.name.trim());
-    const n2 = parseInt(edit.num2, 10);
-    if (n2 >= 1 && n2 <= 99 && n2 !== edit.num) r = renumberPlayer(r, edit.num, n2);
-    setRoster(r); setEdit(null);
-  };
-
-  const save = async () => {
-    if (!name.trim() || busy) return;
-    setBusy(true);
-    const rec: TeamRecord = { id, name: name.trim(), color1, color2, sport: sport || undefined, roster };
-    const ok = await teamStore.set(rec);
-    setBusy(false);
-    if (ok) onDone();
-  };
+  const persist = () => { if (name.trim()) teamStore.set({ id, name: name.trim(), color1, color2, sport: sport || undefined, roster }); };
+  // auto-save 0.8s after any change (skip the first render)
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const t = setTimeout(persist, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, color1, color2, sport, roster]);
+  const done = () => { persist(); onDone(); };
 
   const swatch = (val: string, set: (c: string) => void, which: "c1" | "c2") => (
     <>
@@ -91,7 +69,7 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
   return (
     <div className="te">
       <div className="mt-row"><span className="mt-h" style={{ flex: 1, margin: 0 }}>{initial ? "Edit team" : "New team"}</span>
-        <button className="mt-add alt" onClick={onDone}>✕ Cancel</button></div>
+        <button className="mt-add alt" onClick={done}>‹ Done</button></div>
 
       <label className="te-field">Name <input className="mt-inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Racoons" /></label>
       <div className="te-field">Colours {swatch(color1, setColor1, "c1")} {swatch(color2, setColor2, "c2")}</div>
@@ -102,73 +80,30 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
         </select>
       </label>
 
-      <p className="mt-note">Tap a player to name them. {sport ? "" : "Pick a sport to load a template, or add players below."}</p>
-      <div className="te-pitch" style={{ background: `linear-gradient(${color2}22, #0c3b2a 60%)` }}>
-        {roster.formation.map((row, ri) => (
-          <div className="mt-line" key={ri}>
-            {row.map((n) => { const p = byNum(n); return (
-              <button className="mt-jersey te-slot" key={n} onClick={() => openSlot(n)}>
-                <span className="j" style={{ background: color1, color: contrastOn(color1), borderBottom: `4px solid ${color2}` }}>{n}</span>
-                <span className="nm">{p?.name || "—"}</span>
-              </button>
-            ); })}
-          </div>
-        ))}
-      </div>
-
-      {edit && (
-        <div className="mt-live" style={{ marginTop: 8 }}>
-          <div className="mt-row">
-            <span className="mt-h" style={{ margin: 0 }}>Player {edit.num}</span>
-            <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setEdit(null)}>Cancel</button>
-          </div>
-          <input className="mt-inp" autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="player name" />
-          <div className="mt-row" style={{ marginTop: 6 }}>
-            <label className="mt-note">No. <input style={{ width: 54 }} value={edit.num2} onChange={(e) => setEdit({ ...edit, num2: e.target.value.replace(/\D/g, "") })} /></label>
-            <button className="mt-add" onClick={applySlot}>OK</button>
-            <button className="mt-add danger" onClick={() => { setRoster(removePlayer(roster, edit.num)); setEdit(null); }}>Remove</button>
-          </div>
-        </div>
-      )}
-
-      <p className="mt-h" style={{ marginTop: 12 }}>Subs</p>
-      <div className="mt-bench">
-        {subs.map((p) => <button className="b" key={p.num} onClick={() => openSlot(p.num)}>{p.num}. {p.name || "—"}</button>)}
-      </div>
+      <p className="mt-note">Tap a player to edit name &amp; number; ⇄ Swap or ↕ Move to rearrange. {sport ? "" : "Pick a sport to load a template, or add players below."}</p>
+      <RosterPitch roster={roster} color1={color1} color2={color2} editable onChange={setRoster} />
       <div className="mt-row" style={{ marginTop: 8 }}>
         <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "starting"))}>+ Player</button>
         <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "sub"))}>+ Sub</button>
       </div>
 
-      <div className="mt-row" style={{ marginTop: 14 }}>
-        <button className="mt-add" disabled={!name.trim() || busy} onClick={save}>{busy ? "Saving…" : "Save team"}</button>
-      </div>
-
       {initial && (
         <div className="mt-live" style={{ marginTop: 16 }}>
-          <span className="mt-h" style={{ margin: 0 }}>Sharing</span>
-          {!isPub ? (
+          <label className="mt-row" style={{ alignItems: "center" }}>
+            <span className="mt-h" style={{ margin: 0, flex: 1 }}>Public</span>
+            <button role="switch" aria-checked={isPub} disabled={shareBusy}
+              className={"sw" + (isPub ? " on" : "")} onClick={() => (isPub ? doUnpublish() : doPublish())}>
+              <span className="sw-k" />
+            </button>
+          </label>
+          {isPub && (
             <>
               <p className="mt-note" style={{ margin: "10px 0 4px" }}>Player names on the public page:</p>
-              <div className="mt-grid">
-                {NAME_OPTS.map((o) => (
-                  <button key={o.v} className={"mt-big sm" + (nameDisp === o.v ? " on" : "")} onClick={() => setNameDisp(o.v)}>{o.label}</button>
-                ))}
-              </div>
-              <button className="mt-add" style={{ marginTop: 10 }} disabled={shareBusy} onClick={doPublish}>{shareBusy ? "Publishing…" : "🌐 Make public & get link"}</button>
-            </>
-          ) : (
-            <>
-              <p className="mt-note" style={{ margin: "10px 0 4px" }}>Public link</p>
-              <input className="mt-inp" readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%" }} />
-              <button className="mt-add" style={{ marginTop: 6 }} onClick={copyLink}>{copied ? "Copied ✓" : "🔗 Copy public link"}</button>
-              <p className="mt-note" style={{ margin: "12px 0 4px" }}>Name privacy</p>
               <div className="mt-grid">
                 {NAME_OPTS.map((o) => (
                   <button key={o.v} className={"mt-big sm" + (nameDisp === o.v ? " on" : "")} disabled={shareBusy} onClick={() => changeNameDisp(o.v)}>{o.label}</button>
                 ))}
               </div>
-              <button className="mt-add danger" style={{ marginTop: 10 }} disabled={shareBusy} onClick={doUnpublish}>🚫 Make private</button>
             </>
           )}
         </div>
