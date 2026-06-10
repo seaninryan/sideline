@@ -41,7 +41,7 @@ Here We Go — a personal match tracker for GAA (hurling/football) and soccer th
   - `EditorApp.tsx` — client bootstrap: runs `loadAll()` then renders `<MatchTracker initialId wizard>`.
   - `PublicMatch.tsx` — read-only public match render; carries the `<AppHeader>` with a visitor Share (copy link + share-as-image built client-side from the model).
   - `ShareWizard.tsx` — legacy publish wizard, superseded by `ShareSheet` (unused; retained for reference).
-- **`test/`** — Vitest suites (189 tests total, across all files): `parse-events.test.ts` (the event-only parser behavioural suite), `migrate-notation.test.ts` (legacy→event-only migration + header/roster lift), `team-roster.test.ts`, `util.test.ts`, `raw-edit.test.ts`, `model.test.ts` (canonical `SAMPLE_RECORD` finals), `name-display.test.ts`, `score-card.test.ts`, `score-header.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-view.test.ts`, `short-code.test.ts`, `team-link.test.ts`, `team-templates.test.ts`, `smoke.test.ts`.
+- **`test/`** — Vitest suites (197 tests total, across all files): `parse-events.test.ts` (the event-only parser behavioural suite), `migrate-notation.test.ts` (legacy→event-only migration + header/roster lift), `team-roster.test.ts`, `util.test.ts`, `raw-edit.test.ts`, `model.test.ts` (canonical `SAMPLE_RECORD` finals), `name-display.test.ts`, `score-card.test.ts`, `score-header.test.ts`, `brand.test.ts`, `match-list.test.ts`, `match-sport.test.ts`, `match-view.test.ts`, `short-code.test.ts`, `team-link.test.ts`, `team-templates.test.ts`, `smoke.test.ts`.
 - **`assets/`** — `LiberationSans-Regular.ttf` + `LiberationSans-Bold.ttf` (bundled for resvg OG rendering; these are the fonts used in the score card, not the app UI).
 - **`tools/make-icon.py`** — regenerates `icon-180.png` and `icon-touch-180.png` (needs PIL). The top-bar logo SVG uses the same geometry/colours. Don't edit the icons by hand.
 - **`SETUP.md`** — end-user setup guide (Supabase + Google OAuth + Vercel deploy).
@@ -56,14 +56,14 @@ Node 20 is required (`nvm use 20`).
 npm install
 npm run dev      # → http://localhost:3000
 npm run build    # production build
-npm test         # Vitest (189 tests)
+npm test         # Vitest (197 tests)
 ```
 
 After any parser change, run `npm test` and confirm the canonical `SAMPLE_RECORD` (event-only `raw` + structured Racoons/Wildebeests rosters) produces: final Racoons 2-6, Wildebeests 2-7 (Loss), Rick 2-4 (4 frees), Morty 0-1, leadChanges 1, timesLevel 3, maxLead 5 (us), 0 warnings. The finals are asserted in `test/model.test.ts` (via `SAMPLE_RECORD`); the parser's per-behaviour coverage lives in `test/parse-events.test.ts`. Totals are **counted from the tagged events** — there is no written-score/column-vote machinery any more.
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v50**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v51**.
 
 ## Architecture
 
@@ -82,6 +82,7 @@ The app is **list-first**. `/` renders `<Landing>`: signed-in users see "Your ma
 - **Sign-up policy:** open — any Google account can sign in. RLS isolates each user's rows. Sign out lives in the header account menu (email ▾ → Sign out).
 - **Storage:** a `matches` table, row per match. Columns: `id uuid pk`, `owner uuid (default auth.uid())`, `is_public bool default false`, `short_code text unique`, `name_display text default 'full'`, `match_date timestamptz`, `my_team text`, `opponent text`, `sport text`, `data jsonb`, `updated_at timestamptz`. `data jsonb` holds the full match record and is the source of truth; the promoted columns (`match_date`, `my_team`, `opponent`, `sport`, `name_display`) are derived on every `store.set`. RLS: `own_all` policy (`owner = auth.uid()`) + `public_read` policy (`is_public = true`). The public page and OG route read only `is_public=true` rows and apply `name_display` redaction.
 - **Short links (`short_code`).** Public matches are shared as `herewego.ie/m/<short_code>` — a 6-char code from an unambiguous alphabet (`lib/short-code.ts`), generated once on publish in `ShareSheet.ensureShortCode` (idempotent: an `is null` guard never clobbers an existing code; retries on the unique-index clash; falls back to the full UUID if the column is absent or after repeated collisions). Routing (`/m/[id]` page + OG route) resolves the `[id]` segment by `short_code` when it isn't a UUID and by `id` when it is, so legacy full-UUID links keep working. `store.set` does **not** touch `short_code`, so auto-save can't clobber it. **Schema migration (run once in Supabase):** `alter table matches add column if not exists short_code text; create unique index if not exists matches_short_code_key on matches (short_code);`
+- **Teams unique index.** The new-match wizard requires a unique index `teams_owner_sport_name_key` on `(owner, coalesce(sport,''), lower(name))` so that `teamStore.findOrCreate` never produces duplicate `(sport, name)` pairs per owner. Migration in `docs/teams-migration.sql` (④, run once in Supabase after checking for pre-existing duplicates).
 - **Auto-save & sync:** every match is saved on creation (so it always has a `/m/<uuid>` home), then auto-saves 2.5s after each change (`dirty` compares editor state to `cache[curId]`). The header **Resync** icon re-pulls via `loadAll()` (for edits made on another device) and reloads the open match, confirming first if local changes would be lost. Last-write-wins — there is no merge. (The old explicit Save button + match dropdown were removed; the never-saved-match Save button in game mode is now an inert safety net since `curId` is always set in a routed editor.)
 - **`store` API** (`lib/store.ts`): `store.list()` → `["match:<id>", ...]`; `store.get(id)`; `store.set(id, data)` → bool; `store.del(id)` → bool. `store.set` does a single-row upsert; `store.del` a single-row delete. `MatchTracker` uses this surface unchanged.
 
@@ -132,11 +133,9 @@ Key decisions (preserve these when modifying):
 - The toast banner stays rendered in game mode. A never-saved match shows an `mt-warn` row with its own Save button, because auto-save needs the first explicit Save and the top bar is hidden.
 - Bottom "last entry + ↩ Undo" row is `position:sticky; bottom:0` (`.gm-undo`) — the sticky pattern the scoreboard already proves out; `margin-top:auto` in the `.mt-game` flex column pins it when stage content is short.
 
-### New-match wizard (v36)
+### New-match wizard (v51)
 
-- "New" (⋯ menu) opens a full-screen wizard in the same takeover slot as game mode (`nw` state; chrome wraps are `!(gm || nw)`; the scoreboard also hides — it would show the previous match): **Date (default now) → Your team → Opponent**. Both team steps offer big kit-coloured buttons mined from `cache` (`prevTeams`: distinct myTeam+label combos / opposition names, header line parsed via `parseMatch`, most recent first); picking applies name, colours, and sport (your team's sport wins; an opponent's only fills a gap). Skip gives the blank template; Cancel touches nothing (state only mutates in `finishNew`, which is guarded by `creatingRef` against a double-tap minting two matches).
-- `finishNew` builds the record locally (not `recordPayload()` — stale state) and saves to Supabase immediately, so auto-save is live from creation.
-- New matches (wizard and blank) no longer seed a clock line — every match starts at phase "pre" and Start half opens H1 at throw-in.
+- "New" opens a full-screen wizard (`nw` state) in the same takeover slot as game mode: **Date → Your team → Opponent**. Teams are now **first-class records** (the `teams` table, ③a) with identity **(sport, name)** — `hurling/Spuds` and `football/Spuds` are distinct teams. Each team step is a type-ahead **`<TeamPicker>`** over your saved teams (`teamStore.list`), showing sport icons; typing a new name offers **"Create '<name>'"** which mints a real team (`teamStore.findOrCreate`, sport-template roster, blank names). Picking your team sets the working **sport**; the opponent picker is **scoped to that sport** (mismatch is structurally prevented — a sport-mini toggle re-resolves both sides to their `(sport, name)` variant via find-or-create, never mutating a shared team). On **Create**, `finishNew` links the match via `teamLinkPatch` (③b) — setting `home_team_id`/`away_team_id` and **seeding both `usRoster`/`oppRoster` snapshots** — so lineups + opponent roster are ready immediately and the post-create "Link teams" nudge no longer fires. Pure logic lives in `lib/match-sport.ts` (`teamMatchKey`/`pairingError`/`filterTeams`). The old past-match quick-picks (`prevTeams`) and the "Skip — blank match" path were removed. (`doNew` remains the internal blank-template safety net.)
 
 ### Share image
 
