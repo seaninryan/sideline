@@ -33,6 +33,10 @@ export const LIVE_EVENTS = [
 
 export const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "point65", "point45", "og", "yellow", "red"];
 
+// Rolling window for the match list's "Live" section: a started, unfinished match
+// counts as live while its kickoff or last edit is within this span of now.
+export const LIVE_WINDOW_MS = 3 * 60 * 60 * 1000; // 3h
+
 // Selectable sports: dropdown emoji, display label, and the scoring mode each implies.
 export const SPORTS: Record<string, { label: string; emoji: string; mode: string }> = {
   hurling: { label: "Hurling", emoji: "🏑", mode: "gaa" },

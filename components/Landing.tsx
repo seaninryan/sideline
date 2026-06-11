@@ -84,6 +84,9 @@ export default function Landing({ userId, email }: { userId: string | null; emai
   const feedLive = feedNotUpcoming.filter((r) => isLive(r.data, now, r.updated_at)).sort((a, b) => dateMs(b) - dateMs(a));
   const feedPast = feedNotUpcoming.filter((r) => !isLive(r.data, now, r.updated_at));
 
+  // "Past" only gets its own subhead when an Upcoming or Live group precedes it.
+  const pastSubhead = (up: Row[], live: Row[], past: Row[]) => past.length > 0 && (up.length > 0 || live.length > 0);
+
   // sport chips: every sport actually present across both lists, in canonical
   // order. Hidden entirely when there's nothing to choose between.
   const present = new Set([...(own || []), ...feed].map(sportOf).filter(Boolean));
@@ -161,7 +164,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
                     {ownLive.map((r) => row(r, { privacy: true, live: true }))}
                   </>
                 )}
-                {ownPast.length > 0 && (ownUpcoming.length > 0 || ownLive.length > 0) && <div className="ml-subhead">Past</div>}
+                {pastSubhead(ownUpcoming, ownLive, ownPast) && <div className="ml-subhead">Past</div>}
                 {ownPast.slice(0, ownLimit).map((r) => row(r, { privacy: true }))}
                 {ownPast.length > ownLimit && (
                   <button className="ml-more" onClick={() => setOwnLimit((n) => n + PAGE)}>Show older</button>
@@ -184,7 +187,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
             {feedLive.map((r) => row(r, { live: true }))}
           </>
         )}
-        {feedPast.length > 0 && (feedUpcoming.length > 0 || feedLive.length > 0) && <div className="ml-subhead">Past</div>}
+        {pastSubhead(feedUpcoming, feedLive, feedPast) && <div className="ml-subhead">Past</div>}
         {feedPast.map((r) => row(r))}
         {!feedFiltered.length && !loading && <p className="ml-note">No public matches{sportFilter ? ` for ${SPORTS[sportFilter].label}` : ""} yet.</p>}
         {loading && <p className="ml-note">Loading…</p>}

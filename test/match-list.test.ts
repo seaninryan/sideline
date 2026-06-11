@@ -80,6 +80,7 @@ describe("isLive", () => {
   const recentIso = "2026-06-11T19:30"; // 30m before NOW
   const staleIso = "2026-06-11T15:00"; // 5h before NOW
   const futureIso = "2026-06-12T19:00"; // tomorrow
+  const laterTodayIso = "2026-06-11T22:00"; // 2h after NOW, same calendar day
 
   it("is live when started, unfinished, kickoff within 3h", () => {
     expect(isLive({ ...started, matchDate: recentIso }, NOW)).toBe(true);
@@ -95,6 +96,9 @@ describe("isLive", () => {
   });
   it("is not live for a future calendar day", () => {
     expect(isLive({ ...started, matchDate: futureIso }, NOW)).toBe(false);
+  });
+  it("is not live when kickoff is later today (a future time, same day)", () => {
+    expect(isLive({ ...started, matchDate: laterTodayIso }, NOW)).toBe(false);
   });
   it("is live when kickoff is missing but it was edited recently", () => {
     expect(isLive({ ...started, matchDate: "" }, NOW, recentIso)).toBe(true);

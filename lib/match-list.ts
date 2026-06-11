@@ -1,6 +1,6 @@
 import { parseMatch } from "@/lib/parser";
 import { gpTotal, fmtDateShort, MONTHS } from "@/lib/util";
-import { SPORTS } from "@/lib/constants";
+import { SPORTS, LIVE_WINDOW_MS } from "@/lib/constants";
 import type { MatchRecord } from "@/lib/types";
 
 export interface RowView {
@@ -94,8 +94,6 @@ export function isUpcoming(iso: string | undefined, now: number): boolean {
   return dayStartOf(t) > dayStartOf(now);
 }
 
-const LIVE_WINDOW_MS = 3 * 60 * 60 * 1000; // 3h rolling window for "live"
-
 // True when a match is currently in progress: not a future fixture, has started
 // (≥1 event), has no FT marker, and either kickoff or the last edit is within the
 // last 3h. `now` and `updatedAt` are passed in so the function stays pure.
@@ -121,7 +119,7 @@ export function isLive(rec: MatchRecord, now: number, updatedAt?: string): boole
   });
   const started = parsed.scoring.length > 0 || parsed.notes.length > 0 || parsed.halfMarks.length > 0;
   if (!started) return false;
-  const finished = parsed.halfMarks.some((m: any) => m.marker === "FT");
+  const finished = parsed.halfMarks.some((m: { marker?: string }) => m.marker === "FT");
   return !finished;
 }
 

@@ -37,7 +37,7 @@ export default function MatchRow({ record, href, date, privacy = null, upcoming 
         </span>
       </span>
       <span className="ml-meta">
-        {live && <span className="ml-live">🔴 LIVE</span>}
+        {live && <span className="ml-live" role="status" aria-label="Live match"><span aria-hidden="true">🔴 </span>LIVE</span>}
         <span className={"ml-date" + (upcoming ? " upcoming" : "")}>{upcoming ? `📅 ${date}` : date}</span>
         {privacy && <span className={"ml-priv " + privacy}>{privacy === "public" ? "◉ public" : "🔒 private"}</span>}
       </span>
