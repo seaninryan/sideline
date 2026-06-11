@@ -32,7 +32,7 @@ export default function LinkTeams({ userId, record, currentHomeAway, onApply, on
     onClose();
   };
 
-  const opt = (t: TeamRecord) => <option key={t.id} value={t.id}>{t.sport && SPORTS[t.sport] ? SPORTS[t.sport].emoji + " " : ""}{t.name}</option>;
+  const opt = (t: TeamRecord) => <option key={t.id} value={t.id}>{t.sport && SPORTS[t.sport] ? SPORTS[t.sport].emoji + " " : ""}{t.name}{t.squad ? " · " + t.squad : ""}</option>;
 
   return (
     <div className="mt-live" style={{ marginTop: 0 }}>

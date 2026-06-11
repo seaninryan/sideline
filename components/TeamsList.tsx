@@ -93,7 +93,7 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
               {yoursFiltered.slice(0, yourLimit).map((t) => (
                 <div className="tl-row" key={t.id} onClick={() => setEditing(t)}>
                   <span className="tl-flag" style={{ background: flag(t) }} />
-                  <span className="tl-name">{t.name}</span>
+                  <span className="tl-name">{t.name}{t.squad ? <span className="tl-squad">{t.squad}</span> : null}</span>
                   <span className={"tl-priv " + (t.is_public ? "public" : "private")}>{t.is_public ? "◉ public" : "🔒 private"}</span>
                   <button className="tl-dup" title="Duplicate" onClick={(e) => { e.stopPropagation(); dup(t); }}>⧉</button>
                   {meta(t)}
@@ -108,7 +108,7 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
         {feed.map((t) => (
           <Link className="tl-row" key={t.id} href={`/t/${t.short_code || t.id}`}>
             <span className="tl-flag" style={{ background: flag(t) }} />
-            <span className="tl-name">{t.name}</span>
+            <span className="tl-name">{t.name}{t.squad ? <span className="tl-squad">{t.squad}</span> : null}</span>
             {meta(t)}
           </Link>
         ))}
