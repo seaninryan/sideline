@@ -94,6 +94,37 @@ export function isUpcoming(iso: string | undefined, now: number): boolean {
   return dayStartOf(t) > dayStartOf(now);
 }
 
+const LIVE_WINDOW_MS = 3 * 60 * 60 * 1000; // 3h rolling window for "live"
+
+// True when a match is currently in progress: not a future fixture, has started
+// (≥1 event), has no FT marker, and either kickoff or the last edit is within the
+// last 3h. `now` and `updatedAt` are passed in so the function stays pure.
+export function isLive(rec: MatchRecord, now: number, updatedAt?: string): boolean {
+  const iso = rec.matchDate || rec.date;
+  if (isUpcoming(iso, now)) return false;
+
+  const recent = (s: string | undefined) => {
+    if (!s) return false;
+    const t = Date.parse(s);
+    if (isNaN(t)) return false;
+    const diff = now - t;
+    return diff >= 0 && diff < LIVE_WINDOW_MS;
+  };
+  if (!recent(iso) && !recent(updatedAt)) return false;
+
+  const sp = (SPORTS as Record<string, { mode: string }>)[rec.sport || ""];
+  const scoringMode = sp ? (sp.mode as "gaa" | "goals") : (rec.autoMode ? undefined : rec.scoringMode);
+  const parsed = parseMatch(rec.raw, {
+    myTeam: rec.myTeam, scoringMode,
+    usRoster: rec.usRoster, oppRoster: rec.oppRoster,
+    label: rec.label, homeAway: rec.homeAway, opponent: rec.opponent,
+  });
+  const started = parsed.scoring.length > 0 || parsed.notes.length > 0 || parsed.halfMarks.length > 0;
+  if (!started) return false;
+  const finished = parsed.halfMarks.some((m: any) => m.marker === "FT");
+  return !finished;
+}
+
 // Human "2h ago" / "Yesterday" / "Tomorrow" / short-date, given an explicit
 // `now` (testable). Future dates read as fixtures, not "just now".
 export function relativeDate(iso: string | undefined, now: number): string {
