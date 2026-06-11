@@ -75,3 +75,14 @@ describe("swapHomeAway", () => {
     expect((p as any).raw).toBeUndefined();
   });
 });
+
+describe("teamLinkPatch squad snapshot", () => {
+  it("snapshots each team's squad onto the match", () => {
+    const rec: any = { raw: "", usRoster: { formation: [], players: [] } };
+    const usTeam: any = { id: "u", name: "Racoons", squad: "U12 Boys", roster: { formation: [], players: [] } };
+    const oppTeam: any = { id: "o", name: "Wildebeests", squad: "Senior", roster: { formation: [], players: [] } };
+    const patch = teamLinkPatch(rec, { usTeam, oppTeam, homeAway: "home" });
+    expect(patch.usSquad).toBe("U12 Boys");
+    expect(patch.oppSquad).toBe("Senior");
+  });
+});
