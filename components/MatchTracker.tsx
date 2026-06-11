@@ -31,6 +31,7 @@ import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import StatGrid from "@/components/StatGrid";
 import Scorers from "@/components/Scorers";
+import Timeline from "@/components/Timeline";
 import { htScore } from "@/lib/half-time";
 import { useRouter } from "next/navigation";
 
@@ -691,57 +692,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
   const tabs = [["details", "Details"], ["lineup", "Lineup"], ["game", "Game mode"], ["advanced", "Advanced"]];
 
-  const renderTimeline = () => (
-    <div className="mt-tl">
-      {[1, 2].map((h) => {
-        const items = timeline.filter((t) => t.half === h);
-        if (!items.length) return null;
-        const mk = halfMarks.find((m) => m.half === h && m.clock);
-        const addedMk = halfMarks.find((m) => m.half === h && m.marker && m.added > 0);
-        return (
-          <div key={h}>
-            <div className="mt-half">{h === 1 ? "First half" : "Second half"}{mk ? ` · ${mk.clock}` : ""}</div>
-            {items.map((it, i) => {
-              if (it.kind === "score") {
-                const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
-                const evName = it.scorer === "Opposition" ? themName : it.scorer;
-                return (
-                  <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 }}>
-                    <span className="m">{it.mmin || it.minute}'</span>
-                    <span>
-                      {descriptive
-                        ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
-                        : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">'{it.setPiece}</span> : ""}</>}
-                    </span>
-                    <span className="sc">{it.usScore} – {it.themScore}</span>
-                  </div>
-                );
-              }
-              if (it.kind === "card") {
-                const whoTxt = it.side === "them" && (!it.who || /^t\d*$/i.test(it.who)) ? themName : (it.who || usName);
-                return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
-                  <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
-                  <span><span style={{ display: "inline-block", width: 9, height: 12, borderRadius: 2, background: it.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", verticalAlign: "-2px", marginRight: 6 }} />{whoTxt}</span>
-                </div>;
-              }
-              if (it.kind === "corner") {
-                const nth = timeline.filter((x) => x.kind === "corner" && x.side === it.side && x.seq <= it.seq).length;
-                const ord = nth === 1 ? "1st" : nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
-                return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
-                  <span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span>
-                  <span style={{ color: "#6f7d72" }}>⚑ {ord} corner — {it.side === "them" ? themName : usName}</span>
-                </div>;
-              }
-              if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : ""}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;
-              return <div key={i} className="mt-ev note"><span className="m">{it.minute != null ? `${it.mmin || it.minute}'` : "✎"}</span><span style={{ color: "#6f7d72" }}>{it.text}</span></div>;
-            })}
-            {addedMk && <div className="mt-ev mid"><span className="chip">⏱ +{addedMk.added} added</span></div>}
-          </div>
-        );
-      })}
-      {timeline.length === 0 && <p style={{ color: "#6f7d72" }}>No events parsed.</p>}
-    </div>
-  );
 
   const view = nw ? "new" : tab; // new-match wizard replaces the tab body; game mode is the "game" tab; Share is an inline panel
 
@@ -1131,7 +1081,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             <Scorers us={usScorers} them={themScorers} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} mode={effMode} />
 
             <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
-            {renderTimeline()}
+            <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />
           </>
         )}
 
