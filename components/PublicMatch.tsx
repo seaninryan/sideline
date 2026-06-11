@@ -8,9 +8,9 @@ import ScoreHeader from "@/components/ScoreHeader";
 import StatGrid from "@/components/StatGrid";
 import Scorers from "@/components/Scorers";
 import Timeline from "@/components/Timeline";
+import Jersey from "@/components/Jersey";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
-import { contrastOn } from "@/lib/util";
 import { buildInfographicSVG } from "@/lib/infographic";
 import { svgToPng } from "@/lib/svg-to-png.client";
 import type { Model } from "@/lib/types";
@@ -133,7 +133,7 @@ export default function PublicMatch({ model }: { model: Model }) {
                     const sc = (m.usScorers || []).find((s: any) => s.num === n && (s.g || s.p));
                     return (
                       <div className="pm-jersey" key={ci}>
-                        <div className="sq" style={{ background: m.colorUs, color: contrastOn(m.colorUs) }}>{n}</div>
+                        <Jersey c1={m.colorUs} c2={m.colorUs2} num={n} size={40} />
                         <div className="nm">{findName(n)}{subOff.has(n) ? " ▼" : ""}</div>
                         {sc && <div className="sc">{m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`}</div>}
                       </div>
@@ -161,7 +161,7 @@ export default function PublicMatch({ model }: { model: Model }) {
               <div className="pm-pitch-row" key={ri}>
                 {row.map((n, ci) => { const op = m.oppRoster.players.find((x: any) => x.num === n); return (
                   <div className="pm-jersey" key={ci}>
-                    <div className="sq" style={{ background: m.colorThem, color: contrastOn(m.colorThem) }}>{n}</div>
+                    <Jersey c1={m.colorThem} c2={m.colorThem2} num={n} size={38} />
                     <div className="nm">{op ? op.name : ""}</div>
                   </div>
                 ); })}

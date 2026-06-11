@@ -406,9 +406,10 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .te-slot { cursor: pointer; }
 
 /* RosterPitch (v54) — shared formation pitch + inline name/number edit + swap */
-.rp-pitch { border-radius: 10px; padding: 14px 8px; }
-.rp-tools { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.rp-hint { font-family: var(--font-oswald); font-size: 12px; color: #8fb0a3; }
+.rp-pitch { border-radius: 10px; padding: 14px 8px; position: relative; }
+.rp-tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.rp-toolbtns { display: flex; gap: 6px; }
+.rp-hint { font-family: var(--font-oswald); font-size: 11px; color: #8fb0a3; text-align: right; }
 .rp-target { flex: none; align-self: center; background: rgba(245,197,24,.16); border: 1px dashed #f5c518; color: #f5c518; font-family: var(--font-oswald); cursor: pointer; width: 30px; height: 30px; border-radius: 50%; font-size: 16px; line-height: 1; }
 .rp-target:hover { background: rgba(245,197,24,.3); }
 .rp-target.wide { width: auto; height: auto; border-radius: 16px; padding: 7px 16px; font-size: 13px; }
@@ -421,11 +422,14 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .rp-slot.picked { background: rgba(245,197,24,.22); outline: 2px solid #f5c518; }
 .rp-slot .nm { font-family: var(--font-oswald); font-weight: 500; font-size: 13px; color: #eaf3ee; text-align: center; line-height: 1.15; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
 .rp-subhead { text-align: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8fb0a3; margin: 12px 0 2px; }
-.rp-edit { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 132px; background: rgba(0,0,0,.28); border-radius: 9px; padding: 8px 6px; }
-.rp-edit .rp-num { width: 48px; text-align: center; font-size: 15px; padding: 6px; border-radius: 7px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
-.rp-edit .rp-name { width: 100%; font-size: 14px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.rp-edit { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 154px; background: rgba(0,0,0,.30); border-radius: 11px; padding: 11px 9px; }
+.rp-num-step { display: flex; align-items: center; gap: 6px; }
+.rp-step { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 21px; line-height: 1; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.rp-step:active { background: #ececec; }
+.rp-edit .rp-num { width: 48px; text-align: center; font-size: 18px; font-weight: 700; padding: 6px 4px; border-radius: 7px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.rp-edit .rp-name { width: 100%; font-size: 14px; padding: 8px; border-radius: 7px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
 .rp-edit-btns { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
-.rp-edit-btns .mt-add { padding: 5px 9px; font-size: 12px; }
+.rp-edit-btns .mt-add { padding: 6px 11px; font-size: 12px; }
 
 /* on/off switch */
 .sw { width: 46px; height: 26px; border-radius: 14px; border: 1px solid #c2b894; background: #d8cfb8; position: relative; cursor: pointer; flex: none; padding: 0; transition: background .15s; }
