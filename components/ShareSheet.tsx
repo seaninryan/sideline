@@ -25,15 +25,16 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
   const [isPublic, setIsPublic] = useState(false);
   const [slug, setSlug] = useState(curId);
   const [nameDisplay, setNameDisplay] = useState<NameDisplay>(record.nameDisplay || "full");
+  const [listed, setListed] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const shareUrl = `${origin}/m/${slug}`;
 
   useEffect(() => {
-    Promise.resolve(sb.from("matches").select("is_public,short_code,name_display").eq("id", curId).maybeSingle())
+    Promise.resolve(sb.from("matches").select("is_public,short_code,name_display,listed").eq("id", curId).maybeSingle())
       .then(({ data }) => {
-        const d = data as { is_public?: boolean; short_code?: string | null; name_display?: NameDisplay } | null;
-        if (d) { setIsPublic(!!d.is_public); if (d.short_code) setSlug(d.short_code); if (d.name_display) setNameDisplay(d.name_display); }
+        const d = data as { is_public?: boolean; short_code?: string | null; name_display?: NameDisplay; listed?: boolean } | null;
+        if (d) { setIsPublic(!!d.is_public); if (d.short_code) setSlug(d.short_code); if (d.name_display) setNameDisplay(d.name_display); if (typeof d.listed === "boolean") setListed(d.listed); }
         setLoaded(true);
       }).catch(() => setLoaded(true));
   }, [curId]);
@@ -89,6 +90,14 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
     setBusy(false);
   };
 
+  const toggleListed = async () => {
+    const next = !listed;
+    setBusy(true);
+    setListed(next);
+    await sb.from("matches").update({ listed: next }).eq("id", curId);
+    setBusy(false);
+  };
+
   const copy = () => { navigator.clipboard?.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   return (
@@ -123,6 +132,9 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
               <button key={o.v} className={"mt-big sm" + (nameDisplay === o.v ? " on" : "")} disabled={busy} onClick={() => applyNameDisplay(o.v)}>{o.label}</button>
             ))}
           </div>
+          <p className="mt-note" style={{ margin: "12px 0 4px" }}>Public home page</p>
+          <button className="mt-add alt" disabled={busy} onClick={toggleListed}>{listed ? "👁 Listed — tap to hide" : "🙈 Hidden — tap to list"}</button>
+          <p className="mt-note" style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>{listed ? "Anyone can find this in the public matches feed." : "Hidden from the feed — only people with the link can open it."}</p>
           <button className="mt-add danger" style={{ marginTop: 10 }} disabled={busy} onClick={unshare}>🚫 Unshare (make private)</button>
         </>
       )}

@@ -11,8 +11,7 @@ import Timeline from "@/components/Timeline";
 import Jersey from "@/components/Jersey";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
-import { buildInfographicSVG } from "@/lib/infographic";
-import { svgToPng } from "@/lib/svg-to-png.client";
+import ShareImageModal from "@/components/ShareImageModal";
 import type { Model } from "@/lib/types";
 
 export default function PublicMatch({ model }: { model: Model }) {
@@ -25,29 +24,36 @@ export default function PublicMatch({ model }: { model: Model }) {
   const usShort = (m.usName || "Us").split(" ")[0];
   const themShort = (m.themName || "Them").split(" ")[0];
 
-  // subs involved (for lineup arrows), mirrors the poster
-  const subOff = new Set<number>();
-  (m.timeline || []).forEach((t: any) => { if (t.kind === "sub" && t.offNum != null) subOff.add(t.offNum); });
-  const scoreText = (s: any) => (m.effMode === "goals" ? `${s.g}` : `${s.g}-${s.p}`) + (s.frees ? ` (${s.frees}f)` : "");
+  // lineup badges derived from the timeline — mirrors the editor's subArrows / playerMarks
+  const subOn: Record<string, Set<number>> = { us: new Set(), them: new Set() };
+  const subOff: Record<string, Set<number>> = { us: new Set(), them: new Set() };
+  const cardsBy: Record<string, Record<number, string[]>> = { us: {}, them: {} };
+  (m.timeline || []).forEach((t: any) => {
+    const side = t.side === "them" ? "them" : "us";
+    if (t.kind === "sub") { if (t.onNum != null) subOn[side].add(t.onNum); if (t.offNum != null) subOff[side].add(t.offNum); }
+    if (t.kind === "card" && t.num != null) (cardsBy[side][t.num] ||= []).push(t.card);
+  });
+  const badges = (n: number, side: "us" | "them") => (
+    <>
+      {(subOn[side].has(n) || subOff[side].has(n)) && (
+        <span className="pm-arrows">{subOn[side].has(n) && <span className="on">▲</span>}{subOff[side].has(n) && <span className="off">▼</span>}</span>
+      )}
+      {(cardsBy[side][n] || []).map((c, i) => <span key={i} className={"pm-card " + (c === "red" ? "red" : "yellow")} />)}
+    </>
+  );
+  const usScoreFor = (n: number) => (m.usScorers || []).find((s: any) => s.num === n && (s.g || s.p));
   const findName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
 
   const sb = useMemo(() => createClient(), []);
   const router = useRouter();
   const [share, setShare] = useState(false);
+  const [imgOpen, setImgOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   React.useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
   const copyLink = () => { navigator.clipboard?.writeText(location.href); };
-  const shareImage = () => {
-    try {
-      const { svg, width, height } = buildInfographicSVG(m);
-      svgToPng(svg, width, height).then(({ blob }) => {
-        if (!blob) return;
-        const file = new File([blob], "match.png", { type: "image/png" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {});
-        else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "match.png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
-      }).catch(() => {});
-    } catch { /* ignore */ }
-  };
+  const safe = (s: string) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+  const imgFilename = `${safe(m.usName || "match")}-${safe(m.themName || "")}.png`;
+  const imgTitle = `${m.usName} ${m.totals.us.str} – ${m.totals.them.str} ${m.themName}`;
 
   return (
     <div className="pm-root mt-root">
@@ -69,9 +75,10 @@ export default function PublicMatch({ model }: { model: Model }) {
         <div className="mt-live" style={{ marginTop: 0 }}>
           <div className="mt-row"><span className="mt-h" style={{ margin: 0, flex: 1 }}>Share</span><button className="mt-add alt" onClick={() => setShare(false)}>✕ Close</button></div>
           <button className="mt-add" style={{ marginTop: 8 }} onClick={copyLink}>🔗 Copy link</button>
-          <button className="mt-add alt" style={{ marginTop: 8 }} onClick={shareImage}>🖼 Share as image</button>
+          <button className="mt-add alt" style={{ marginTop: 8 }} onClick={() => { setShare(false); setImgOpen(true); }}>🖼 Share as image</button>
         </div>
       )}
+      {imgOpen && <ShareImageModal model={m} filename={imgFilename} title={imgTitle} onClose={() => setImgOpen(false)} />}
 
       {/* score header (shared with the editor) */}
       {(() => {
@@ -130,26 +137,43 @@ export default function PublicMatch({ model }: { model: Model }) {
               {m.formationRows.map((row: number[], ri: number) => (
                 <div className="pm-pitch-row" key={ri}>
                   {row.map((n, ci) => {
-                    const sc = (m.usScorers || []).find((s: any) => s.num === n && (s.g || s.p));
+                    const sc = usScoreFor(n);
                     return (
                       <div className="pm-jersey" key={ci}>
                         <Jersey c1={m.colorUs} c2={m.colorUs2} num={n} size={40} />
-                        <div className="nm">{findName(n)}{subOff.has(n) ? " ▼" : ""}</div>
+                        <div className="nm">{findName(n)} {badges(n, "us")}</div>
                         {sc && <div className="sc">{m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`}</div>}
                       </div>
                     );
                   })}
                 </div>
               ))}
+              {m.subs && m.subs.length > 0 && (
+                <>
+                  <div className="pm-subhead">Subs</div>
+                  <div className="pm-pitch-row">
+                    {m.subs.map((p: any) => {
+                      const sc = usScoreFor(p.num);
+                      return (
+                        <div className="pm-jersey" key={p.num}>
+                          <Jersey c1={m.colorUs} c2={m.colorUs2} num={p.num} size={34} />
+                          <div className="nm">{p.name} {badges(p.num, "us")}</div>
+                          {sc && <div className="sc">{m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="pm-lineup-list">
               {m.starters.map((p: any, i: number) => (
-                <span className="pm-lineup-item" key={i}>{p.num ? `${p.num}. ` : ""}{p.name}{subOff.has(p.num) ? " ▼" : ""}</span>
+                <span className="pm-lineup-item" key={i}>{p.num ? `${p.num}. ` : ""}{p.name}{subOff.us.has(p.num) ? " ▼" : ""}</span>
               ))}
             </div>
           )}
-          {m.subs && m.subs.length > 0 && <p className="pm-bench">Subs: {m.subs.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
+          {!(m.formationRows && m.formationRows.length > 0) && m.subs && m.subs.length > 0 && <p className="pm-bench">Subs: {m.subs.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
           {m.missing && m.missing.length > 0 && <p className="pm-bench">Missing: {m.missing.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
         </section>
       )}
@@ -162,11 +186,24 @@ export default function PublicMatch({ model }: { model: Model }) {
                 {row.map((n, ci) => { const op = m.oppRoster.players.find((x: any) => x.num === n); return (
                   <div className="pm-jersey" key={ci}>
                     <Jersey c1={m.colorThem} c2={m.colorThem2} num={n} size={38} />
-                    <div className="nm">{op ? op.name : ""}</div>
+                    <div className="nm">{op ? op.name : ""} {badges(n, "them")}</div>
                   </div>
                 ); })}
               </div>
             ))}
+            {(() => { const os = (m.oppRoster.players || []).filter((p: any) => p.role === "sub"); return os.length > 0 ? (
+              <>
+                <div className="pm-subhead">Subs</div>
+                <div className="pm-pitch-row">
+                  {os.map((p: any) => (
+                    <div className="pm-jersey" key={p.num}>
+                      <Jersey c1={m.colorThem} c2={m.colorThem2} num={p.num} size={34} />
+                      <div className="nm">{p.name} {badges(p.num, "them")}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null; })()}
           </div>
         </section>
       )}
