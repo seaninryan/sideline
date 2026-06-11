@@ -7,7 +7,7 @@ import Jersey from "@/components/Jersey";
 // Teams are passed already ordered home-left / away-right. Result indicator is neutral:
 // "Leading by N" (in play) / "Won by N" (full time) under the leader, or "Tie" centred.
 export default function ScoreHeader({
-  homeName, awayName, homeStr, awayStr, homeColors, awayColors, grade, dateStr, homeTotal, awayTotal, phase, action,
+  homeName, awayName, homeStr, awayStr, homeColors, awayColors, grade, dateStr, homeTotal, awayTotal, phase, action, homeSquad, awaySquad,
 }: {
   homeName: string; awayName: string;
   homeStr: string; awayStr: string;
@@ -15,6 +15,7 @@ export default function ScoreHeader({
   grade: string; dateStr: string;
   homeTotal: number; awayTotal: number; phase: string;
   action?: React.ReactNode;
+  homeSquad?: string; awaySquad?: string;
 }) {
   const r = scoreHeaderResult({ homeTotal, awayTotal, phase });
   const flag = (c: [string, string]) => <Jersey c1={c[0]} c2={c[1]} size={40} />;
@@ -28,9 +29,9 @@ export default function ScoreHeader({
       {action && <div className="sh-action">{action}</div>}
       {dateStr && <div className="sh-meta">{dateStr}</div>}
       <div className="sh-row">
-        <div className="sh-team">{flag(homeColors)}<div className="sh-nm">{homeName}</div><div className="sh-sc">{homeStr}</div>{lead("home")}</div>
+        <div className="sh-team">{flag(homeColors)}<div className="sh-nm">{homeName}{homeSquad ? <span className="sh-squad">{homeSquad}</span> : null}</div><div className="sh-sc">{homeStr}</div>{lead("home")}</div>
         {showResult && r.kind === "tie" ? <span className="sh-tie">TIE</span> : <span className="sh-dash">–</span>}
-        <div className="sh-team">{flag(awayColors)}<div className="sh-nm">{awayName}</div><div className="sh-sc">{awayStr}</div>{lead("away")}</div>
+        <div className="sh-team">{flag(awayColors)}<div className="sh-nm">{awayName}{awaySquad ? <span className="sh-squad">{awaySquad}</span> : null}</div><div className="sh-sc">{awayStr}</div>{lead("away")}</div>
       </div>
     </div>
   );
