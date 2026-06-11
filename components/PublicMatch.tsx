@@ -61,8 +61,10 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   React.useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
   // Live updates: rebuild the whole model from each Realtime UPDATE payload.
   useEffect(() => {
+    let reconnectT: ReturnType<typeof setTimeout> | undefined;
     const apply = (row: any) => {
       if (row.is_public === false) { setGone(true); return; }
+      if (!row.data) return; // truncated/partial payload — skip rather than crash buildModel
       const next = applyNameDisplay(buildModel(row.data), row.name_display || row.data?.nameDisplay || "full");
       if (scoreChanged(prevModel.current, next)) setPulse((p) => p + 1);
       prevModel.current = next;
@@ -93,14 +95,14 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
           if (wasConnected.current) {
             refetch();
             setConn("reconnected");
-            setTimeout(() => setConn(null), 2000);
+            reconnectT = setTimeout(() => setConn(null), 2000);
           }
           wasConnected.current = true;
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           if (wasConnected.current) setConn("reconnecting");
         }
       });
-    return () => { sb.removeChannel(ch); };
+    return () => { clearTimeout(reconnectT); sb.removeChannel(ch); };
   }, [id, sb]);
   const copyLink = () => { navigator.clipboard?.writeText(location.href); };
   const safe = (s: string) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
