@@ -6,18 +6,16 @@ import { addPlayer } from "@/lib/team-roster";
 import { mkId } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
 import RosterPitch from "@/components/RosterPitch";
+import PrivacyControl from "@/components/PrivacyControl";
+import { privacyLevel, levelToColumns, type PrivacyLevel } from "@/lib/privacy";
 import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
 
 const EMPTY: TeamRoster = { formation: [], players: [] };
-const NAME_OPTS: { v: NameDisplay; label: string }[] = [
-  { v: "full", label: "Full" },
-  { v: "initials", label: "Initials" },
-  { v: "none", label: "None" },
-];
 
-export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord | null; onDone: () => void }) {
+export default function TeamEditor({ initial, userId, onDone }: { initial?: TeamRecord | null; userId?: string; onDone: () => void }) {
   const [id] = useState(() => initial?.id || mkId());
   const [name, setName] = useState(initial?.name || "");
+  const [squad, setSquad] = useState(initial?.squad || "");
   const [color1, setColor1] = useState(initial?.color1 || "#f5c518");
   const [color2, setColor2] = useState(initial?.color2 || "#1f7a4d");
   const [sport, setSport] = useState(initial?.sport || "");
@@ -25,15 +23,19 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
   const [pick, setPick] = useState<null | "c1" | "c2">(null);
 
   // sharing (existing teams only)
-  const [isPub, setIsPub] = useState(!!initial?.is_public);
+  const [level, setLevel] = useState<PrivacyLevel>(privacyLevel(!!initial?.is_public, initial?.listed));
   const [nameDisp, setNameDisp] = useState<NameDisplay>(initial?.name_display || "full");
   const [shareBusy, setShareBusy] = useState(false);
 
-  const doPublish = async () => { setShareBusy(true); await teamStore.publish(id, nameDisp); setIsPub(true); setShareBusy(false); };
-  const doUnpublish = async () => { setShareBusy(true); await teamStore.unpublish(id); setIsPub(false); setShareBusy(false); };
+  const applyLevel = async (next: PrivacyLevel) => {
+    setShareBusy(true);
+    setLevel(next);
+    await teamStore.setPrivacy(id, levelToColumns(next));
+    setShareBusy(false);
+  };
   const changeNameDisp = async (v: NameDisplay) => {
     setNameDisp(v);
-    if (isPub) { setShareBusy(true); await teamStore.setNameDisplay(id, v); setShareBusy(false); }
+    if (level !== "private") { setShareBusy(true); await teamStore.setNameDisplay(id, v); setShareBusy(false); }
   };
 
   const chooseSport = (s: string) => {
@@ -43,7 +45,11 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
     setRoster(templateForSport(s));
   };
 
-  const persist = () => { if (name.trim()) teamStore.set({ id, name: name.trim(), color1, color2, sport: sport || undefined, roster }); };
+  const persist = async () => {
+    if (!name.trim()) return;
+    const saved = await teamStore.set({ id, owner: userId || initial?.owner, name: name.trim(), squad: squad.trim(), color1, color2, sport: sport || undefined, roster });
+    if (saved && saved.name !== name) setName(saved.name);
+  };
   // auto-save 0.8s after any change (skip the first render)
   const first = useRef(true);
   useEffect(() => {
@@ -51,7 +57,7 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
     const t = setTimeout(persist, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, color1, color2, sport, roster]);
+  }, [name, squad, color1, color2, sport, roster]);
   const done = () => { persist(); onDone(); };
 
   const swatch = (val: string, set: (c: string) => void, which: "c1" | "c2") => (
@@ -69,9 +75,11 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
   return (
     <div className="te">
       <div className="mt-row"><span className="mt-h" style={{ flex: 1, margin: 0 }}>{initial ? "Edit team" : "New team"}</span>
+        {initial && <button className="mt-add alt" onClick={async () => { await persist(); const d = await teamStore.duplicate({ ...initial, name, squad, color1, color2, sport: sport || undefined, roster }); if (d) onDone(); }}>⧉ Duplicate</button>}
         <button className="mt-add alt" onClick={done}>‹ Done</button></div>
 
       <label className="te-field">Name <input className="mt-inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Racoons" /></label>
+      <label className="te-field">Squad <input className="mt-inp" value={squad} onChange={(e) => setSquad(e.target.value)} placeholder="e.g. U12 Boys (optional)" /></label>
       <div className="te-field">Colours {swatch(color1, setColor1, "c1")} {swatch(color2, setColor2, "c2")}</div>
       <label className="te-field">Sport
         <select className="mt-sel" value={sport} onChange={(e) => chooseSport(e.target.value)}>
@@ -89,23 +97,14 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
 
       {initial && (
         <div className="mt-live" style={{ marginTop: 16 }}>
-          <label className="mt-row" style={{ alignItems: "center" }}>
-            <span className="mt-h" style={{ margin: 0, flex: 1 }}>Public</span>
-            <button role="switch" aria-checked={isPub} disabled={shareBusy}
-              className={"sw" + (isPub ? " on" : "")} onClick={() => (isPub ? doUnpublish() : doPublish())}>
-              <span className="sw-k" />
-            </button>
-          </label>
-          {isPub && (
-            <>
-              <p className="mt-note" style={{ margin: "10px 0 4px" }}>Player names on the public page:</p>
-              <div className="mt-grid">
-                {NAME_OPTS.map((o) => (
-                  <button key={o.v} className={"mt-big sm" + (nameDisp === o.v ? " on" : "")} disabled={shareBusy} onClick={() => changeNameDisp(o.v)}>{o.label}</button>
-                ))}
-              </div>
-            </>
-          )}
+          <PrivacyControl
+            level={level}
+            onLevel={applyLevel}
+            link={typeof location !== "undefined" ? location.origin + "/t/" + (initial?.short_code || id) : undefined}
+            nameDisplay={nameDisp}
+            onNameDisplay={changeNameDisp}
+            busy={shareBusy}
+          />
         </div>
       )}
     </div>

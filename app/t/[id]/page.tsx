@@ -16,7 +16,7 @@ async function fetchTeam(slug: string): Promise<TeamRecord | null> {
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const t = await fetchTeam(params.id);
   if (!t) return { title: "Here We Go" };
-  return { title: `${t.name} · Here We Go`, description: `${t.name} squad on Here We Go` };
+  return { title: `${t.name}${t.squad ? " · " + t.squad : ""} · Here We Go`, description: `${t.name}${t.squad ? " · " + t.squad : ""} squad on Here We Go` };
 }
 
 export default async function TeamRoutePage({ params }: { params: { id: string } }) {

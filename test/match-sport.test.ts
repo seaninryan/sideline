@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { teamMatchKey, pairingError, filterTeams } from "@/lib/match-sport";
+import { teamMatchKey, pairingError, filterTeams, dedupeTeamName } from "@/lib/match-sport";
 import type { TeamRecord } from "@/lib/types";
 
 const T = (name: string, sport?: string): TeamRecord => ({ id: name + (sport || ""), name, sport, roster: { formation: [], players: [] } });
@@ -34,4 +34,42 @@ describe("filterTeams", () => {
     expect(filterTeams(teams, "wild", "hurling").map((t) => t.name)).toEqual(["Wildebeests"]);
   });
   it("empty query returns all (within scope)", () => expect(filterTeams(teams, "").length).toBe(3));
+});
+
+describe("teamMatchKey with squad", () => {
+  it("distinguishes squads of the same club", () => {
+    expect(teamMatchKey("Racoons", "hurling", "U11 Boys"))
+      .not.toBe(teamMatchKey("Racoons", "hurling", "Senior Men"));
+  });
+  it("blank squad matches blank squad", () => {
+    expect(teamMatchKey("Racoons", "hurling", "")).toBe(teamMatchKey("racoons", "hurling"));
+  });
+});
+
+describe("filterTeams matches name or squad", () => {
+  const teams = [
+    { id: "1", name: "Racoons", sport: "hurling", squad: "U11 Boys", roster: { formation: [], players: [] } },
+    { id: "2", name: "Racoons", sport: "hurling", squad: "Senior Men", roster: { formation: [], players: [] } },
+  ] as any[];
+  it("filters by squad text too", () => {
+    expect(filterTeams(teams, "u11", "hurling").map((t) => t.id)).toEqual(["1"]);
+  });
+});
+
+describe("dedupeTeamName", () => {
+  const keyset = (teams: any[]) => new Set(teams.map((t) => teamMatchKey(t.name, t.sport, t.squad)));
+  it("returns the name unchanged when no clash", () => {
+    expect(dedupeTeamName(new Set(), "Racoons", "hurling", "U11")).toBe("Racoons");
+  });
+  it("appends (2) on a clash", () => {
+    const s = keyset([{ name: "Racoons", sport: "hurling", squad: "U11" }]);
+    expect(dedupeTeamName(s, "Racoons", "hurling", "U11")).toBe("Racoons (2)");
+  });
+  it("appends (2) (2) when (2) also clashes", () => {
+    const s = keyset([
+      { name: "Racoons", sport: "hurling", squad: "U11" },
+      { name: "Racoons (2)", sport: "hurling", squad: "U11" },
+    ]);
+    expect(dedupeTeamName(s, "Racoons", "hurling", "U11")).toBe("Racoons (2) (2)");
+  });
 });

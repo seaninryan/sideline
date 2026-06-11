@@ -195,6 +195,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [homeTeamId, setHomeTeamId] = useState(null);
   const [awayTeamId, setAwayTeamId] = useState(null);
   const [oppRoster, setOppRoster] = useState(SAMPLE_RECORD.oppRoster || null);
+  const [usSquad, setUsSquad] = useState(SAMPLE_RECORD.usSquad || "");
+  const [oppSquad, setOppSquad] = useState(SAMPLE_RECORD.oppSquad || "");
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, scoringMode, autoMode, sport, label, homeAway, opponent, usRoster, oppRoster]);
@@ -249,7 +251,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, notationV: 2, ...(legacyRaw ? { legacyRaw } : {}) });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, notationV: 2, ...(legacyRaw ? { legacyRaw } : {}) });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -258,7 +260,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, saved]);
+  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, saved]);
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -280,7 +282,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
-  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster]);
+  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad]);
   // legacy matches (no team links) get a gentle one-time "Link teams?" nudge on open
   const linkNudged = useRef(false);
   useEffect(() => { linkNudged.current = false; }, [curId]);
@@ -316,6 +318,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setNameDisplay(d.nameDisplay || "full");
     setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || ""); setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
     setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
+    setUsSquad(d.usSquad || ""); setOppSquad(d.oppSquad || "");
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
   };
   const doNew = async () => {
@@ -530,15 +533,15 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // Wizard now picks a Home team then an Away team (sport is chosen on stage 1).
   // Internally Home → us, Away → them (homeAway:"home") so the engine is unchanged.
   const nwPickHome = (t) => setNw({ ...nw, home: t, stage: "away" });
-  const nwCreateHome = async (name) => {
+  const nwCreateHome = async (name, squad) => {
     if (!userUid || !nw.sport) return;
-    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#f5c518", color2: "#1f7a4d" });
+    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, squad, color1: "#f5c518", color2: "#1f7a4d" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, home: t, stage: "away" }); }
   };
   const nwPickAway = (t) => setNw({ ...nw, away: t });
-  const nwCreateAway = async (name) => {
+  const nwCreateAway = async (name, squad) => {
     if (!userUid || !nw.sport) return;
-    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#c0392b", color2: "#2c5fa8" });
+    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, away: t }); }
   };
   const finishNew = async () => {
@@ -558,6 +561,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       setRaw(""); setMyTeam(patch.myTeam); setOpponent(patch.opponent); setLabel(label);
       setHomeAway(patch.homeAway); setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
       setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster); setLegacyRaw(undefined);
+      setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
       setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
       setSport(sportKey); setScoringMode(mode); setAutoMode(true);
       setMatchDate(nw.date); setNw(null); setTab("game");
@@ -730,6 +734,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       totals, result, effMode, ht,
       leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
       series: parsed.series, goalDots: parsed.goalDots, chartMarkers, htLine: parsed.htLine, halfMarks,
+      usSquad, oppSquad,
       usScorers, themScorers, formationRows, starters, subs, missing, timeline, oppRoster,
       colorUs, colorUs2, colorThem, colorThem2,
     };
@@ -852,6 +857,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             if (p.opponent !== undefined) setOpponent(p.opponent);
             if (p.usRoster !== undefined) setUsRoster(p.usRoster);
             setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId); setOppRoster(p.oppRoster);
+            setUsSquad(p.usSquad || ""); setOppSquad(p.oppSquad || "");
             setSavedMsg("Teams linked ✓"); setTimeout(() => setSavedMsg(""), 2000);
           }}
         />
@@ -875,6 +881,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             homeTotal={usIsHome ? usTotal : themTotal}
             awayTotal={usIsHome ? themTotal : usTotal}
             phase={phase}
+            homeSquad={usIsHome ? usSquad : oppSquad}
+            awaySquad={usIsHome ? oppSquad : usSquad}
             action={<button className="sh-edit" onClick={() => { setShowDetails((o) => !o); if (showDetails) setColorPick(null); }}>{showDetails ? "▾ Hide" : "✎ Edit"}</button>}
           />
         );

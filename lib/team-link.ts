@@ -36,6 +36,8 @@ export function teamLinkPatch(
     awayTeamId: homeAway === "home" ? oppTeam.id : usTeam.id,
     usRoster,
     oppRoster: clone(oppTeam.roster),
+    usSquad: usTeam.squad || "",
+    oppSquad: oppTeam.squad || "",
   };
 }
 

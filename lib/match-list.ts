@@ -13,6 +13,8 @@ export interface RowView {
   sportEmoji: string;
   homeColors: [string, string];
   awayColors: [string, string];
+  homeSquad: string;
+  awaySquad: string;
 }
 
 // Resolved sport key (one of SPORTS): an explicit key wins, else a sport named
@@ -63,6 +65,8 @@ export function matchRowView(rec: MatchRecord): RowView {
   const winner: RowView["winner"] =
     winnerSide === "draw" ? "draw" : (winnerSide === "us") === usIsHome ? "home" : "away";
 
+  const usSquad = rec.usSquad || "";
+  const oppSquad = rec.oppSquad || "";
   return {
     homeName: usIsHome ? usName : themName,
     awayName: usIsHome ? themName : usName,
@@ -73,6 +77,8 @@ export function matchRowView(rec: MatchRecord): RowView {
     sportEmoji: resolveSportEmoji(rec.sport, header.sport, mode),
     homeColors: usIsHome ? usColors : themColors,
     awayColors: usIsHome ? themColors : usColors,
+    homeSquad: usIsHome ? usSquad : oppSquad,
+    awaySquad: usIsHome ? oppSquad : usSquad,
   };
 }
 

@@ -38,7 +38,8 @@ export default function TeamPage({ team, isOwner, fixtures = [] }: { team: TeamR
       <div className="tp-id">
         <span className="tp-flag" style={{ background: `linear-gradient(135deg, ${c1} 50%, ${c2} 50%)` }} />
         <div><div className="mt-h" style={{ margin: 0 }}>{team.name}</div>
-          <div className="mt-note" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 5 }}>{team.sport && SPORTS[team.sport] ? <><SportIcon sport={team.sport} size={14} />{SPORTS[team.sport].label}</> : "Team"}</div></div>
+          <div className="mt-note" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 5 }}>{team.sport && SPORTS[team.sport] ? <><SportIcon sport={team.sport} size={14} />{SPORTS[team.sport].label}</> : "Team"}</div>
+          {team.squad && <div className="mt-note" style={{ margin: 0, color: "var(--muted)" }}>{team.squad}</div>}</div>
       </div>
 
       {team.roster.formation.length > 0 && (

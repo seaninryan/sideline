@@ -29,6 +29,16 @@ describe("matchRowView", () => {
   });
 });
 
+describe("matchRowView squad mapping", () => {
+  it("maps usSquad/oppSquad to home/away by venue", () => {
+    const rec: any = { raw: "", myTeam: "Racoons", opponent: "Wildebeests", homeAway: "home",
+      usSquad: "U12 Boys", oppSquad: "Senior" };
+    const v = matchRowView(rec);
+    expect(v.homeSquad).toBe("U12 Boys");
+    expect(v.awaySquad).toBe("Senior");
+  });
+});
+
 describe("matchRowView draw", () => {
   it("returns draw when totals are equal", () => {
     const drawRec: MatchRecord = { raw: "Home v Away\n12:00\n5 Home\n6 Away", myTeam: "Home", sport: "soccer" };

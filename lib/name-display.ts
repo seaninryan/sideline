@@ -28,7 +28,7 @@ export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
     starters: (model.starters || []).map(fixPlayer),
     subs: (model.subs || []).map(fixPlayer),
     missing: (model.missing || []).map(fixPlayer),
-    formationRows: (model.formationRows || []).map((row: any[]) => (row || []).map(fixPlayer)),
+    formationRows: model.formationRows, // rows of shirt numbers — no names to redact (and fixPlayer would corrupt the numbers into objects)
     timeline: (model.timeline || []).map((t: any) =>
       t && t.scorer ? { ...t, scorer: redactName(t.scorer, t.num, mode) } : t,
     ),

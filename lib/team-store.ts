@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { genShortCode } from "@/lib/short-code";
 import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
-import { teamMatchKey } from "@/lib/match-sport";
+import { teamMatchKey, dedupeTeamName, duplicateTeamRecord } from "@/lib/match-sport";
 import { templateForSport } from "@/lib/team-templates";
 import { mkId } from "@/lib/util";
 
@@ -11,14 +11,15 @@ const sb = createClient();
 interface TeamRow {
   id: string; owner?: string; short_code?: string | null;
   name: string; color1?: string | null; color2?: string | null;
-  sport?: string | null; roster: TeamRoster;
-  is_public?: boolean | null; name_display?: NameDisplay | null; updated_at?: string;
+  sport?: string | null; roster: TeamRoster; squad?: string | null;
+  is_public?: boolean | null; listed?: boolean | null; name_display?: NameDisplay | null; updated_at?: string;
 }
 
 const toRecord = (r: TeamRow): TeamRecord => ({
   id: r.id, owner: r.owner, short_code: r.short_code ?? null,
   name: r.name, color1: r.color1 ?? undefined, color2: r.color2 ?? undefined,
-  sport: r.sport ?? undefined, roster: r.roster,
+  sport: r.sport ?? undefined, roster: r.roster, squad: r.squad ?? "",
+  listed: r.listed ?? true,
   is_public: !!r.is_public, name_display: r.name_display ?? "full", updated_at: r.updated_at,
 });
 
@@ -48,46 +49,54 @@ export const teamStore = {
     const { data } = await sb.from("teams").select("*").eq("id", id).maybeSingle();
     return data ? toRecord(data as TeamRow) : null;
   },
-  // upsert a team; returns the saved id (with a freshly-minted short_code on create) or null on failure
-  async set(t: TeamRecord): Promise<string | null> {
-    const row = { id: t.id, name: t.name, color1: t.color1 ?? null, color2: t.color2 ?? null, sport: t.sport ?? null, roster: t.roster, updated_at: new Date().toISOString() };
+  // upsert a team; collision-safe: bumps the name if (sport, name, squad) already exists
+  // for another record owned by the same user. Returns { id, name } (with a freshly-minted
+  // short_code on create) or null on failure.
+  async set(t: TeamRecord): Promise<{ id: string; name: string } | null> {
+    let name = t.name.trim();
+    if (t.owner) {
+      const others = (await this.list(t.owner)).filter((x) => x.id !== t.id);
+      const keys = new Set(others.map((x) => teamMatchKey(x.name, x.sport, x.squad)));
+      name = dedupeTeamName(keys, name, t.sport, t.squad);
+    }
+    const row = { id: t.id, name, color1: t.color1 ?? null, color2: t.color2 ?? null, sport: t.sport ?? null, squad: t.squad ?? "", roster: t.roster, updated_at: new Date().toISOString() };
     const { error } = await sb.from("teams").upsert(row);
     if (error) { console.warn("team save failed", error.message); return null; }
     await ensureShortCode(t.id);
-    return t.id;
+    return { id: t.id, name };
   },
-  // Find a team by (sport, name) for this owner, or create one with the sport's
+  // Find a team by (sport, name, squad) for this owner, or create one with the sport's
   // template roster. Never mutates an existing team. Returns the TeamRecord (or null on save failure).
   async findOrCreate(
     userId: string,
-    { name, sport, color1, color2 }: { name: string; sport: string; color1?: string; color2?: string },
+    { name, sport, squad, color1, color2 }: { name: string; sport: string; squad?: string; color1?: string; color2?: string },
   ): Promise<TeamRecord | null> {
-    const want = teamMatchKey(name, sport);
-    const existing = (await this.list(userId)).find((t) => teamMatchKey(t.name, t.sport) === want);
+    const want = teamMatchKey(name, sport, squad || "");
+    const existing = (await this.list(userId)).find((t) => teamMatchKey(t.name, t.sport, t.squad) === want);
     if (existing) return existing;
-    const rec: TeamRecord = { id: mkId(), name: name.trim(), sport, color1, color2, roster: templateForSport(sport) };
-    const id = await this.set(rec);
-    return id ? rec : null;
+    const rec: TeamRecord = { id: mkId(), owner: userId, name: name.trim(), sport, squad: (squad || "").trim(), color1, color2, roster: templateForSport(sport) };
+    const saved = await this.set(rec);
+    return saved ? { ...rec, name: saved.name } : null;
   },
   async del(id: string): Promise<boolean> {
     const { error } = await sb.from("teams").delete().eq("id", id);
     return !error;
   },
+  async duplicate(src: TeamRecord): Promise<TeamRecord | null> {
+    const copy = duplicateTeamRecord(src, mkId());
+    const saved = await this.set(copy);            // collision-safe: bumps name again if needed
+    return saved ? { ...copy, name: saved.name } : null;
+  },
   // Global feed of public teams (own + others), newest first. Offset-paginated.
   async listPublic({ offset = 0, limit = 5 }: { offset?: number; limit?: number } = {}): Promise<TeamRecord[]> {
-    const { data, error } = await sb.from("teams").select("*").eq("is_public", true)
+    const { data, error } = await sb.from("teams").select("*").eq("is_public", true).eq("listed", true)
       .order("updated_at", { ascending: false }).range(offset, offset + limit - 1);
     if (error) { console.warn("public teams failed", error.message); return []; }
     return (data as TeamRow[] || []).map(toRecord);
   },
-  // Make a team public with a name-privacy setting (mints a short_code if needed).
-  async publish(id: string, nameDisplay: NameDisplay): Promise<boolean> {
-    await ensureShortCode(id);
-    const { error } = await sb.from("teams").update({ is_public: true, name_display: nameDisplay }).eq("id", id);
-    return !error;
-  },
-  async unpublish(id: string): Promise<boolean> {
-    const { error } = await sb.from("teams").update({ is_public: false }).eq("id", id);
+  async setPrivacy(id: string, cols: { is_public: boolean; listed: boolean }): Promise<boolean> {
+    if (cols.is_public) await ensureShortCode(id);
+    const { error } = await sb.from("teams").update(cols).eq("id", id);
     return !error;
   },
   async setNameDisplay(id: string, v: NameDisplay): Promise<boolean> {

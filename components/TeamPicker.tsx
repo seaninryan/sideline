@@ -18,9 +18,10 @@ export default function TeamPicker({
   side: "us" | "them";
   exclude?: string | null;
   onPick: (t: TeamRecord) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string, squad: string) => void;
 }) {
   const [q, setQ] = useState("");
+  const [squad, setSquad] = useState("");
   const [expanded, setExpanded] = useState(false);
 
   const all = filterTeams(teams, q, sport).filter((t) => t.id !== exclude);
@@ -41,7 +42,7 @@ export default function TeamPicker({
         {shown.map((t) => (
           <button key={t.id} className="tp-row" onClick={() => onPick(t)}>
             <span className="tp-flag" style={{ background: `linear-gradient(135deg, ${t.color1 || fallback[0]} 50%, ${t.color2 || fallback[1]} 50%)` }} />
-            <span className="tp-name">{t.name}</span>
+            <span className="tp-name">{t.name}{t.squad ? <span className="tp-squad">{t.squad}</span> : null}</span>
             {t.sport && <SportIcon sport={t.sport} size={16} />}
           </button>
         ))}
@@ -51,7 +52,10 @@ export default function TeamPicker({
         <button className="tp-more" onClick={() => setExpanded(true)}>Show all {all.length} teams</button>
       )}
       {q.trim() && !exact && (
-        <button className="mt-add tp-create" onClick={() => onCreate(q.trim())}>+ Create &quot;{q.trim()}&quot;</button>
+        <div className="tp-createbox">
+          <input className="nw-in" placeholder="Squad (optional, e.g. U12 Boys)" value={squad} onChange={(e) => setSquad(e.target.value)} />
+          <button className="mt-add tp-create" onClick={() => onCreate(q.trim(), squad.trim())}>+ Create &quot;{q.trim()}{squad.trim() ? ` · ${squad.trim()}` : ""}&quot;</button>
+        </div>
       )}
     </div>
   );

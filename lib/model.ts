@@ -57,6 +57,7 @@ export function buildModel(record: MatchRecord): Model {
     colorThem: r.colorThem || "#c0392b", colorThem2: r.colorThem2 || "#2c5fa8",
     nameDisplay: r.nameDisplay || "full",
     oppRoster: r.oppRoster || null,
+    usSquad: r.usSquad || "", oppSquad: r.oppSquad || "",
     parsed,
   };
 }

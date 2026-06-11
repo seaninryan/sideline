@@ -99,6 +99,8 @@ export default function PublicMatch({ model }: { model: Model }) {
             homeTotal={usIsHome ? usTotal : themTotal}
             awayTotal={usIsHome ? themTotal : usTotal}
             phase={phase}
+            homeSquad={usIsHome ? m.usSquad : m.oppSquad}
+            awaySquad={usIsHome ? m.oppSquad : m.usSquad}
           />
         );
       })()}
