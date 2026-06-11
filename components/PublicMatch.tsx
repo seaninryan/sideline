@@ -22,6 +22,8 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   const prevModel = useRef<Model>(initialModel);
   const [pulse, setPulse] = useState(0);
   const [gone, setGone] = useState(false);
+  const [conn, setConn] = useState<null | "reconnecting" | "reconnected">(null);
+  const wasConnected = useRef(false);
   const m = model;
   const margin = Math.abs(m.totals.us.total - m.totals.them.total);
   const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
@@ -66,6 +68,14 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
       prevModel.current = next;
       setModel(next);
     };
+    const refetch = async () => {
+      const { data } = await sb
+        .from("matches")
+        .select("data,name_display,is_public")
+        .eq("id", id)
+        .maybeSingle();
+      if (data) apply(data);
+    };
     const ch = sb
       .channel(`match:${id}`)
       .on(
@@ -78,7 +88,18 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         { event: "DELETE", schema: "public", table: "matches", filter: `id=eq.${id}` },
         () => setGone(true)
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (wasConnected.current) {
+            refetch();
+            setConn("reconnected");
+            setTimeout(() => setConn(null), 2000);
+          }
+          wasConnected.current = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (wasConnected.current) setConn("reconnecting");
+        }
+      });
     return () => { sb.removeChannel(ch); };
   }, [id, sb]);
   const copyLink = () => { navigator.clipboard?.writeText(location.href); };
@@ -102,6 +123,8 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         }
         menuItems={email ? [{ label: "＋ New", onClick: () => router.push("/m/new") }] : []}
       />
+      {conn === "reconnecting" && <div className="pm-conn">Reconnecting…</div>}
+      {conn === "reconnected" && <div className="pm-conn ok">Reconnected</div>}
       {share && (
         <div className="mt-live" style={{ marginTop: 0 }}>
           <div className="mt-row"><span className="mt-h" style={{ margin: 0, flex: 1 }}>Share</span><button className="mt-add alt" onClick={() => setShare(false)}>✕ Close</button></div>

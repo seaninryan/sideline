@@ -524,6 +524,14 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .sh-squad{display:block; font-size:11px; font-weight:400; color:var(--muted);}
 .tl-squad{display:block; font-size:11px; color:var(--muted);}
 
+/* Live-update: connection pill (reconnecting / reconnected). */
+.pm-conn {
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+  padding: 6px 14px; border-radius: 999px; font-size: 13px; z-index: 60;
+  background: #11241b; color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+.pm-conn.ok { background: #1a7f44; }
+
 /* Live-update: one-shot score-header flash (brand tint fading out). */
 @keyframes pmScoreFlash {
   0%   { background-color: rgba(245, 197, 24, 0.55); }
