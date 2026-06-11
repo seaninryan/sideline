@@ -25,13 +25,13 @@ export default function MatchRow({ record, href, date, privacy = null, upcoming 
       <span className="ml-teams">
         <span className="ml-side home">
           <span className={"ml-flag " + cls("home")} style={{ background: flag(v.homeColors) }} />
-          <span className={"ml-name " + cls("home")}>{v.homeName}</span>
+          <span className={"ml-name " + cls("home")}>{v.homeName}{v.homeSquad && <span className="ml-squad">{v.homeSquad}</span>}</span>
           <span className={"ml-score " + cls("home")}>{v.homeStr}</span>
         </span>
         <span className="ml-dash">–</span>
         <span className="ml-side away">
           <span className={"ml-score " + cls("away")}>{v.awayStr}</span>
-          <span className={"ml-name " + cls("away")}>{v.awayName}</span>
+          <span className={"ml-name " + cls("away")}>{v.awayName}{v.awaySquad && <span className="ml-squad">{v.awaySquad}</span>}</span>
           <span className={"ml-flag " + cls("away")} style={{ background: flag(v.awayColors) }} />
         </span>
       </span>
