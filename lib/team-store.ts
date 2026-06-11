@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { genShortCode } from "@/lib/short-code";
 import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
-import { teamMatchKey, dedupeTeamName } from "@/lib/match-sport";
+import { teamMatchKey, dedupeTeamName, duplicateTeamRecord } from "@/lib/match-sport";
 import { templateForSport } from "@/lib/team-templates";
 import { mkId } from "@/lib/util";
 
@@ -81,6 +81,11 @@ export const teamStore = {
   async del(id: string): Promise<boolean> {
     const { error } = await sb.from("teams").delete().eq("id", id);
     return !error;
+  },
+  async duplicate(src: TeamRecord): Promise<TeamRecord | null> {
+    const copy = duplicateTeamRecord(src, mkId());
+    const saved = await this.set(copy);            // collision-safe: bumps name again if needed
+    return saved ? { ...copy, name: saved.name } : null;
   },
   // Global feed of public teams (own + others), newest first. Offset-paginated.
   async listPublic({ offset = 0, limit = 5 }: { offset?: number; limit?: number } = {}): Promise<TeamRecord[]> {
