@@ -1,6 +1,7 @@
 import { contrastOn, fmtScore, gpTotal } from "@/lib/util";
 import type { Model } from "@/lib/types";
 import { BRAND_SITE, BRAND_WORDMARK, BRAND_CHANT } from "@/lib/constants";
+import { lineupBadges } from "./lineup-badges";
 
 /* Shared HWG brand pill (same geometry as the app icon / top-bar logo).
    Drawn as an SVG string so the poster and OG card share one source of truth.
@@ -222,12 +223,8 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   });
   y += 18;
 
-  // who was involved in subs (for lineup arrows)
-  const subOnSet = new Set<number>(), subOffSet = new Set<number>();
-  (m.timeline || []).forEach((t: any) => { if (t.kind === "sub") { if (t.onNum != null) subOnSet.add(t.onNum); if (t.offNum != null) subOffSet.add(t.offNum); } });
-
-  // shared pitch renderer — jersey shirts on a green pitch, names + (optional) score badges below
-  const drawPitch = (rows: number[][], c1: string, c2: string, nameFor: (n: number) => string, withScores: boolean) => {
+  // shared pitch renderer — jersey shirts on a green pitch, names + score/card/sub/og badges below
+  const drawPitch = (rows: number[][], c1: string, c2: string, nameFor: (n: number) => string, side: "us" | "them") => {
     const pitchH = rows.length ? rows.length * 56 + 18 : 28;
     body.push(R(P, y, CW, pitchH, PITCH, 12));
     body.push(R(P, y + pitchH / 2 - 0.5, CW, 1, "#1c5a40"));
@@ -238,46 +235,51 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
       const sx = P + (CW - total) / 2, ry = y + 12 + ri * 56;
       row.forEach((n, ci) => {
         const jx = sx + ci * (jw + (isFinite(gap) ? gap : 0));
+        const b = lineupBadges(m as any, side, n);
         body.push(jersey(jx, ry, jw, c1, c2, n));
         body.push(T(jx + jw / 2, ry + jw + 11, nameFor(n), 9.5, "#eaf3ee", { w: 600, a: "middle" }));
-        if (withScores && subOffSet.has(n)) body.push(T(jx + jw + 1, ry + 9, "▼", 8, "#ff6e63"));
-        if (withScores) {
-          const sc = (m.usScorers || []).find((s: any) => s.num === n && (s.g || s.p));
-          if (sc) body.push(T(jx + jw / 2, ry + jw + 22, m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`, 9, "#f5c518", { w: 700, a: "middle", ls: m.effMode === "goals" ? 2 : 0 }));
-        }
+        if (b.subOn) body.push(T(jx - 2, ry + 9, "▲", 8, "#2ecc71"));
+        if (b.subOff) body.push(T(jx + jw + 1, ry + 9, "▼", 8, "#ff6e63"));
+        b.cards.forEach((c, ci2) => body.push(R(jx + jw - 3 - ci2 * 5, ry - 3, 4, 6, c === "red" ? "#e74c3c" : "#f1c40f", 1, { stroke: "rgba(0,0,0,.3)", sw: 0.5 })));
+        if (b.og) body.push(T(jx + jw / 2, ry + jw + 22, "OG", 8, "#ff6e63", { w: 700, a: "middle" }));
+        if (b.score) body.push(T(jx + jw / 2, ry + jw + (b.og ? 32 : 22), m.effMode === "goals" ? "●".repeat(b.score.g) : `${b.score.g}-${b.score.p}`, 9, "#f5c518", { w: 700, a: "middle", ls: m.effMode === "goals" ? 2 : 0 }));
       });
     });
     y += pitchH + 10;
+  };
+
+  // reusable bench-chip renderer — used for both teams' substitutes
+  const drawBench = (players: any[], side: "us" | "them", c1: string, c2: string) => {
+    let bx = P + 38, by = y + 4;
+    const chipH = 17;
+    players.forEach((p: any) => {
+      const b = lineupBadges(m as any, side, p.num);
+      const used = b.subOn || b.subOff;
+      const scoreTxt = b.score ? (m.effMode === "goals" ? "●".repeat(b.score.g) : `${b.score.g}-${b.score.p}`) : "";
+      const label = `${p.num} ${p.name}`;
+      const arrowsW = (b.subOn ? 9 : 0) + (b.subOff ? 9 : 0);
+      const w = label.length * 5.4 + arrowsW + (scoreTxt ? scoreTxt.length * 5.6 + 5 : 0) + 16;
+      if (bx + w > P + CW) { bx = P + 38; by += chipH + 5; }
+      body.push(R(bx, by, w, chipH, used ? c1 : "#ffffff", 8.5, { stroke: used ? c2 : LINE, sw: 1 }));
+      let tx = bx + 8;
+      body.push(T(tx, by + 12, label, 9.5, used ? contrastOn(c1) : INK, { w: 600 }));
+      tx += label.length * 5.4 + 3;
+      if (b.subOn) { body.push(T(tx, by + 12, "▲", 8.5, "#2ecc71", { w: 700 })); tx += 9; }
+      if (b.subOff) { body.push(T(tx, by + 12, "▼", 8.5, "#ff6e63", { w: 700 })); tx += 9; }
+      if (scoreTxt) body.push(T(tx + 2, by + 12, scoreTxt, 9, used ? contrastOn(c1) : PITCH, { w: 700 }));
+      bx += w + 6;
+    });
+    y = by + chipH + 6;
   };
 
   // ---- our team ----
   body.push(T(P, y, `TEAM · ${(m.usName || "").toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
   y += 12;
   const findName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-  drawPitch(m.formationRows && m.formationRows.length ? m.formationRows : [], m.colorUs, m.colorUs2, findName, true);
+  drawPitch(m.formationRows && m.formationRows.length ? m.formationRows : [], m.colorUs, m.colorUs2, findName, "us");
   if (m.subs && m.subs.length) {
-    // bench chips: used subs wear the team colours, with on/off arrows and score badges
     body.push(T(P, y + 15, "SUBS", 9, MUTE, { w: 700, ls: 1 }));
-    let bx = P + 38, by = y + 4;
-    const chipH = 17;
-    m.subs.forEach((p: any) => {
-      const used = subOnSet.has(p.num) || subOffSet.has(p.num);
-      const sc = (m.usScorers || []).find((s: any) => s.num === p.num && (s.g || s.p));
-      const scoreTxt = sc ? (m.effMode === "goals" ? "●".repeat(sc.g) : `${sc.g}-${sc.p}`) : "";
-      const label = `${p.num} ${p.name}`;
-      const arrowsW = (subOnSet.has(p.num) ? 9 : 0) + (subOffSet.has(p.num) ? 9 : 0);
-      const w = label.length * 5.4 + arrowsW + (scoreTxt ? scoreTxt.length * 5.6 + 5 : 0) + 16;
-      if (bx + w > P + CW) { bx = P + 38; by += chipH + 5; }
-      body.push(R(bx, by, w, chipH, used ? m.colorUs : "#ffffff", 8.5, { stroke: used ? m.colorUs2 : LINE, sw: 1 }));
-      let tx = bx + 8;
-      body.push(T(tx, by + 12, label, 9.5, used ? contrastOn(m.colorUs) : INK, { w: 600 }));
-      tx += label.length * 5.4 + 3;
-      if (subOnSet.has(p.num)) { body.push(T(tx, by + 12, "▲", 8.5, "#2ecc71", { w: 700 })); tx += 9; }
-      if (subOffSet.has(p.num)) { body.push(T(tx, by + 12, "▼", 8.5, "#ff6e63", { w: 700 })); tx += 9; }
-      if (scoreTxt) body.push(T(tx + 2, by + 12, scoreTxt, 9, used ? contrastOn(m.colorUs) : PITCH, { w: 700 }));
-      bx += w + 6;
-    });
-    y = by + chipH + 6;
+    drawBench(m.subs, "us", m.colorUs, m.colorUs2);
   }
   if (m.missing && m.missing.length) { body.push(T(P, y + 8, "Missing: " + m.missing.map((p: any) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
   y += 16;
@@ -287,7 +289,12 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
     body.push(T(P, y, `TEAM · ${(m.themName || "").toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
     y += 12;
     const oppName = (n: number) => { const p = (m.oppRoster.players || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-    drawPitch(m.oppRoster.formation, m.colorThem, m.colorThem2, oppName, false);
+    drawPitch(m.oppRoster.formation, m.colorThem, m.colorThem2, oppName, "them");
+    const oppSubs = (m.oppRoster.players || []).filter((p: any) => p.role === "sub");
+    if (oppSubs.length) {
+      body.push(T(P, y + 15, "SUBS", 9, MUTE, { w: 700, ls: 1 }));
+      drawBench(oppSubs, "them", m.colorThem, m.colorThem2);
+    }
     y += 16;
   }
 
