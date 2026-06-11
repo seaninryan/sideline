@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Oswald, Bebas_Neue } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const oswald = Oswald({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-oswald" });
@@ -20,7 +21,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${oswald.variable} ${bebas.variable}`}>
-      <body>{children}</body>
+      <body>{children}<Analytics /></body>
     </html>
   );
 }
