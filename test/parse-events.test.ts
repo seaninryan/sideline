@@ -374,3 +374,28 @@ describe("resolution order across both rosters", () => {
     expect(r.warnings.some((w: any) => /couldn't tell/i.test(w.msg))).toBe(true);
   });
 });
+
+describe("chartMarkers", () => {
+  it("emits subs + cards ordered by x; a minute-less sub is placed at the half boundary", () => {
+    const r = parseEvents("18:00\n10 Morty goal\n23 Rick yellow card\n40 Pencilvester for Morty\nGerald for Tariq", gaa);
+    expect(r.chartMarkers.length).toBe(3); // minute-less "Gerald for Tariq" is kept
+    expect(r.chartMarkers.map((m: any) => m.kind).sort()).toEqual(["sub", "sub", "yellow"]);
+    const xs = r.chartMarkers.map((m: any) => m.x);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs); // already ordered by x
+  });
+  it("red card → kind 'red'", () => {
+    const r = parseEvents("18:00\n70 Wildebeests 7 red card", gaa);
+    expect(r.chartMarkers).toMatchObject([{ kind: "red", side: "B" }]);
+  });
+  it("a half crossing the hour stays monotonic (game minute, not bogus added time)", () => {
+    // 2nd half starts 23:00; "7 FT" is really 00:07 (67') — events must not become "55+6"
+    const r = parseEvents("22:06\n11 Racoons\n56 HT\n23:00\n11 Racoons\n36 Wildebeests\n7 FT", goals);
+    const h2 = r.scoring.filter((s: any) => s.half === 2);
+    expect(h2.map((s: any) => s.mmin)).toEqual(["61", "86"]); // 50 + 11, 50 + 36
+  });
+  it("a minuted line containing 'for' that isn't an X-for-Y sub doesn't crash", () => {
+    expect(() => parseEvents("18:00\n12 for the win", gaa)).not.toThrow();
+    const r = parseEvents("18:00\n12 for the win", gaa);
+    expect(r.notes.some((n: any) => n.type === "sub")).toBe(false); // not treated as a sub
+  });
+});

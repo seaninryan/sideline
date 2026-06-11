@@ -110,7 +110,7 @@ export default function PublicMatch({ model }: { model: Model }) {
       <section className="pm-sec">
         <p className="pm-label">Score progression</p>
         <div className="pm-chart">
-          <ScoreChart series={m.series} goalDots={m.goalDots} htLine={m.htLine} colorUs={m.colorUs} colorThem={m.colorThem} />
+          <ScoreChart series={m.series} goalDots={m.goalDots} chartMarkers={m.chartMarkers} htLine={m.htLine} colorUs={m.colorUs} colorThem={m.colorThem} nameUs={m.usName} nameThem={m.themName} mode={m.effMode} />
         </div>
       </section>
 
