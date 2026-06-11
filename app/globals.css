@@ -197,7 +197,9 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-blk{display:flex; align-items:center; gap:8px; background:#fffdf6; border:1px solid var(--line);
   border-radius:8px; padding:7px 9px; cursor:pointer; text-align:left; width:100%; box-sizing:border-box;}
 .mt-blk .t{flex:1; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12px; color:#333; word-break:break-word;}
-.mt-blk.lineup{background:#f4eedd;}
+.mt-blk-main{flex:1; min-width:0; display:flex; align-items:center; gap:8px; background:transparent; border:0; padding:0; margin:0; cursor:pointer; text-align:left; font:inherit; color:inherit;}
+.mt-blk-add{flex:none; width:28px; height:28px; border-radius:7px; border:1px dashed var(--line); background:#fff; color:#1f7a4d; font-size:15px; line-height:1; cursor:pointer; padding:0;}
+.mt-blk-add:hover{border-color:#1f7a4d; background:#f1f8f3;}
 .mt-blk .chev{color:#bbac8a; font-size:10px; flex:none;}
 .mt-bpill{font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; border-radius:99px; padding:2px 7px;
   flex:none; background:#e8e0cc; color:#777; font-weight:600; font-family:var(--font-oswald);}
