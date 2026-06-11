@@ -60,5 +60,5 @@ export default async function MatchPage({ params }: { params: { id: string } }) 
 
   // public read-only
   const model = applyNameDisplay(buildModel(row!.data), row!.name_display || row!.data.nameDisplay || "full");
-  return <PublicMatch model={model} />;
+  return <PublicMatch model={model} id={row!.id} />;
 }
