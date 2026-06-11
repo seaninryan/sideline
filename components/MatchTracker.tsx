@@ -530,15 +530,15 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // Wizard now picks a Home team then an Away team (sport is chosen on stage 1).
   // Internally Home → us, Away → them (homeAway:"home") so the engine is unchanged.
   const nwPickHome = (t) => setNw({ ...nw, home: t, stage: "away" });
-  const nwCreateHome = async (name) => {
+  const nwCreateHome = async (name, squad) => {
     if (!userUid || !nw.sport) return;
-    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#f5c518", color2: "#1f7a4d" });
+    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, squad, color1: "#f5c518", color2: "#1f7a4d" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, home: t, stage: "away" }); }
   };
   const nwPickAway = (t) => setNw({ ...nw, away: t });
-  const nwCreateAway = async (name) => {
+  const nwCreateAway = async (name, squad) => {
     if (!userUid || !nw.sport) return;
-    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, color1: "#c0392b", color2: "#2c5fa8" });
+    const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, away: t }); }
   };
   const finishNew = async () => {
