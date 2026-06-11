@@ -106,6 +106,29 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [blkIns, setBlkIns] = useState(null);         // insert flow state (Task 7)
   const [lineupEdit, setLineupEdit] = useState(null); // preamble text while editing (Task 8)
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); }, [curId]);
+  // undo stack of recent notation (raw) states — covers adds/edits/deletes/inserts
+  const rawHist = useRef([]);
+  const prevRawRef = useRef(raw);
+  const skipHist = useRef(false);
+  const [canUndo, setCanUndo] = useState(false);
+  useEffect(() => {
+    if (skipHist.current) { skipHist.current = false; prevRawRef.current = raw; return; }
+    if (raw !== prevRawRef.current) {
+      rawHist.current.push(prevRawRef.current);
+      if (rawHist.current.length > 25) rawHist.current.shift();
+      prevRawRef.current = raw;
+      setCanUndo(true);
+    }
+  }, [raw]);
+  useEffect(() => { rawHist.current = []; prevRawRef.current = raw; setCanUndo(false); /* eslint-disable-next-line */ }, [curId]);
+  const undoRaw = () => {
+    if (!rawHist.current.length) return;
+    setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
+    skipHist.current = true;
+    setRaw(rawHist.current.pop());
+    setCanUndo(rawHist.current.length > 0);
+    setSavedMsg("Undone"); setTimeout(() => setSavedMsg(""), 1500);
+  };
   // default tab when a match opens: Game mode while unfinished, Details once it's full time.
   // Keyed on curId so it only fires on open, never mid-session (won't yank the user off a tab).
   useEffect(() => { if (curId) setTab(phase === "over" ? "details" : "game"); /* eslint-disable-next-line */ }, [curId]);
@@ -532,7 +555,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const openBlk = (b) => {
     setBlkIns(null); setLineupEdit(null);
     const min = eventLineMinute(b.text);
-    setBlkEdit({ idx: b.idx, minute: min, rest: min == null ? b.text : b.text.replace(/^\s*\d{1,2}\b\s*/, ""), confirmDel: false });
+    setBlkEdit({ idx: b.idx, kind: b.kind, minute: min, rest: min == null ? b.text : b.text.replace(/^\s*\d{1,2}\b\s*/, ""), confirmDel: false });
   };
   const blkLineOf = (be) => (be.minute == null ? be.rest.trim() : `${be.minute} ${be.rest.trim()}`);
   const blkOk = () => {
@@ -542,6 +565,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setBlkEdit(null);
   };
   const blkDelete = () => {
+    if (blkEdit.kind === "half") { setSavedMsg("Can't delete the half start"); setTimeout(() => setSavedMsg(""), 2000); return; }
     if (!blkEdit.confirmDel) {
       const idxAtArm = blkEdit.idx;
       setBlkEdit({ ...blkEdit, confirmDel: true });
@@ -557,7 +581,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const m = (text || "").match(/^(\d{1,2})[:.]?(\d{2})?/);
     return m ? (m[2] != null ? parseInt(m[2], 10) : parseInt(m[1], 10)) % 60 : 0;
   };
-  const openInsert = (b) => { setBlkEdit(null); setLineupEdit(null); setBlkIns({ afterIdx: b.idx, type: null, minute: anchorMinute(b.text), team: "us", ev: null, player: undefined, on: null, off: null, cardKind: "yellow", noteText: "", noteMin: false }); };
+  const openInsert = (b) => { setBlkEdit(null); setLineupEdit(null); setBlkIns({ afterIdx: b.idx, minute: anchorMinute(b.text), stage: "team", team: null, ev: null, on: null, off: null, noteText: "", noteMin: false }); };
   const openLineup = () => {
     setBlkEdit(null); setBlkIns(null);
     const lines = raw.split("\n");
@@ -570,25 +594,23 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     });
     setLineupEdit(null);
   };
-  const insLine = () => {
-    const i = blkIns;
-    if (!i || !i.type) return "";
-    if (i.type === "score") return i.ev && (i.team === "them" || i.player !== undefined) ? buildEventLine(i.ev, i.team, i.player, i.minute) : "";
-    if (i.type === "card") return i.team === "them" || i.player !== undefined ? buildEventLine(i.cardKind, i.team, i.player, i.minute) : "";
-    if (i.type === "corner") return buildEventLine("corner", i.team, null, i.minute);
-    if (i.type === "sub") return i.on && i.off ? `${i.minute} ${i.on.name} for ${i.off.name}` : "";
-    if (i.type === "note") return i.noteText.trim() ? (i.noteMin ? `${i.minute} ${i.noteText.trim()}` : i.noteText.trim()) : "";
-    return "";
-  };
-  const insOk = () => {
-    const line = insLine();
+  // commit an insert: place the built line after the anchor (re-ordered by minute), toast, close
+  const insCommit = (line) => {
     if (!line) return;
     setRaw((r) => insertEventLine(r, blkIns.afterIdx, line));
     setBlkIns(null);
-    setSavedMsg(`Added "${line}"`); setTimeout(() => setSavedMsg(""), 1800);
+    setSavedMsg(`Inserted "${line}"`); setTimeout(() => setSavedMsg(""), 1800);
   };
+  // event picked in the insert flow (mirrors game mode): player events open the Who? grid
+  // when we have a roster for that side; everything else commits straight away
+  const insEvent = (key) => {
+    if (LIVE_PLAYER_EVENTS.includes(key) && (blkIns.team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) setBlkIns({ ...blkIns, stage: "who", ev: key });
+    else insCommit(buildEventLine(key, blkIns.team, null, blkIns.minute));
+  };
+  const subWho = (p) => (p && p !== "unknown" ? (p.name || String(p.num)) : "");
+  const noteLine = () => (blkIns && blkIns.noteText.trim() ? (blkIns.noteMin ? `${blkIns.minute} ${blkIns.noteText.trim()}` : blkIns.noteText.trim()) : "");
   // a minuted free-text note with none of the parser's note keywords would read as a score
-  const notePhantom = blkIns && blkIns.type === "note" && blkIns.noteMin && blkIns.noteText.trim()
+  const notePhantom = blkIns && blkIns.stage === "note" && blkIns.noteMin && blkIns.noteText.trim()
     && !/\b(miss(ed|es)?|wide|saved|blocked|short|water|corner|yellow|red|for)\b/i.test(blkIns.noteText);
 
   // players involved in substitutions (by roster number), for lineup styling
@@ -1052,12 +1074,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {/* pinned bottom: last entry + undo */}
             <div className="gm-undo">
               <span className="t">{undoTarget ? `Last: ${undoTarget.text}` : "Nothing added yet"}</span>
-              <button className="mt-add alt" disabled={!undoTarget} onClick={doUndo}>↩ Undo</button>
+              <button className="mt-add alt" disabled={!canUndo} onClick={undoRaw}>↩ Undo</button>
             </div>
 
             {/* running timeline beneath the controls */}
             <p className="mt-h" style={{ marginTop: 16 }}>Timeline</p>
-            {renderTimeline()}
+            <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />
           </div>
         )}
 
@@ -1198,6 +1220,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           <>
             <div className="mt-row" style={{ marginTop: 0, marginBottom: 6 }}>
               <p className="mt-h" style={{ margin: 0, flex: 1 }}>{notaView === "blocks" ? "Notation — tap a line to edit" : "Raw notation (edit freely — re-parses instantly)"}</p>
+              {canUndo && <button className="mt-add alt" onClick={undoRaw}>↩ Undo</button>}
               <button className="mt-add alt" onClick={() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNotaView(notaView === "blocks" ? "text" : "blocks"); }}>
                 {notaView === "blocks" ? "Edit as text" : "Blocks"}
               </button>
@@ -1214,22 +1237,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               </>
             ) : (
               <div className="mt-blks">
-                {lineupEdit == null ? (
-                  <button className="mt-blk lineup" onClick={openLineup}>
-                    <span className="mt-bpill">Lineup</span>
-                    <span className="t">{starters.length} starting · {subs.length} subs{missing.length ? ` · ${missing.length} missing` : ""}</span>
-                    <span className="chev">tap to edit ▸</span>
-                  </button>
-                ) : (
-                  <div className="mt-blk editing">
-                    <p className="mt-h" style={{ margin: "0 0 6px" }}>Header & lineup</p>
-                    <textarea className="mt-blkta" style={{ minHeight: 140, resize: "vertical" }} value={lineupEdit} onChange={(e) => setLineupEdit(e.target.value)} spellCheck={false} />
-                    <div className="mt-blkrow">
-                      <button className="mt-add" onClick={lineupOk}>OK</button>
-                      <button className="mt-add alt" onClick={() => setLineupEdit(null)}>Cancel</button>
-                    </div>
-                  </div>
-                )}
                 {blocks.list.map((b) => (
                   <React.Fragment key={b.idx}>
                     {blkEdit && blkEdit.idx === b.idx ? (
@@ -1240,79 +1247,98 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                         <div className="mt-blkrow">
                           <button className="mt-add" onClick={blkOk}>OK</button>
                           <button className="mt-add alt" onClick={() => setBlkEdit(null)}>Cancel</button>
-                          <button className="mt-add alt" onClick={() => openInsert(b)}>+ Insert after</button>
-                          <button className={"mt-add danger" + (blkEdit.confirmDel ? " armed" : "")} onClick={blkDelete}>
-                            {blkEdit.confirmDel ? "Tap again to delete" : "Delete"}
-                          </button>
+                          {blkEdit.kind !== "half" && (
+                            <button className={"mt-add danger" + (blkEdit.confirmDel ? " armed" : "")} onClick={blkDelete}>
+                              {blkEdit.confirmDel ? "Tap again to delete" : "Delete"}
+                            </button>
+                          )}
                         </div>
                         {blkEdit.minute != null && <p className="mt-note" style={{ margin: "6px 0 0" }}>OK re-parses — changing the minute moves the line to its spot in the half.</p>}
                       </div>
                     ) : (
-                      <button className="mt-blk" onClick={() => openBlk(b)}>
-                        {blkPill(b)}
-                        <span className="t">{b.text}</span>
-                      </button>
+                      <div className="mt-blk">
+                        <button className="mt-blk-main" onClick={() => openBlk(b)}>{blkPill(b)}<span className="t">{b.text}</span></button>
+                        <button className="mt-blk-add" onClick={() => openInsert(b)} title="Insert event after this line" aria-label="Insert after">＋</button>
+                      </div>
                     )}
                     {blkIns && blkIns.afterIdx === b.idx && (
                       <div className="mt-blk editing">
-                        {!blkIns.type ? (
+                        <p className="mt-h" style={{ margin: "0 0 6px" }}>Insert after "{b.text.slice(0, 24)}…"</p>
+                        {blkIns.stage !== "note" && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
+
+                        {/* stage 1 — who / sub / note */}
+                        {blkIns.stage === "team" && (
                           <>
-                            <p className="mt-h" style={{ margin: "0 0 6px" }}>Insert after "{b.text.slice(0, 24)}…" — what kind?</p>
-                            <div className="mt-grid">
-                              {["score", "sub", "card", "corner", "note"].map((k) => (
-                                <button key={k} className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, type: k })}>{k[0].toUpperCase() + k.slice(1)}</button>
-                              ))}
+                            <div className="mt-grid" style={{ marginTop: 7 }}>
+                              <button className="mt-big sm" style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setBlkIns({ ...blkIns, stage: "event", team: "us" })}>{usName}</button>
+                              <button className="mt-big sm" style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setBlkIns({ ...blkIns, stage: "event", team: "them" })}>{themName}</button>
+                            </div>
+                            <div className="mt-grid" style={{ marginTop: 7 }}>
+                              <button className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, stage: "sub", team: "us", on: null, off: null })}>Sub</button>
+                              <button className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, stage: "note" })}>Note</button>
                             </div>
                             <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button></div>
                           </>
-                        ) : (
+                        )}
+
+                        {/* stage 2 — what happened? */}
+                        {blkIns.stage === "event" && (
                           <>
-                            {(blkIns.type !== "note" || blkIns.noteMin) && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
-                            {(blkIns.type === "score" || blkIns.type === "card" || blkIns.type === "corner") && (
-                              <div className="mt-grid" style={{ marginTop: 7 }}>
-                                <button className={"mt-big sm" + (blkIns.team === "us" ? " on" : "")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setBlkIns({ ...blkIns, team: "us" })}>{usName}</button>
-                                <button className={"mt-big sm" + (blkIns.team === "them" ? " on" : "")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setBlkIns({ ...blkIns, team: "them", player: undefined })}>{themName}</button>
-                              </div>
-                            )}
-                            {blkIns.type === "score" && (
-                              <div className="mt-grid" style={{ marginTop: 7 }}>
-                                {liveEvents.filter((ev) => LIVE_PLAYER_EVENTS.includes(ev.key) && !["yellow", "red"].includes(ev.key)).map((ev) => (
-                                  <button key={ev.key} className={"mt-big sm" + (blkIns.ev === ev.key ? " on" : "")} onClick={() => setBlkIns({ ...blkIns, ev: ev.key })}>{ev.label}</button>
-                                ))}
-                              </div>
-                            )}
-                            {blkIns.type === "card" && (
-                              <div className="mt-grid" style={{ marginTop: 7 }}>
-                                {["yellow", "red"].map((c) => <button key={c} className={"mt-big sm" + (blkIns.cardKind === c ? " on" : "")} onClick={() => setBlkIns({ ...blkIns, cardKind: c })}>{c}</button>)}
-                              </div>
-                            )}
-                            {((blkIns.type === "score" && blkIns.ev) || blkIns.type === "card") && blkIns.team === "us" && (
-                              <div style={{ marginTop: 7 }}>{whoGrid((p) => setBlkIns({ ...blkIns, player: p }))}</div>
-                            )}
-                            {blkIns.type === "sub" && (
-                              <>
-                                <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who came on?{blkIns.on ? ` — ${blkIns.on.name}` : ""}</p>
-                                {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, on: p }))}
-                                <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who went off?{blkIns.off ? ` — ${blkIns.off.name}` : ""}</p>
-                                {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, off: p }))}
-                              </>
-                            )}
-                            {blkIns.type === "note" && (
-                              <>
-                                <input className="mt-blkta" style={{ marginTop: 7 }} placeholder="note text" value={blkIns.noteText} onChange={(e) => setBlkIns({ ...blkIns, noteText: e.target.value })} />
-                                <label className="mt-note" style={{ display: "block", marginTop: 6 }}>
-                                  <input type="checkbox" checked={blkIns.noteMin} onChange={(e) => setBlkIns({ ...blkIns, noteMin: e.target.checked })} /> attach a minute
-                                </label>
-                                {notePhantom && <p className="mt-note" style={{ color: "#c0392b", margin: "4px 0 0" }}>Careful — a minuted line with no note keyword reads as a score. Leave the minute off for a plain note.</p>}
-                              </>
-                            )}
-                            {insLine() && <p className="mt-note" style={{ margin: "8px 0 0", fontFamily: "ui-monospace,Menlo,monospace", border: "1px dashed var(--line)", borderRadius: 6, padding: "5px 8px" }}>{insLine()}</p>}
-                            {insLine() && <p className="mt-note" style={{ margin: "4px 0 0" }}>OK places it by minute within the half — it may land further down than where you tapped.</p>}
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{blkIns.team === "us" ? usName : themName} — what happened?</p>
+                            <div className="mt-grid">
+                              {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
+                                <button key={ev.key} className="mt-big sm" onClick={() => insEvent(ev.key)}>{ev.label}</button>
+                              ))}
+                            </div>
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team", team: null })}>← Back</button></div>
+                          </>
+                        )}
+
+                        {/* stage 3 — which player? */}
+                        {blkIns.stage === "who" && (
+                          <>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{(liveEvents.find((ev) => ev.key === blkIns.ev) || {}).label} — who?</p>
+                            {whoGrid((p) => insCommit(buildEventLine(blkIns.ev, blkIns.team, p, blkIns.minute)), blkIns.team)}
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event", ev: null })}>← Back</button></div>
+                          </>
+                        )}
+
+                        {/* sub flow */}
+                        {blkIns.stage === "sub" && (
+                          <>
+                            <div className="mt-grid" style={{ marginTop: 7 }}>
+                              <button className={"mt-big sm" + (blkIns.team === "us" ? " on" : "")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setBlkIns({ ...blkIns, team: "us", on: null, off: null })}>{usName}</button>
+                              <button className={"mt-big sm" + (blkIns.team === "them" ? " on" : "")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setBlkIns({ ...blkIns, team: "them", on: null, off: null })}>{themName}</button>
+                            </div>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who came on?{blkIns.on ? ` — ${subWho(blkIns.on)}` : ""}</p>
+                            {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, on: p }), blkIns.team)}
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who went off?{blkIns.off ? ` — ${subWho(blkIns.off)}` : ""}</p>
+                            {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, off: p }), blkIns.team)}
                             <div className="mt-blkrow">
-                              <button className="mt-add" disabled={!insLine()} onClick={insOk}>OK</button>
-                              <button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button>
+                              <button className="mt-add" disabled={!(blkIns.on && blkIns.off)} onClick={() => insCommit(`${blkIns.minute} ${subWho(blkIns.on)} for ${subWho(blkIns.off)}`)}>OK</button>
+                              <button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team", team: null })}>← Back</button>
                             </div>
                           </>
+                        )}
+
+                        {/* note flow */}
+                        {blkIns.stage === "note" && (
+                          <>
+                            <input className="mt-blkta" style={{ marginTop: 7 }} placeholder="note text" value={blkIns.noteText} onChange={(e) => setBlkIns({ ...blkIns, noteText: e.target.value })} />
+                            <label className="mt-note" style={{ display: "block", marginTop: 6 }}>
+                              <input type="checkbox" checked={blkIns.noteMin} onChange={(e) => setBlkIns({ ...blkIns, noteMin: e.target.checked })} /> attach a minute
+                            </label>
+                            {blkIns.noteMin && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
+                            {notePhantom && <p className="mt-note" style={{ color: "#c0392b", margin: "4px 0 0" }}>Careful — a minuted line with no note keyword reads as a score. Leave the minute off for a plain note.</p>}
+                            <div className="mt-blkrow">
+                              <button className="mt-add" disabled={!noteLine()} onClick={() => insCommit(noteLine())}>OK</button>
+                              <button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button>
+                            </div>
+                          </>
+                        )}
+
+                        {["event", "who", "sub"].includes(blkIns.stage) && (
+                          <p className="mt-note" style={{ margin: "8px 0 0" }}>Lands by minute within the half — may sit further down than where you tapped.</p>
                         )}
                       </div>
                     )}
