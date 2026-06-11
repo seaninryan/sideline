@@ -63,7 +63,7 @@ After any parser change, run `npm test` and confirm the canonical `SAMPLE_RECORD
 
 **Deploy:** push to the production branch `main` (Vercel's Production Branch; cutover from `supabase-migration` is complete); Vercel auto-builds with `@vercel/next`.
 
-**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v68**.
+**Versioning:** `APP_VERSION` (in `lib/constants.ts`) is shown in the footer at the bottom of the app (`Here We Go · vN`). Bump it on every change that will be deployed, and tell the user which version to look for. Current: **v69**.
 
 ## Architecture
 
@@ -91,6 +91,7 @@ The app is **list-first**. `/` renders `<Landing>`: signed-in users see "Your ma
 ### Public match page + OG image
 
 - `/m/[id]` (`app/m/[id]/page.tsx`) — server-rendered read-only view. Fetches only rows where `is_public=true`, runs `buildModel` then `applyNameDisplay`, renders `<PublicMatch>`. `PublicMatch` is a full **poster-style responsive page** (mirrors `buildInfographicSVG` as real HTML, reusing the `<ScoreChart>` component): brand header → score header (kit flags, result pill) → 2×2 stats → chart → scorers → lineup pitch (flat starters list when a match has no formation rows) → centre-rail timeline → brand footer with a clickable `herewego.ie` link.
+- **Live updates.** `PublicMatch` subscribes to Supabase Realtime `postgres_changes` (UPDATE/DELETE) on its own row; each UPDATE payload carries the full record, so it rebuilds the model client-side (`buildModel` → `applyNameDisplay`) and swaps it into state — score, chart, timeline, scorers, lineup, and `name_display` all reflect the owner's edits within a few seconds (owner auto-save is 2.5s-debounced). The server render still seeds the first paint (SEO/OG unchanged); state is only *seeded* from the prop. A score change pulses the score header (pure `scoreChanged` in `lib/live-update.ts`); unpublish (`is_public=false`)/delete shows a "no longer shared" notice; socket drops show a "Reconnecting…" pill and a "Reconnected" pill + catch-up re-fetch on resubscribe. Realtime respects RLS via the existing `public_read` policy (private rows stay dark). This is a Supabase feature, not a Vercel one — the websocket runs browser↔Supabase, consistent with the no-middleware constraint. **Schema step (run once in Supabase, DONE):** `alter publication supabase_realtime add table matches;`
 - `/m/[id]/opengraph-image` (`app/m/[id]/opengraph-image.tsx`) — Next.js OG image route. Renders `buildScoreCardSVG` (compact score card, no player names) via `@resvg/resvg-js` using the bundled LiberationSans fonts. Returns a 1200×630 PNG with `Cache-Control: public, max-age=3600`. Note in the source: if `buildScoreCardSVG` ever adds player names, run `applyNameDisplay` before calling it.
 - **Share wizard** (`components/ShareWizard.tsx`): name-display choice (full / initials / none) → confirm → sets `is_public=true` + `name_display` on the row → shows the `/m/<id>` URL + OG preview.
 - **`name_display`** (`'full' | 'initials' | 'none'`, default `'full'`) replaces the old `hide_names bool`. `initials` renders first initials of each name part; `none` falls back to shirt number or "Player".

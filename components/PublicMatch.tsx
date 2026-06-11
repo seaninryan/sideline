@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ScoreChart from "@/components/ScoreChart";
 import AppHeader from "@/components/AppHeader";
@@ -11,10 +11,19 @@ import Timeline from "@/components/Timeline";
 import Jersey from "@/components/Jersey";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
+import { buildModel } from "@/lib/model";
+import { applyNameDisplay } from "@/lib/name-display";
+import { scoreChanged } from "@/lib/live-update";
 import ShareImageModal from "@/components/ShareImageModal";
 import type { Model } from "@/lib/types";
 
-export default function PublicMatch({ model }: { model: Model }) {
+export default function PublicMatch({ model: initialModel, id }: { model: Model; id: string }) {
+  const [model, setModel] = useState<Model>(initialModel);
+  const prevModel = useRef<Model>(initialModel);
+  const [pulse, setPulse] = useState(0);
+  const [gone, setGone] = useState(false);
+  const [conn, setConn] = useState<null | "reconnecting" | "reconnected">(null);
+  const wasConnected = useRef(false);
   const m = model;
   const margin = Math.abs(m.totals.us.total - m.totals.them.total);
   const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
@@ -50,6 +59,51 @@ export default function PublicMatch({ model }: { model: Model }) {
   const [imgOpen, setImgOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   React.useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
+  // Live updates: rebuild the whole model from each Realtime UPDATE payload.
+  useEffect(() => {
+    let reconnectT: ReturnType<typeof setTimeout> | undefined;
+    const apply = (row: any) => {
+      if (row.is_public === false) { setGone(true); return; }
+      if (!row.data) return; // truncated/partial payload — skip rather than crash buildModel
+      const next = applyNameDisplay(buildModel(row.data), row.name_display || row.data?.nameDisplay || "full");
+      if (scoreChanged(prevModel.current, next)) setPulse((p) => p + 1);
+      prevModel.current = next;
+      setModel(next);
+    };
+    const refetch = async () => {
+      const { data } = await sb
+        .from("matches")
+        .select("data,name_display,is_public")
+        .eq("id", id)
+        .maybeSingle();
+      if (data) apply(data);
+    };
+    const ch = sb
+      .channel(`match:${id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "matches", filter: `id=eq.${id}` },
+        (payload) => apply(payload.new)
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "matches", filter: `id=eq.${id}` },
+        () => setGone(true)
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (wasConnected.current) {
+            refetch();
+            setConn("reconnected");
+            reconnectT = setTimeout(() => setConn(null), 2000);
+          }
+          wasConnected.current = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (wasConnected.current) setConn("reconnecting");
+        }
+      });
+    return () => { clearTimeout(reconnectT); sb.removeChannel(ch); };
+  }, [id, sb]);
   const copyLink = () => { navigator.clipboard?.writeText(location.href); };
   const safe = (s: string) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   const imgFilename = `${safe(m.usName || "match")}-${safe(m.themName || "")}.png`;
@@ -71,6 +125,8 @@ export default function PublicMatch({ model }: { model: Model }) {
         }
         menuItems={email ? [{ label: "＋ New", onClick: () => router.push("/m/new") }] : []}
       />
+      {conn === "reconnecting" && <div className="pm-conn">Reconnecting…</div>}
+      {conn === "reconnected" && <div className="pm-conn ok">Reconnected</div>}
       {share && (
         <div className="mt-live" style={{ marginTop: 0 }}>
           <div className="mt-row"><span className="mt-h" style={{ margin: 0, flex: 1 }}>Share</span><button className="mt-add alt" onClick={() => setShare(false)}>✕ Close</button></div>
@@ -79,7 +135,12 @@ export default function PublicMatch({ model }: { model: Model }) {
         </div>
       )}
       {imgOpen && <ShareImageModal model={m} filename={imgFilename} title={imgTitle} onClose={() => setImgOpen(false)} />}
-
+      {gone ? (
+        <section className="pm-sec" style={{ textAlign: "center", padding: "48px 16px" }}>
+          <p className="pm-label">This match is no longer shared.</p>
+        </section>
+      ) : (
+       <>
       {/* score header (shared with the editor) */}
       {(() => {
         const usIsHome = m.homeAway === "home";
@@ -87,21 +148,23 @@ export default function PublicMatch({ model }: { model: Model }) {
         const themTotal = gpTotal(m.totals.them.g, m.totals.them.p, m.effMode);
         const phase = (m.halfMarks || []).some((mk: any) => mk.marker === "FT") ? "over" : "play";
         return (
-          <ScoreHeader
-            homeName={usIsHome ? m.usName : m.themName}
-            awayName={usIsHome ? m.themName : m.usName}
-            homeStr={usIsHome ? m.totals.us.str : m.totals.them.str}
-            awayStr={usIsHome ? m.totals.them.str : m.totals.us.str}
-            homeColors={usIsHome ? [m.colorUs, m.colorUs2] : [m.colorThem, m.colorThem2]}
-            awayColors={usIsHome ? [m.colorThem, m.colorThem2] : [m.colorUs, m.colorUs2]}
-            grade={m.grade || m.sport || ""}
-            dateStr={m.dateStr}
-            homeTotal={usIsHome ? usTotal : themTotal}
-            awayTotal={usIsHome ? themTotal : usTotal}
-            phase={phase}
-            homeSquad={usIsHome ? m.usSquad : m.oppSquad}
-            awaySquad={usIsHome ? m.oppSquad : m.usSquad}
-          />
+          <div key={pulse} className={pulse > 0 ? "pm-score-wrap pm-pulse" : "pm-score-wrap"}>
+            <ScoreHeader
+              homeName={usIsHome ? m.usName : m.themName}
+              awayName={usIsHome ? m.themName : m.usName}
+              homeStr={usIsHome ? m.totals.us.str : m.totals.them.str}
+              awayStr={usIsHome ? m.totals.them.str : m.totals.us.str}
+              homeColors={usIsHome ? [m.colorUs, m.colorUs2] : [m.colorThem, m.colorThem2]}
+              awayColors={usIsHome ? [m.colorThem, m.colorThem2] : [m.colorUs, m.colorUs2]}
+              grade={m.grade || m.sport || ""}
+              dateStr={m.dateStr}
+              homeTotal={usIsHome ? usTotal : themTotal}
+              awayTotal={usIsHome ? themTotal : usTotal}
+              phase={phase}
+              homeSquad={usIsHome ? m.usSquad : m.oppSquad}
+              awaySquad={usIsHome ? m.oppSquad : m.usSquad}
+            />
+          </div>
         );
       })()}
 
@@ -218,7 +281,8 @@ export default function PublicMatch({ model }: { model: Model }) {
         </section>
       )}
 
-      {/* brand footer */}
+       </>
+      )}
       <BrandFooter />
     </div>
   );
