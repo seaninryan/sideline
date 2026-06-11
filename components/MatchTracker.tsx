@@ -143,7 +143,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, scoringMode, autoMode, sport, label, homeAway, opponent, usRoster, oppRoster]);
-  const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
+  const { header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = SPORTS[sport] ? SPORTS[sport].label : header.sport; // chosen sport beats one named in the notation
 
@@ -1123,9 +1123,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
             <p className="mt-h">Score progression</p>
             <div style={{ width: "100%" }}>
-              <ScoreChart series={series} goalDots={goalDots} htLine={htLine} colorUs={colorUs === "#f5c518" ? "#d9af00" : colorUs} colorThem={colorThem} />
+              <ScoreChart series={series} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorUs={colorUs} colorThem={colorThem} nameUs={usName} nameThem={themName} mode={effMode} />
             </div>
-            <p className="mt-note">● large dots mark goals. Step lines show the running total ({effMode === "gaa" ? "goals ×3 + points" : "goals"}).</p>
 
             <p className="mt-h" style={{ marginTop: 18 }}>Top scorers — {usName}</p>
             <table className="mt-tbl">

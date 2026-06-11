@@ -60,6 +60,7 @@ export interface ParsedEvents {
   halfMarks: any[];
   series: any[];
   goalDots: any[];
+  chartMarkers: any[];
   scorers: any[];
   leadChanges: number;
   timesLevel: number;
@@ -137,7 +138,7 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
   // --- walk events ---
   const scoring: any[] = [];
   const notes: any[] = [];
-  let half = 0, startMin = 0, seq = 0, lastElapsed = 0;
+  let half = 0, startMin = 0, seq = 0, lastElapsed = 0, halfMaxElapsed = -1;
   const halfMarks: any[] = [];
   const addedOverride: Record<number, number> = {};
 
@@ -147,12 +148,16 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     const line = rawLine.trim();
     if (line === "") continue;
     const tm = line.match(timeRe);
-    if (tm) { half += 1; startMin = parseInt(tm[2], 10); halfMarks.push({ half, clock: `${tm[1]}:${tm[2]}`, srcLine }); continue; }
+    if (tm) { half += 1; startMin = parseInt(tm[2], 10); halfMaxElapsed = -1; halfMarks.push({ half, clock: `${tm[1]}:${tm[2]}`, srcLine }); continue; }
 
     const lead = line.match(/^(\d{1,2})\b\s*(.*)$/);
     if (lead) {
       const minute = parseInt(lead[1], 10);
+      // elapsed since the half's clock; wrap forward when the clock crosses an
+      // hour mid-half (e.g. a half starting 23:00 and running past 00:00).
       let elapsed = minute - startMin; if (elapsed < 0) elapsed += 60;
+      while (elapsed < halfMaxElapsed) elapsed += 60;
+      halfMaxElapsed = Math.max(halfMaxElapsed, elapsed);
       const restFull = lead[2];
       if (/^(ht|ft|half ?time|full ?time|end)\b/i.test(restFull.trim())) {
         halfMarks.push({ half, marker: /^f/i.test(restFull.trim()) ? "FT" : "HT", minute, elapsed, srcLine });
@@ -185,8 +190,8 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
       // "40 11 for 10" / "43 12 Rick for 6 Morty" — a substitution with a minute in
       // front. A bare-number sub ("11 for 10") peels "10" as a score token, so don't
       // gate the sub on scoreToks here — the " for " is the discriminator.
-      if (/\bfor\b/i.test(restFull)) {
-        const sm = restFull.match(/(.+?)\s+for\s+(.+)/i)!;
+      const sm = restFull.match(/(.+?)\s+for\s+(.+)/i);
+      if (sm) { // a real "X for Y" substitution (not just any line containing "for")
         const on = sm[1].trim(), off = sm[2].trim();
         const onR = subRef(on), offR = subRef(off);
         const side = onR.side || offR.side || null;
@@ -200,7 +205,7 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
       const scorerText = text.replace(/['']?\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
       // a bare minute on its own line marks the start of a half
       if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
-        half += 1; startMin = minute; halfMarks.push({ half, startMin: minute, srcLine }); continue;
+        half += 1; startMin = minute; halfMaxElapsed = -1; halfMarks.push({ half, startMin: minute, srcLine }); continue;
       }
 
       const r = who(scorerText);
@@ -261,7 +266,7 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
   let ag = 0, ap = 0, bg = 0, bp = 0;
   const GAP = 4;
   const xOf = (s: any) => (s.half === 1 ? s.elapsed : h1max + GAP + s.elapsed);
-  const series: any[] = [{ x: 0, half: 1, a: 0, b: 0, aScore: fmtScore(0, 0, mode), bScore: fmtScore(0, 0, mode), label: "Throw-in" }];
+  const series: any[] = [{ x: 0, half: 1, a: 0, b: 0, mmin: "0", aScore: fmtScore(0, 0, mode), bScore: fmtScore(0, 0, mode), label: "Throw-in" }];
   const goalDots: any[] = [];
   const scorers: Record<string, any> = {};
   const bump = (name: string, side: Side, type: string, free: boolean, num: number | null) => {
@@ -297,12 +302,12 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     const x = xOf(s);
     s.aScore = fmtScore(ag, ap, mode); s.bScore = fmtScore(bg, bp, mode);
     series.push({
-      x, half: s.half, minute: s.minute, a: aT, b: bT,
+      x, half: s.half, minute: s.minute, mmin: s.mmin, a: aT, b: bT,
       aScore: fmtScore(ag, ap, mode), bScore: fmtScore(bg, bp, mode),
       label: `${s.scorer || (s.side === "A" ? teamA.name : s.side === "B" ? teamB.name : "")}${effType === "goal" ? " GOAL" : s.fromFree ? " (free)" : s.setPiece ? ` ('${s.setPiece})` : ""}`,
       side: s.side, type: effType,
     });
-    if (effType === "goal" && s.side) goalDots.push({ x, y: s.side === "A" ? aT : bT, side: s.side });
+    if (effType === "goal" && s.side) goalDots.push({ x, y: s.side === "A" ? aT : bT, side: s.side, label: `${s.mmin}' Goal — ${s.scorer || (s.side === "A" ? teamA.name : teamB.name)}${s.fromFree ? " (free)" : ""}` });
   }
 
   const totals = {
@@ -316,5 +321,22 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
   const htX = halfMarks.find((m) => m.marker === "HT");
   const htLine = htX ? xOf({ half: 1, elapsed: htX.elapsed }) : (scoring.some((s) => s.half === 2) ? h1max + GAP / 2 : null);
 
-  return { mode, detectedMode, totals, result, scoring, notes, halfMarks, series, goalDots, scorers: Object.values(scorers), leadChanges, timesLevel, maxLead, maxLeadSide, htLine, warnings };
+  // chart event markers (extensible): subs + cards on the time axis. `kind` ∈
+  // "sub" | "yellow" | "red" today; future kinds (e.g. pen-miss) slot in here.
+  // Minute-less events (e.g. a half-time sub) have no `elapsed`, so they're
+  // placed at their half's boundary rather than dropped.
+  const maxX = Math.max(0, ...series.map((p: any) => p.x));
+  const markerX = (n: any) => (n.elapsed != null ? xOf(n) : ((n.half || 1) === 1 ? h1max : maxX));
+  const chartMarkers = notes
+    .filter((n: any) => n.type === "sub" || n.type === "card")
+    .map((n: any) => {
+      const min = n.mmin ? `${n.mmin}'` : "HT";
+      const label = n.type === "sub"
+        ? `${min} Sub — ${n.on} for ${n.off}`
+        : `${min} ${n.card === "red" ? "Red" : "Yellow"} card${n.who ? ` — ${n.who}` : ""}`;
+      return { x: markerX(n), kind: n.type === "card" ? (n.card === "red" ? "red" : "yellow") : "sub", side: n.side ?? null, label };
+    })
+    .sort((a, b) => a.x - b.x);
+
+  return { mode, detectedMode, totals, result, scoring, notes, halfMarks, series, goalDots, chartMarkers, scorers: Object.values(scorers), leadChanges, timesLevel, maxLead, maxLeadSide, htLine, warnings };
 }

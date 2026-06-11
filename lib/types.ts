@@ -60,6 +60,7 @@ export interface ParsedMatch {
   formationRows: any[];
   series: any[];
   goalDots: any[];
+  chartMarkers: any[];
   htLine: any;
   leadChanges: number;
   timesLevel: number;

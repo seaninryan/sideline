@@ -18,7 +18,7 @@ export function buildModel(record: MatchRecord): Model {
     oppRoster: r.oppRoster,
   };
   const parsed = parseMatch(r.raw, settings);
-  const { header, roster, totals, result, series, goalDots, scorers, scoring, notes, halfMarks, htLine } = parsed;
+  const { header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = sp ? sp.label : header.sport;
   const usName = r.myTeam || "My Team";
@@ -51,7 +51,7 @@ export function buildModel(record: MatchRecord): Model {
     totals, result, effMode, ht,
     leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
     maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
-    series, goalDots, htLine, halfMarks,
+    series, goalDots, chartMarkers, htLine, halfMarks,
     usScorers, themScorers, formationRows, starters, subs, missing, timeline,
     colorUs: r.colorUs || "#f5c518", colorUs2: r.colorUs2 || "#1f7a4d",
     colorThem: r.colorThem || "#c0392b", colorThem2: r.colorThem2 || "#2c5fa8",
