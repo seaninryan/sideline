@@ -28,6 +28,7 @@ import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
 import { whoToken, onPitchNums } from "@/lib/event-line";
 import TeamPicker from "@/components/TeamPicker";
+import { lineupBadges } from "@/lib/lineup-badges";
 import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
@@ -681,30 +682,30 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const notePhantom = blkIns && blkIns.stage === "note" && blkIns.noteMin && blkIns.noteText.trim()
     && !/\b(miss(ed|es)?|wide|saved|blocked|short|water|corner|yellow|red|for)\b/i.test(blkIns.noteText);
 
-  // players involved in substitutions (by roster number), for lineup styling
-  const subbedOn = new Set(notes.filter((n) => n.type === "sub" && n.onNum != null).map((n) => n.onNum));
-  const subbedOff = new Set(notes.filter((n) => n.type === "sub" && n.offNum != null).map((n) => n.offNum));
-  const subArrows = (num) => (subbedOn.has(num) || subbedOff.has(num)) && (
-    <span style={{ fontSize: 10, letterSpacing: 1 }}>
-      {subbedOn.has(num) && <span style={{ color: "#2ecc71" }}>▲</span>}
-      {subbedOff.has(num) && <span style={{ color: "#ff6e63" }}>▼</span>}
-    </span>
-  );
-  // card / own-goal markers for the lineup
-  const playerMarks = (num) => {
-    const cards = notes.filter((n) => n.type === "card" && n.num === num);
-    const og = scoring.some((s) => s.og && s.ogNum === num);
-    if (!cards.length && !og) return null;
+  // side-aware lineup badge helpers (sub arrows, card/og marks, score tally)
+  const mdl = { timeline, usScorers, themScorers };
+  const subArrows = (num, side) => {
+    const b = lineupBadges(mdl, side, num);
+    return (b.subOn || b.subOff) ? (
+      <span style={{ fontSize: 10, letterSpacing: 1 }}>
+        {b.subOn && <span style={{ color: "#2ecc71" }}>▲</span>}
+        {b.subOff && <span style={{ color: "#ff6e63" }}>▼</span>}
+      </span>
+    ) : null;
+  };
+  const playerMarks = (num, side) => {
+    const b = lineupBadges(mdl, side, num);
+    if (!b.cards.length && !b.og) return null;
     return (
       <span style={{ marginLeft: 2, whiteSpace: "nowrap" }}>
-        {cards.map((c, i) => <span key={i} style={{ display: "inline-block", width: 7, height: 10, borderRadius: 1.5, background: c.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", marginLeft: 2, verticalAlign: "-1px" }} />)}
-        {og && <span style={{ color: "#ff6e63", fontSize: 9, fontWeight: 600, marginLeft: 2 }}>OG</span>}
+        {b.cards.map((c, i) => <span key={i} style={{ display: "inline-block", width: 7, height: 10, borderRadius: 1.5, background: c === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", marginLeft: 2, verticalAlign: "-1px" }} />)}
+        {b.og && <span style={{ color: "#ff6e63", fontSize: 9, fontWeight: 600, marginLeft: 2 }}>OG</span>}
       </span>
     );
   };
   // what a player scored, for the lineup: "1-2" in GAA, a ball per goal in soccer
-  const scoreFor = (num) => {
-    const sc = scorers.find((s) => s.side === "us" && s.num === num && (s.g || s.p));
+  const scoreFor = (num, side) => {
+    const sc = lineupBadges(mdl, side, num).score;
     if (!sc) return null;
     return <span className="pts">{effMode === "goals" ? "⚽".repeat(sc.g) : fmtScore(sc.g, sc.p, effMode)}</span>;
   };
@@ -1187,8 +1188,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                     return (
                       <div className="mt-jersey" key={n} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch")}>
                         <Jersey c1={colorUs} c2={colorUs2} num={n} size={44} />
-                        <div className="nm">{p ? p.name : ""} {subArrows(n)}{playerMarks(n)}</div>
-                        {scoreFor(n)}
+                        <div className="nm">{p ? p.name : ""} {subArrows(n, "us")}{playerMarks(n, "us")}</div>
+                        {scoreFor(n, "us")}
                       </div>
                     );
                   })}
@@ -1203,8 +1204,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                       return (
                         <div className="mt-jersey" key={p.num} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>
                           <Jersey c1={colorUs} c2={colorUs2} num={p.num} size={36} />
-                          <div className="nm">{p.name} {subArrows(p.num)}{playerMarks(p.num)}</div>
-                          {scoreFor(p.num)}
+                          <div className="nm">{p.name} {subArrows(p.num, "us")}{playerMarks(p.num, "us")}</div>
+                          {scoreFor(p.num, "us")}
                         </div>
                       );
                     })}
@@ -1238,7 +1239,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                         {row.map((n) => { const op = oppRoster.players.find((x) => x.num === n); return (
                           <div className="mt-jersey" key={n}>
                             <Jersey c1={colorThem} c2={colorThem2} num={n} size={40} />
-                            <div className="nm">{op ? op.name : ""}</div>
+                            <div className="nm">{op ? op.name : ""} {subArrows(n, "them")}{playerMarks(n, "them")}</div>
+                            {scoreFor(n, "them")}
                           </div>
                         ); })}
                       </div>
@@ -1247,7 +1249,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                       <>
                         <div className="rp-subhead">Subs</div>
                         <div className="mt-line">{os.map((p) => (
-                          <div className="mt-jersey" key={p.num}><Jersey c1={colorThem} c2={colorThem2} num={p.num} size={36} /><div className="nm">{p.name}</div></div>
+                          <div className="mt-jersey" key={p.num}><Jersey c1={colorThem} c2={colorThem2} num={p.num} size={36} /><div className="nm">{p.name} {subArrows(p.num, "them")}{playerMarks(p.num, "them")}</div>{scoreFor(p.num, "them")}</div>
                         ))}</div>
                       </>
                     ) : null; })()}
