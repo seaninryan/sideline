@@ -35,7 +35,7 @@ export default function TeamPicker({
         className="nw-in tp-search"
         placeholder="Search teams, or type a new name…"
         value={q}
-        onChange={(e) => setQ(e.target.value)}
+        onChange={(e) => { const v = e.target.value; setQ(v); if (!v.trim()) setSquad(""); }}
         autoFocus
       />
       <div className="tp-list">
