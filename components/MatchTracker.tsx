@@ -12,7 +12,10 @@ import {
   deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
   eventLineMinute, rosterEnd,
 } from "@/lib/raw-edit";
-import { swapPositions, renumberPlayer, renamePlayer } from "@/lib/team-roster";
+import { swapPositions, renumberPlayer, renamePlayer, addPlayer } from "@/lib/team-roster";
+import RosterPitch from "@/components/RosterPitch";
+import Jersey from "@/components/Jersey";
+const EMPTY_ROSTER = { formation: [], players: [] };
 import { SAMPLE_RECORD } from "@/lib/sample";
 import {
   gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
@@ -107,12 +110,13 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // Keyed on curId so it only fires on open, never mid-session (won't yank the user off a tab).
   useEffect(() => { if (curId) setTab(phase === "over" ? "details" : "game"); /* eslint-disable-next-line */ }, [curId]);
   // switching tabs closes any open Advanced editor and resets the game-mode stage
-  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setGmStage({ stage: "team" }); }, [tab]);
+  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setEditLineup(false); setGmStage({ stage: "team" }); }, [tab]);
   const [userUid, setUserUid] = useState("");
   useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); }); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
+  const [editLineup, setEditLineup] = useState(false); // structural lineup editing via RosterPitch
   // lineup tools: "swap" (reshuffle two players) or "renum" (change a shirt number)
   const [lineupMode, setLineupMode] = useState(null);
   const [swapFirst, setSwapFirst] = useState(null); // {num, name}
@@ -1085,16 +1089,38 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </>
         )}
 
-        {view === "lineup" && (
+        {view === "lineup" && (editLineup ? (() => {
+          const us = editLineup === "us";
+          const roster = (us ? usRoster : oppRoster) || EMPTY_ROSTER;
+          const setRoster = us ? setUsRoster : setOppRoster;
+          return (
+            <>
+              <div className="mt-row" style={{ marginBottom: 8 }}>
+                <span className="mt-h" style={{ margin: 0, flex: 1 }}>Edit {us ? usName : themName} — tap to rename/renumber; ⇄ Swap or ↕ Move</span>
+                <button className="mt-add" onClick={() => setEditLineup(false)}>✓ Done</button>
+              </div>
+              <RosterPitch roster={roster} color1={us ? colorUs : colorThem} color2={us ? colorUs2 : colorThem2} editable onChange={setRoster} />
+              <div className="mt-row" style={{ marginTop: 8 }}>
+                <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "starting"))}>+ Player</button>
+                <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "sub"))}>+ Sub</button>
+              </div>
+            </>
+          );
+        })() : (
           <>
+            <div className="mt-row" style={{ marginBottom: 6 }}>
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>{usName}</span>
+              <button className="mt-add alt" onClick={() => setEditLineup("us")}>✎ Edit lineup</button>
+            </div>
             <div className="mt-pitch" style={{ background: `linear-gradient(${colorUs2}22, #0c3b2a 60%)` }}>
               {formationRows.map((row, ri) => (
                 <div className="mt-line" key={ri}>
                   {row.map((n) => {
                     const p = starters.find((x) => x.num === n);
+                    const picked = subPick && subPick.role === "off" && subPick.num === n;
                     return (
-                      <div className="mt-jersey" key={n} style={{ cursor: "pointer" }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch")}>
-                        <div className="j" style={{ background: colorUs, color: contrastOn(colorUs), borderBottom: `4px solid ${colorUs2}`, outline: (subPick && subPick.role === "off" && subPick.num === n) || (swapFirst && swapFirst.num === n) || (renumTarget && renumTarget.num === n) ? "2px solid #f5c518" : "none", outlineOffset: 2 }}>{n}</div>
+                      <div className="mt-jersey" key={n} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch")}>
+                        <Jersey c1={colorUs} c2={colorUs2} num={n} size={44} />
                         <div className="nm">{p ? p.name : ""} {subArrows(n)}{playerMarks(n)}</div>
                         {scoreFor(n)}
                       </div>
@@ -1102,35 +1128,25 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                   })}
                 </div>
               ))}
+              {subs.length > 0 && (
+                <>
+                  <div className="rp-subhead">Subs</div>
+                  <div className="mt-line">
+                    {subs.map((p) => {
+                      const picked = subPick && subPick.role === "on" && subPick.num === p.num;
+                      return (
+                        <div className="mt-jersey" key={p.num} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>
+                          <Jersey c1={colorUs} c2={colorUs2} num={p.num} size={36} />
+                          <div className="nm">{p.name} {subArrows(p.num)}{playerMarks(p.num)}</div>
+                          {scoreFor(p.num)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
-            {renumTarget ? (
-              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
-                <div className="mt-row">
-                  <span className="mt-h" style={{ margin: 0 }}>Edit {renumTarget.num}. {renumTarget.name}</span>
-                  <input style={{ width: 56 }} value={newNum} onChange={(e) => setNewNum(e.target.value.replace(/\D/g, ""))} placeholder="No." />
-                  <input style={{ flex: 1, minWidth: 120 }} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" />
-                  {!renumValid && newNum && <span className="mt-note" style={{ margin: 0 }}>taken</span>}
-                  <button className="mt-add" disabled={!renumValid} onClick={applyRenum}>OK</button>
-                  <button className="mt-add alt" onClick={resetLineupModes}>Cancel</button>
-                </div>
-              </div>
-            ) : lineupMode === "swap" ? (
-              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
-                <div className="mt-row">
-                  <span className="mt-h" style={{ margin: 0 }}>
-                    {swapFirst ? <>Swapping {swapFirst.num}. {swapFirst.name} — tap the second player</> : <>Reshuffle — tap two players to swap their spots (subs too)</>}
-                  </span>
-                  <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={resetLineupModes}>Cancel</button>
-                </div>
-              </div>
-            ) : lineupMode === "renum" ? (
-              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
-                <div className="mt-row">
-                  <span className="mt-h" style={{ margin: 0 }}>Edit player — tap a player to change their number or name</span>
-                  <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={resetLineupModes}>Cancel</button>
-                </div>
-              </div>
-            ) : subPick ? (
+            {subPick ? (
               <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
                 <div className="mt-row">
                   <span className="mt-h" style={{ margin: 0 }}>
@@ -1140,39 +1156,43 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                 </div>
               </div>
             ) : (
-              <div className="mt-row" style={{ marginTop: 8 }}>
-                <p className="mt-note" style={{ margin: 0, flex: 1, minWidth: 180 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
-                <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("swap"); }}>Reshuffle</button>
-                <button className="mt-add alt" onClick={() => { resetLineupModes(); setLineupMode("renum"); }}>Edit player</button>
-              </div>
+              <p className="mt-note" style={{ marginTop: 8 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
             )}
-            {subs.length > 0 && <><p className="mt-h" style={{ marginTop: 16 }}>Subs</p><div className="mt-bench">{subs.map((p) => {
-              const picked = (subPick && subPick.role === "on" && subPick.num === p.num) || (swapFirst && swapFirst.num === p.num) || (renumTarget && renumTarget.num === p.num);
-              const used = subbedOn.has(p.num) || subbedOff.has(p.num); // used subs wear the team colours
-              const st = picked ? { background: "#f5c518", borderColor: "#f5c518" }
-                : used ? { background: colorUs, color: contrastOn(colorUs), borderColor: colorUs2 } : {};
-              return <span className="b" key={p.num} style={{ cursor: "pointer", ...st }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>{p.num}. {p.name} {subArrows(p.num)}{playerMarks(p.num)} {scoreFor(p.num)}</span>;
-            })}</div></>}
             {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
-            {oppRoster && oppRoster.formation && oppRoster.formation.length > 0 && (
+            {oppRoster && (
               <>
-                <p className="mt-h" style={{ marginTop: 18 }}>Opponent — {themName}</p>
-                <div className="mt-pitch" style={{ background: `linear-gradient(${colorThem2}22, #0c3b2a 60%)` }}>
-                  {oppRoster.formation.map((row, ri) => (
-                    <div className="mt-line" key={ri}>
-                      {row.map((n) => { const op = oppRoster.players.find((x) => x.num === n); return (
-                        <div className="mt-jersey" key={n}>
-                          <div className="j" style={{ background: colorThem, color: contrastOn(colorThem), borderBottom: `4px solid ${colorThem2}` }}>{n}</div>
-                          <div className="nm">{op ? op.name : ""}</div>
-                        </div>
-                      ); })}
-                    </div>
-                  ))}
+                <div className="mt-row" style={{ marginTop: 18, marginBottom: 6 }}>
+                  <span className="mt-h" style={{ margin: 0, flex: 1 }}>{themName}</span>
+                  <button className="mt-add alt" onClick={() => setEditLineup("them")}>✎ Edit lineup</button>
                 </div>
+                {oppRoster.formation && oppRoster.formation.length > 0 ? (
+                  <div className="mt-pitch" style={{ background: `linear-gradient(${colorThem2}22, #0c3b2a 60%)` }}>
+                    {oppRoster.formation.map((row, ri) => (
+                      <div className="mt-line" key={ri}>
+                        {row.map((n) => { const op = oppRoster.players.find((x) => x.num === n); return (
+                          <div className="mt-jersey" key={n}>
+                            <Jersey c1={colorThem} c2={colorThem2} num={n} size={40} />
+                            <div className="nm">{op ? op.name : ""}</div>
+                          </div>
+                        ); })}
+                      </div>
+                    ))}
+                    {(() => { const os = oppRoster.players.filter((p) => p.role === "sub"); return os.length > 0 ? (
+                      <>
+                        <div className="rp-subhead">Subs</div>
+                        <div className="mt-line">{os.map((p) => (
+                          <div className="mt-jersey" key={p.num}><Jersey c1={colorThem} c2={colorThem2} num={p.num} size={36} /><div className="nm">{p.name}</div></div>
+                        ))}</div>
+                      </>
+                    ) : null; })()}
+                  </div>
+                ) : (
+                  <p className="mt-note">No away lineup yet — tap Edit lineup to add players.</p>
+                )}
               </>
             )}
           </>
-        )}
+        ))}
 
         {view === "advanced" && (
           <>

@@ -58,14 +58,18 @@ export default function RosterPitch({ roster, color1, color2, editable = false, 
 
   const slot = (p: Player, jerseySize: number) => {
     if (editable && editNum === p.num) {
+      const bump = (d: number) => setDraft((dr) => ({ ...dr, num: String(Math.min(99, Math.max(1, (parseInt(dr.num, 10) || 0) + d))) }));
+      const onKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditNum(null); };
       return (
         <div className="rp-edit" key={p.num}>
-          <input className="rp-num" inputMode="numeric" value={draft.num} maxLength={2} aria-label="Number"
-            onChange={(e) => setDraft({ ...draft, num: e.target.value.replace(/\D/g, "") })}
-            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditNum(null); }} />
+          <div className="rp-num-step">
+            <button className="rp-step" onClick={() => bump(-1)} aria-label="Lower number">−</button>
+            <input className="rp-num" inputMode="numeric" value={draft.num} maxLength={2} aria-label="Number"
+              onChange={(e) => setDraft({ ...draft, num: e.target.value.replace(/\D/g, "") })} onKeyDown={onKey} />
+            <button className="rp-step" onClick={() => bump(1)} aria-label="Higher number">+</button>
+          </div>
           <input className="rp-name" autoFocus value={draft.name} placeholder="name" aria-label="Name"
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditNum(null); }} />
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })} onKeyDown={onKey} />
           <div className="rp-edit-btns">
             <button className="mt-add" onClick={commit}>OK</button>
             <button className="mt-add alt" onClick={() => setEditNum(null)}>Cancel</button>
@@ -95,8 +99,10 @@ export default function RosterPitch({ roster, color1, color2, editable = false, 
     <div className="rp-pitch" style={{ background: `linear-gradient(${c2}22, transparent 55%), #0c3b2a` }}>
       {editable && (
         <div className="rp-tools">
-          <button className={"mt-btn" + (mode === "swap" ? " solid" : "")} onClick={() => setModeBtn("swap")}>⇄ Swap</button>
-          <button className={"mt-btn" + (mode === "move" ? " solid" : "")} onClick={() => setModeBtn("move")}>↕ Move</button>
+          <div className="rp-toolbtns">
+            <button className={"mt-btn" + (mode === "swap" ? " solid" : "")} onClick={() => setModeBtn("swap")}>⇄ Swap</button>
+            <button className={"mt-btn" + (mode === "move" ? " solid" : "")} onClick={() => setModeBtn("move")}>↕ Move</button>
+          </div>
           {hint && <span className="rp-hint">{hint}</span>}
         </div>
       )}
