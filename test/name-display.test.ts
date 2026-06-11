@@ -67,4 +67,12 @@ describe("applyNameDisplay", () => {
     const out = applyNameDisplay(model, "none");
     expect(out.themScorers[0].name).toBe("#7");
   });
+  it("leaves formationRows (shirt numbers, not players) untouched", () => {
+    const model: any = {
+      usScorers: [], themScorers: [], starters: [], subs: [], missing: [], timeline: [],
+      formationRows: [[1, 2, 3], [4, 5]],
+    };
+    expect(applyNameDisplay(model, "none").formationRows).toEqual([[1, 2, 3], [4, 5]]);
+    expect(applyNameDisplay(model, "initials").formationRows).toEqual([[1, 2, 3], [4, 5]]);
+  });
 });
