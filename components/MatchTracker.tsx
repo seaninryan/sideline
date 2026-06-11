@@ -734,6 +734,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       totals, result, effMode, ht,
       leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
       series: parsed.series, goalDots: parsed.goalDots, chartMarkers, htLine: parsed.htLine, halfMarks,
+      usSquad, oppSquad,
       usScorers, themScorers, formationRows, starters, subs, missing, timeline, oppRoster,
       colorUs, colorUs2, colorThem, colorThem2,
     };

@@ -109,6 +109,8 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   head.push(jerseyC(W * 0.73, 40, 46, m.colorThem, m.colorThem2));
   head.push(T(W * 0.27, 104, m.usName, 15, PAPER, { w: 700, a: "middle" }));
   head.push(T(W * 0.73, 104, m.themName, 15, PAPER, { w: 700, a: "middle" }));
+  if (m.usSquad) head.push(T(W * 0.27, 118, m.usSquad, 10, "#9fc2b3", { a: "middle" }));
+  if (m.oppSquad) head.push(T(W * 0.73, 118, m.oppSquad, 10, "#9fc2b3", { a: "middle" }));
   head.push(T(W * 0.27, 146, m.totals.us.str, 42, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.73, 146, m.totals.them.str, 42, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.5, 138, "–", 24, "#7fa395", { a: "middle" }));
