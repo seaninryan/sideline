@@ -12,9 +12,10 @@ import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
 
 const EMPTY: TeamRoster = { formation: [], players: [] };
 
-export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord | null; onDone: () => void }) {
+export default function TeamEditor({ initial, userId, onDone }: { initial?: TeamRecord | null; userId?: string; onDone: () => void }) {
   const [id] = useState(() => initial?.id || mkId());
   const [name, setName] = useState(initial?.name || "");
+  const [squad, setSquad] = useState(initial?.squad || "");
   const [color1, setColor1] = useState(initial?.color1 || "#f5c518");
   const [color2, setColor2] = useState(initial?.color2 || "#1f7a4d");
   const [sport, setSport] = useState(initial?.sport || "");
@@ -44,7 +45,11 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
     setRoster(templateForSport(s));
   };
 
-  const persist = () => { if (name.trim()) teamStore.set({ id, name: name.trim(), color1, color2, sport: sport || undefined, roster }); };
+  const persist = async () => {
+    if (!name.trim()) return;
+    const saved = await teamStore.set({ id, owner: userId || initial?.owner, name: name.trim(), squad: squad.trim(), color1, color2, sport: sport || undefined, roster });
+    if (saved && saved.name !== name) setName(saved.name);
+  };
   // auto-save 0.8s after any change (skip the first render)
   const first = useRef(true);
   useEffect(() => {
@@ -52,7 +57,7 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
     const t = setTimeout(persist, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, color1, color2, sport, roster]);
+  }, [name, squad, color1, color2, sport, roster]);
   const done = () => { persist(); onDone(); };
 
   const swatch = (val: string, set: (c: string) => void, which: "c1" | "c2") => (
@@ -73,6 +78,7 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
         <button className="mt-add alt" onClick={done}>‹ Done</button></div>
 
       <label className="te-field">Name <input className="mt-inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Racoons" /></label>
+      <label className="te-field">Squad <input className="mt-inp" value={squad} onChange={(e) => setSquad(e.target.value)} placeholder="e.g. U12 Boys (optional)" /></label>
       <div className="te-field">Colours {swatch(color1, setColor1, "c1")} {swatch(color2, setColor2, "c2")}</div>
       <label className="te-field">Sport
         <select className="mt-sel" value={sport} onChange={(e) => chooseSport(e.target.value)}>
