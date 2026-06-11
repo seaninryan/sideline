@@ -7,6 +7,7 @@ import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import StatGrid from "@/components/StatGrid";
 import Scorers from "@/components/Scorers";
+import Timeline from "@/components/Timeline";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
@@ -29,7 +30,6 @@ export default function PublicMatch({ model }: { model: Model }) {
   (m.timeline || []).forEach((t: any) => { if (t.kind === "sub" && t.offNum != null) subOff.add(t.offNum); });
   const scoreText = (s: any) => (m.effMode === "goals" ? `${s.g}` : `${s.g}-${s.p}`) + (s.frees ? ` (${s.frees}f)` : "");
   const findName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-  const halves: number[] = [...new Set<number>((m.timeline || []).map((t: any) => t.half as number))].sort((a, b) => a - b);
 
   const sb = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -175,46 +175,7 @@ export default function PublicMatch({ model }: { model: Model }) {
       {(m.timeline && m.timeline.length > 0) && (
         <section className="pm-sec">
           <p className="pm-label">Timeline</p>
-          <div className="pm-tl">
-            {halves.map((h) => (
-              <React.Fragment key={h}>
-                <div className="pm-half"><span>{h === 1 ? "FIRST HALF" : h === 2 ? "SECOND HALF" : `PERIOD ${h}`}</span></div>
-                {m.timeline.filter((t: any) => t.half === h).map((it: any, i: number) => {
-                  const mm = it.minute != null ? `${it.mmin || it.minute}'` : "";
-                  const us = it.side === "us";
-                  if (it.kind === "score") {
-                    const col = us ? m.colorUs : m.colorThem;
-                    const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
-                    const label = `${evName}${it.type === "goal" ? "  GOAL" : it.fromFree ? "  (free)" : it.setPiece ? `  ('${it.setPiece})` : ""}`;
-                    const run = `${it.usScore} – ${it.themScore}`;
-                    return (
-                      <div className="pm-ev" key={i}>
-                        <div className="us">{us && <><span className="min">{mm}</span> {label}<div className="run">{run}</div></>}</div>
-                        <div className="dot" style={{ background: col }} />
-                        <div className="them">{!us && <>{mm} {label}<div className="run">{run}</div></>}</div>
-                      </div>
-                    );
-                  }
-                  if (it.kind === "sub") {
-                    return (
-                      <div className="pm-ev" key={i}>
-                        <div className="us">{mm} <span className="on">▲ {it.on}</span> <span className="off">▼ {it.off}</span></div>
-                        <div className="dot alt" />
-                        <div className="them" />
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="pm-ev" key={i}>
-                      <div className="us note">{mm} {it.text}</div>
-                      <div className="dot alt" />
-                      <div className="them" />
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
+          <Timeline timeline={m.timeline} halfMarks={m.halfMarks} colorUs={m.colorUs} colorUs2={m.colorUs2} colorThem={m.colorThem} colorThem2={m.colorThem2} usName={m.usName} themName={m.themName} />
         </section>
       )}
 
