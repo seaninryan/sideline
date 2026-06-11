@@ -507,3 +507,11 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .tp-more { width: 100%; background: transparent; border: 1px dashed var(--line); border-radius: 9px; padding: 9px; color: var(--muted); font-family: var(--font-oswald); font-size: 13px; cursor: pointer; margin-bottom: 8px; }
 .tp-more:hover { border-color: #1f7a4d; color: #1f7a4d; }
 .tp .tp-create { width: 100%; }
+
+.pc-seg{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px;}
+.pc-opt{display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 4px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer;}
+.pc-opt.on{background:var(--pitch); border-color:var(--pitch);}
+.pc-opt.on .pc-lbl, .pc-opt.on .pc-hint{color:#f4efe1;}
+.pc-lbl{font-family:var(--font-oswald),sans-serif; font-weight:600; font-size:13px; color:var(--pitch);}
+.pc-hint{font-size:9px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); text-align:center; line-height:1.1;}
+.pc-link{margin-top:10px;}
