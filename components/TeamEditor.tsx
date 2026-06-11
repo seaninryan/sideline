@@ -75,6 +75,7 @@ export default function TeamEditor({ initial, userId, onDone }: { initial?: Team
   return (
     <div className="te">
       <div className="mt-row"><span className="mt-h" style={{ flex: 1, margin: 0 }}>{initial ? "Edit team" : "New team"}</span>
+        {initial && <button className="mt-add alt" onClick={async () => { await persist(); const d = await teamStore.duplicate({ ...initial, name, squad, color1, color2, sport: sport || undefined, roster }); if (d) onDone(); }}>⧉ Duplicate</button>}
         <button className="mt-add alt" onClick={done}>‹ Done</button></div>
 
       <label className="te-field">Name <input className="mt-inp" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Racoons" /></label>

@@ -29,6 +29,7 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
   const feedOffset = useRef(0);
 
   const reload = () => teamStore.list(userId).then(setTeams);
+  const dup = async (t: TeamRecord) => { const d = await teamStore.duplicate(t); await reload(); if (d) setEditing(d); };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [userId]);
 
   const loadFeed = async () => {
@@ -64,7 +65,7 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
       <div className="mt-root">
         {header}
         <div className="ml-page">
-          <TeamEditor initial={editing === "new" ? null : editing} onDone={() => { setEditing(null); reload(); }} />
+          <TeamEditor initial={editing === "new" ? null : editing} userId={userId} onDone={() => { setEditing(null); reload(); }} />
         </div>
         <BrandFooter />
       </div>
@@ -94,6 +95,7 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
                   <span className="tl-flag" style={{ background: flag(t) }} />
                   <span className="tl-name">{t.name}</span>
                   <span className={"tl-priv " + (t.is_public ? "public" : "private")}>{t.is_public ? "◉ public" : "🔒 private"}</span>
+                  <button className="tl-dup" title="Duplicate" onClick={(e) => { e.stopPropagation(); dup(t); }}>⧉</button>
                   {meta(t)}
                 </div>
               ))}
