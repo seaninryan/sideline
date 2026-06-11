@@ -30,6 +30,7 @@ import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import StatGrid from "@/components/StatGrid";
+import Scorers from "@/components/Scorers";
 import { htScore } from "@/lib/half-time";
 import { useRouter } from "next/navigation";
 
@@ -1126,35 +1127,9 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               <ScoreChart series={series} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorUs={colorUs} colorThem={colorThem} nameUs={usName} nameThem={themName} mode={effMode} />
             </div>
 
-            <p className="mt-h" style={{ marginTop: 18 }}>Top scorers — {usName}</p>
-            <table className="mt-tbl">
-              <thead><tr><th>Player</th><th>Goals</th><th>Points</th><th>Frees</th><th>Total</th></tr></thead>
-              <tbody>
-                {usScorers.map((s, i) => (
-                  <tr key={i}>
-                    <td>{s.num ? <span className="mt-num">{s.num}</span> : null}{s.name}</td>
-                    <td className="n">{s.g}</td><td className="n">{s.p}</td>
-                    <td>{s.frees || "–"}</td>
-                    <td className="n">{effMode === "goals" ? s.g : `${s.g}-${s.p}`}</td>
-                  </tr>
-                ))}
-                {usScorers.length === 0 && <tr><td colSpan={5} style={{ color: "#6f7d72" }}>No scores parsed yet.</td></tr>}
-              </tbody>
-            </table>
+            <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>
+            <Scorers us={usScorers} them={themScorers} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} mode={effMode} />
 
-            {themScorers.length > 0 && (
-              <>
-                <p className="mt-h" style={{ marginTop: 18 }}>{themName} scorers</p>
-                <table className="mt-tbl">
-                  <thead><tr><th>Player</th><th>Goals</th><th>Points</th><th>Frees</th><th>Total</th></tr></thead>
-                  <tbody>
-                    {themScorers.map((s, i) => (
-                      <tr className="them" key={i}><td>{s.name === "Opposition" ? themName : s.name}</td><td className="n">{s.g}</td><td className="n">{s.p}</td><td>{s.frees || "–"}</td><td className="n">{effMode === "goals" ? s.g : `${s.g}-${s.p}`}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
             <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
             {renderTimeline()}
           </>

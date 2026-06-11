@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import StatGrid from "@/components/StatGrid";
+import Scorers from "@/components/Scorers";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
 import { contrastOn } from "@/lib/util";
@@ -114,28 +115,11 @@ export default function PublicMatch({ model }: { model: Model }) {
         </div>
       </section>
 
-      {/* scorers */}
+      {/* scorers — both teams, combined leaderboard */}
       <section className="pm-sec">
-        <p className="pm-label">Scorers · {(m.usName || "").toUpperCase()}</p>
-        {!m.usScorers.length && <p className="pm-empty">No scores recorded</p>}
-        {m.usScorers.map((s: any, i: number) => (
-          <div className="pm-scorer" key={i}>
-            <span>{s.num ? `${s.num}. ` : ""}{s.name}</span><b>{scoreText(s)}</b>
-          </div>
-        ))}
+        <p className="pm-label">Scorers</p>
+        <Scorers us={m.usScorers} them={m.themScorers} colorUs={m.colorUs} colorUs2={m.colorUs2} colorThem={m.colorThem} colorThem2={m.colorThem2} mode={m.effMode} />
       </section>
-
-      {/* opponent scorers */}
-      {m.themScorers && m.themScorers.length > 0 && (
-        <section className="pm-sec">
-          <p className="pm-label">Scorers · {(m.themName || "").toUpperCase()}</p>
-          {m.themScorers.map((s: any, i: number) => (
-            <div className="pm-scorer" key={i}>
-              <span>{s.num ? `${s.num}. ` : ""}{s.name}</span><b>{scoreText(s)}</b>
-            </div>
-          ))}
-        </section>
-      )}
 
       {/* lineup — pitch when we have formation rows, else a flat starters list */}
       {((m.formationRows && m.formationRows.length > 0) || (m.starters && m.starters.length > 0)) && (
