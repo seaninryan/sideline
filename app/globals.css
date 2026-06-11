@@ -139,11 +139,12 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-panel .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; justify-content:center;}
 .mt-add:disabled{opacity:.45; cursor:not-allowed;}
 .mt-pitch{display:grid; gap:7px; background:linear-gradient(var(--pitch),var(--pitch2)); border-radius:12px; padding:16px 10px;}
-.mt-line{display:flex; justify-content:center; gap:8px; flex-wrap:wrap;}
-.mt-jersey{display:flex; flex-direction:column; align-items:center; gap:4px; width:84px;}
+.mt-line{display:flex; justify-content:center; gap:8px; flex-wrap:nowrap;}
+.mt-jersey{display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 1 84px; min-width:0;}
+.mt-jersey svg{max-width:100%; height:auto;}
 .mt-jersey .j{width:26px; height:26px; border-radius:7px; background:#f5c518; color:#11241b; font-family:var(--font-bebas);
   font-size:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.3);}
-.mt-jersey .nm{font-family:var(--font-oswald); font-weight:500; font-size:14px; color:#eaf3ee; text-align:center; line-height:1.15; max-width:84px;}
+.mt-jersey .nm{font-family:var(--font-oswald); font-weight:500; font-size:14px; color:#eaf3ee; text-align:center; line-height:1.15; max-width:100%;}
 .mt-jersey .pts{font-family:var(--font-oswald); font-weight:600; font-size:11px; color:#f5c518; line-height:1;}
 .mt-bench .pts{font-family:var(--font-oswald); font-weight:600; font-size:11px;}
 .mt-bench{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
@@ -284,8 +285,8 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .pm-pitch{background:#0c3b2a; border-radius:12px; padding:16px 8px;}
 .pm-pitch-row{display:flex; justify-content:center; gap:6%; margin-bottom:18px;}
 .pm-pitch-row:last-child{margin-bottom:0;}
-.pm-jersey{text-align:center; width:56px;}
-.pm-jersey svg{margin:0 auto;}
+.pm-jersey{text-align:center; flex:0 1 56px; min-width:0;}
+.pm-jersey svg{margin:0 auto; max-width:100%; height:auto;}
 .pm-jersey .sq{width:34px; height:34px; border-radius:8px; margin:0 auto; display:flex; align-items:center; justify-content:center; font-family:var(--font-bebas), sans-serif; font-size:18px;}
 .pm-jersey .nm{font-size:10px; color:#eaf3ee; margin-top:4px; line-height:1.1;}
 .pm-jersey .sc{font-size:10px; color:#f5c518; font-weight:700;}
@@ -441,12 +442,13 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .rp-target.sm { width: auto; height: auto; border-radius: 13px; padding: 3px 10px; font-size: 11px; margin-left: 8px; vertical-align: middle; }
 .rp-newline { min-height: 44px; border: 1px dashed rgba(245,197,24,.4); border-radius: 9px; margin: 8px 12px; justify-content: center; }
 .rp-line { margin: 8px 0; align-items: flex-start; }
-.rp-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 88px; background: transparent; border: 0; padding: 4px; border-radius: 9px; cursor: default; }
+.rp-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 1 88px; min-width: 0; background: transparent; border: 0; padding: 4px; border-radius: 9px; cursor: default; }
+.rp-slot svg { max-width: 100%; height: auto; }
 .rp-slot.ed { cursor: pointer; }
 .rp-slot.ed:hover { background: rgba(255,255,255,.08); }
 .rp-slot.picked { background: rgba(245,197,24,.22); outline: 2px solid #f5c518; }
 .rp-slot.dim { opacity: .3; cursor: default; }
-.rp-slot .nm { font-family: var(--font-oswald); font-weight: 500; font-size: 13px; color: #eaf3ee; text-align: center; line-height: 1.15; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
+.rp-slot .nm { font-family: var(--font-oswald); font-weight: 500; font-size: 13px; color: #eaf3ee; text-align: center; line-height: 1.15; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .rp-subhead { text-align: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8fb0a3; margin: 12px 0 2px; }
 .rp-edit { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 154px; background: rgba(0,0,0,.30); border-radius: 11px; padding: 11px 9px; }
 .rp-num-step { display: flex; align-items: center; gap: 6px; }
