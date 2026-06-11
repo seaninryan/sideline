@@ -6,8 +6,6 @@ import ScoreChart from "@/components/ScoreChart";
 import { store, cache, loadAll } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { parseMatch, isPlaceholderLabel } from "@/lib/parser";
-import { buildInfographicSVG } from "@/lib/infographic";
-import { svgToPng } from "@/lib/svg-to-png.client";
 import {
   deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
   eventLineMinute, rosterEnd,
@@ -23,6 +21,7 @@ import {
 } from "@/lib/util";
 import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
+import ShareImageModal from "@/components/ShareImageModal";
 import LinkTeams from "@/components/LinkTeams";
 import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
 import { teamStore } from "@/lib/team-store";
@@ -191,6 +190,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userUid]);
   const [share, setShare] = useState(false);
+  const [shareModel, setShareModel] = useState(null);
   const [link, setLink] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState(null);
   const [awayTeamId, setAwayTeamId] = useState(null);
@@ -722,40 +722,19 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const evEnabled = (k) => (phase === "play" ? k !== "half" : (phase === "pre" || phase === "ht") && k === "half");
 
   const doExport = () => {
-    if (modal && modal.kind === "share") { setModal(null); return; }
+    if (shareModel) { setShareModel(null); return; }
     const ht = htScore(parsed.series, effMode);
     const model = {
       grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
       usName, themName, dateStr: matchDate ? fmtDate(matchDate) : "",
       totals, result, effMode, ht,
       leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
-      series: parsed.series, goalDots: parsed.goalDots, htLine: parsed.htLine, halfMarks,
-      usScorers, formationRows, starters, subs, missing, timeline,
+      series: parsed.series, goalDots: parsed.goalDots, chartMarkers, htLine: parsed.htLine, halfMarks,
+      usScorers, themScorers, formationRows, starters, subs, missing, timeline, oppRoster,
       colorUs, colorUs2, colorThem, colorThem2,
     };
     const safe = (s) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-    const filename = `${safe(header.label)}-${safe(themName)}.png`;
-    const title = `${usName} ${totals.us.str} – ${totals.them.str} ${themName}`;
-    try {
-      const { svg, width, height } = buildInfographicSVG(model);
-      const svgUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-      setModal({ kind: "share", img: svgUrl, svg, filename, title, blob: null, png: false });
-      svgToPng(svg, width, height)
-        .then(({ blob, dataUrl }) => setModal((mm) => (mm && mm.kind === "share") ? { ...mm, blob, img: dataUrl, png: true } : mm))
-        .catch(() => setModal((mm) => (mm && mm.kind === "share") ? { ...mm, png: false, pngFailed: true } : mm));
-    } catch (e) {
-      setModal({ kind: "share", error: true });
-    }
-  };
-  const nativeShare = () => {
-    if (!modal || !modal.blob) return;
-    const file = new File([modal.blob], modal.filename, { type: "image/png" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: modal.title }).catch(() => {});
-    else downloadBlob(modal.blob, modal.filename);
-  };
-  const downloadSvg = () => {
-    if (!modal || !modal.svg) return;
-    downloadBlob(new Blob([modal.svg], { type: "image/svg+xml" }), (modal.filename || "match.png").replace(/\.png$/, ".svg"));
+    setShareModel({ model, filename: `${safe(header.label || usName)}-${safe(themName)}.png`, title: `${usName} ${totals.us.str} – ${totals.them.str} ${themName}` });
   };
   const openBackup = async () => {
     if (modal && modal.kind === "backup") { setModal(null); return; }
@@ -829,21 +808,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         />
       )}
 
+      {!nw && shareModel && (
+        <ShareImageModal model={shareModel.model} filename={shareModel.filename} title={shareModel.title} onClose={() => setShareModel(null)} />
+      )}
+
       {!nw && modal && (
         <div className="mt-panel">
-          {modal.kind === "share" && (
-            <>
-              <div className="mt-panel-head"><h3>Match image</h3><button className="mt-add alt" onClick={() => setModal(null)}>Close</button></div>
-              {modal.error && <p className="hint">Couldn't build the image — try again.</p>}
-              {modal.img && <img className="shot" src={modal.img} alt="match infographic" />}
-              {modal.img && <p className="hint"><b>Press and hold the image</b> to save it to Photos or share it{modal.png ? "." : " (preparing a saveable version…)"}</p>}
-              <div className="row">
-                {modal.png && <button className="mt-add" onClick={nativeShare}>Save / Share</button>}
-                {modal.img && !modal.png && <button className="mt-add alt" onClick={downloadSvg}>Download</button>}
-              </div>
-              {modal.pngFailed && <p className="hint">A PNG couldn't be made in this browser — long-press the image above to save it, or use Download.</p>}
-            </>
-          )}
           {modal.kind === "backup" && (
             <>
               <div className="mt-panel-head"><h3>Backup &amp; transfer</h3><button className="mt-add alt" onClick={() => setModal(null)}>Close</button></div>

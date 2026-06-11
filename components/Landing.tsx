@@ -45,7 +45,7 @@ export default function Landing({ userId, email }: { userId: string | null; emai
     if (loadingRef.current || !moreRef.current) return;
     loadingRef.current = true; setLoading(true);
     const q = sb.from("matches").select("id,short_code,data,updated_at")
-      .eq("is_public", true).order("match_date", { ascending: false, nullsFirst: false });
+      .eq("is_public", true).eq("listed", true).order("match_date", { ascending: false, nullsFirst: false });
     const { data } = await q.range(offsetRef.current, offsetRef.current + PAGE - 1);
     const rows = (data as Row[]) || [];
     offsetRef.current += rows.length;
