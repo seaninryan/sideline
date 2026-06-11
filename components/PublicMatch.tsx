@@ -21,6 +21,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   const [model, setModel] = useState<Model>(initialModel);
   const prevModel = useRef<Model>(initialModel);
   const [pulse, setPulse] = useState(0);
+  const [gone, setGone] = useState(false);
   const m = model;
   const margin = Math.abs(m.totals.us.total - m.totals.them.total);
   const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
@@ -59,6 +60,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   // Live updates: rebuild the whole model from each Realtime UPDATE payload.
   useEffect(() => {
     const apply = (row: any) => {
+      if (row.is_public === false) { setGone(true); return; }
       const next = applyNameDisplay(buildModel(row.data), row.name_display || row.data?.nameDisplay || "full");
       if (scoreChanged(prevModel.current, next)) setPulse((p) => p + 1);
       prevModel.current = next;
@@ -70,6 +72,11 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "matches", filter: `id=eq.${id}` },
         (payload) => apply(payload.new)
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "matches", filter: `id=eq.${id}` },
+        () => setGone(true)
       )
       .subscribe();
     return () => { sb.removeChannel(ch); };
@@ -103,7 +110,12 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         </div>
       )}
       {imgOpen && <ShareImageModal model={m} filename={imgFilename} title={imgTitle} onClose={() => setImgOpen(false)} />}
-
+      {gone ? (
+        <section className="pm-sec" style={{ textAlign: "center", padding: "48px 16px" }}>
+          <p className="pm-label">This match is no longer shared.</p>
+        </section>
+      ) : (
+       <>
       {/* score header (shared with the editor) */}
       {(() => {
         const usIsHome = m.homeAway === "home";
@@ -244,7 +256,8 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         </section>
       )}
 
-      {/* brand footer */}
+       </>
+      )}
       <BrandFooter />
     </div>
   );
