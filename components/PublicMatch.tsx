@@ -14,7 +14,8 @@ import { createClient } from "@/lib/supabase/client";
 import ShareImageModal from "@/components/ShareImageModal";
 import type { Model } from "@/lib/types";
 
-export default function PublicMatch({ model }: { model: Model }) {
+export default function PublicMatch({ model: initialModel, id }: { model: Model; id: string }) {
+  const [model, setModel] = useState<Model>(initialModel);
   const m = model;
   const margin = Math.abs(m.totals.us.total - m.totals.them.total);
   const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
