@@ -4,13 +4,9 @@ import { store } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { genShortCode } from "@/lib/short-code";
 import { teamsToPublish } from "@/lib/team-link";
+import PrivacyControl from "@/components/PrivacyControl";
+import { privacyLevel, levelToColumns, type PrivacyLevel } from "@/lib/privacy";
 import type { MatchRecord, NameDisplay } from "@/lib/types";
-
-const NAME_OPTS: { v: NameDisplay; label: string }[] = [
-  { v: "full", label: "Full" },
-  { v: "initials", label: "Initials" },
-  { v: "none", label: "None" },
-];
 
 export default function ShareSheet({ record, curId, onClose, onShareImage, onApplied }: {
   record: MatchRecord;
@@ -22,10 +18,9 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
   const sb = createClient();
   const origin = typeof location !== "undefined" ? location.origin : "";
   const [loaded, setLoaded] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
+  const [level, setLevel] = useState<PrivacyLevel>("private");
   const [slug, setSlug] = useState(curId);
   const [nameDisplay, setNameDisplay] = useState<NameDisplay>(record.nameDisplay || "full");
-  const [listed, setListed] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const shareUrl = `${origin}/m/${slug}`;
@@ -34,7 +29,7 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
     Promise.resolve(sb.from("matches").select("is_public,short_code,name_display,listed").eq("id", curId).maybeSingle())
       .then(({ data }) => {
         const d = data as { is_public?: boolean; short_code?: string | null; name_display?: NameDisplay; listed?: boolean } | null;
-        if (d) { setIsPublic(!!d.is_public); if (d.short_code) setSlug(d.short_code); if (d.name_display) setNameDisplay(d.name_display); if (typeof d.listed === "boolean") setListed(d.listed); }
+        if (d) { setLevel(privacyLevel(!!d.is_public, d.listed)); if (d.short_code) setSlug(d.short_code); if (d.name_display) setNameDisplay(d.name_display); }
         setLoaded(true);
       }).catch(() => setLoaded(true));
   }, [curId]);
@@ -64,37 +59,20 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
     await store.set(curId, { ...record, nameDisplay: v });
     await sb.from("matches").update({ name_display: v }).eq("id", curId);
     // keep the (already public) linked teams' name privacy in sync
-    if (isPublic && teamIds.length) await sb.from("teams").update({ name_display: v }).in("id", teamIds);
-    onApplied({ nameDisplay: v, isPublic });
+    if (level !== "private" && teamIds.length) await sb.from("teams").update({ name_display: v }).in("id", teamIds);
+    onApplied({ nameDisplay: v, isPublic: level !== "private" });
     setBusy(false);
   };
 
-  const publish = async () => {
+  const applyLevel = async (next: PrivacyLevel) => {
     setBusy(true);
+    setLevel(next);
+    const cols = levelToColumns(next);
     await store.set(curId, { ...record, nameDisplay });
-    const code = await ensureShortCode();
-    setSlug(code);
-    await sb.from("matches").update({ is_public: true, name_display: nameDisplay }).eq("id", curId);
-    // sharing a match makes its teams public too (sticky — unshare won't undo this)
-    if (teamIds.length) await sb.from("teams").update({ is_public: true, name_display: nameDisplay }).in("id", teamIds);
-    setIsPublic(true);
-    onApplied({ nameDisplay, isPublic: true });
-    setBusy(false);
-  };
-
-  const unshare = async () => {
-    setBusy(true);
-    await sb.from("matches").update({ is_public: false }).eq("id", curId);
-    setIsPublic(false);
-    onApplied({ nameDisplay, isPublic: false });
-    setBusy(false);
-  };
-
-  const toggleListed = async () => {
-    const next = !listed;
-    setBusy(true);
-    setListed(next);
-    await sb.from("matches").update({ listed: next }).eq("id", curId);
+    if (cols.is_public && level === "private") { const code = await ensureShortCode(); setSlug(code); }
+    await sb.from("matches").update({ ...cols, name_display: nameDisplay }).eq("id", curId);
+    if (cols.is_public && teamIds.length) await sb.from("teams").update({ is_public: true, name_display: nameDisplay }).in("id", teamIds);
+    onApplied({ nameDisplay, isPublic: cols.is_public });
     setBusy(false);
   };
 
@@ -111,32 +89,17 @@ export default function ShareSheet({ record, curId, onClose, onShareImage, onApp
 
       {!loaded ? (
         <p className="mt-note" style={{ marginTop: 10 }}>Checking publish status…</p>
-      ) : !isPublic ? (
-        <>
-          <p className="mt-note" style={{ margin: "12px 0 4px" }}>Player names on the public page:</p>
-          <div className="mt-grid">
-            {NAME_OPTS.map((o) => (
-              <button key={o.v} className={"mt-big sm" + (nameDisplay === o.v ? " on" : "")} onClick={() => setNameDisplay(o.v)}>{o.label}</button>
-            ))}
-          </div>
-          <button className="mt-add" style={{ marginTop: 10 }} disabled={busy} onClick={publish}>{busy ? "Publishing…" : "🌐 Make public & get link"}</button>
-        </>
       ) : (
-        <>
-          <p className="mt-note" style={{ margin: "12px 0 4px" }}>Public link</p>
-          <input className="mt-inp" readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%" }} />
-          <button className="mt-add" style={{ marginTop: 6 }} onClick={copy}>{copied ? "Copied ✓" : "🔗 Copy public link"}</button>
-          <p className="mt-note" style={{ margin: "12px 0 4px" }}>Name privacy</p>
-          <div className="mt-grid">
-            {NAME_OPTS.map((o) => (
-              <button key={o.v} className={"mt-big sm" + (nameDisplay === o.v ? " on" : "")} disabled={busy} onClick={() => applyNameDisplay(o.v)}>{o.label}</button>
-            ))}
-          </div>
-          <p className="mt-note" style={{ margin: "12px 0 4px" }}>Public home page</p>
-          <button className="mt-add alt" disabled={busy} onClick={toggleListed}>{listed ? "👁 Listed — tap to hide" : "🙈 Hidden — tap to list"}</button>
-          <p className="mt-note" style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>{listed ? "Anyone can find this in the public matches feed." : "Hidden from the feed — only people with the link can open it."}</p>
-          <button className="mt-add danger" style={{ marginTop: 10 }} disabled={busy} onClick={unshare}>🚫 Unshare (make private)</button>
-        </>
+        <PrivacyControl
+          level={level}
+          onLevel={applyLevel}
+          link={level !== "private" ? shareUrl : undefined}
+          copied={copied}
+          onCopy={copy}
+          nameDisplay={nameDisplay}
+          onNameDisplay={applyNameDisplay}
+          busy={busy}
+        />
       )}
     </div>
   );
