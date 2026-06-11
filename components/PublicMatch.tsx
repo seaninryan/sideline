@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ScoreChart from "@/components/ScoreChart";
 import AppHeader from "@/components/AppHeader";
@@ -11,11 +11,15 @@ import Timeline from "@/components/Timeline";
 import Jersey from "@/components/Jersey";
 import { gpTotal } from "@/lib/util";
 import { createClient } from "@/lib/supabase/client";
+import { buildModel } from "@/lib/model";
+import { applyNameDisplay } from "@/lib/name-display";
+import { scoreChanged } from "@/lib/live-update";
 import ShareImageModal from "@/components/ShareImageModal";
 import type { Model } from "@/lib/types";
 
 export default function PublicMatch({ model: initialModel, id }: { model: Model; id: string }) {
   const [model, setModel] = useState<Model>(initialModel);
+  const prevModel = useRef<Model>(initialModel);
   const m = model;
   const margin = Math.abs(m.totals.us.total - m.totals.them.total);
   const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
@@ -51,6 +55,23 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   const [imgOpen, setImgOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   React.useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
+  // Live updates: rebuild the whole model from each Realtime UPDATE payload.
+  useEffect(() => {
+    const apply = (row: any) => {
+      const next = applyNameDisplay(buildModel(row.data), row.name_display || row.data?.nameDisplay || "full");
+      prevModel.current = next;
+      setModel(next);
+    };
+    const ch = sb
+      .channel(`match:${id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "matches", filter: `id=eq.${id}` },
+        (payload) => apply(payload.new)
+      )
+      .subscribe();
+    return () => { sb.removeChannel(ch); };
+  }, [id, sb]);
   const copyLink = () => { navigator.clipboard?.writeText(location.href); };
   const safe = (s: string) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   const imgFilename = `${safe(m.usName || "match")}-${safe(m.themName || "")}.png`;
