@@ -31,6 +31,8 @@ export interface MatchRecord {
   label?: string;
   homeAway?: "home" | "away";
   opponent?: string;
+  usSquad?: string;     // squad sub-line, snapshotted from the linked teams at link time
+  oppSquad?: string;
   legacyRaw?: string;
   notationV?: number;
   savedAt?: number;
@@ -85,11 +87,13 @@ export interface TeamRecord {
   owner?: string;
   short_code?: string | null;
   name: string;
+  squad?: string;       // squad label, part of identity: (sport, name, squad). "" = plain club team.
   color1?: string;
   color2?: string;
   sport?: string;
   roster: TeamRoster;
   is_public?: boolean;
   name_display?: NameDisplay;
+  listed?: boolean;     // when public, also shown in the public-teams feed
   updated_at?: string;
 }
