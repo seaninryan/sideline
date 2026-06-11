@@ -6,7 +6,7 @@ import BrandFooter from "@/components/BrandFooter";
 import MatchRow from "@/components/MatchRow";
 import SportIcon, { ICON_SPORTS } from "@/components/SportIcon";
 import { createClient } from "@/lib/supabase/client";
-import { matchRowView, relativeDate, isUpcoming } from "@/lib/match-list";
+import { matchRowView, relativeDate, isUpcoming, isLive } from "@/lib/match-list";
 import { SPORTS } from "@/lib/constants";
 import type { MatchRecord } from "@/lib/types";
 
@@ -74,21 +74,26 @@ export default function Landing({ userId, email }: { userId: string | null; emai
     filter === "both" ? true : filter === "public" ? r.is_public : !r.is_public);
   const ownFiltered = ownByPrivacy.filter(bySport);
   const ownUpcoming = ownFiltered.filter((r) => isUpcoming(dateOf(r), now)).sort((a, b) => dateMs(a) - dateMs(b));
-  const ownPast = ownFiltered.filter((r) => !isUpcoming(dateOf(r), now)); // already date-desc from the query
+  const ownNotUpcoming = ownFiltered.filter((r) => !isUpcoming(dateOf(r), now));
+  const ownLive = ownNotUpcoming.filter((r) => isLive(r.data, now, r.updated_at)).sort((a, b) => dateMs(b) - dateMs(a));
+  const ownPast = ownNotUpcoming.filter((r) => !isLive(r.data, now, r.updated_at)); // already date-desc from the query
 
   const feedFiltered = feed.filter(bySport);
   const feedUpcoming = feedFiltered.filter((r) => isUpcoming(dateOf(r), now)).sort((a, b) => dateMs(a) - dateMs(b));
-  const feedPast = feedFiltered.filter((r) => !isUpcoming(dateOf(r), now));
+  const feedNotUpcoming = feedFiltered.filter((r) => !isUpcoming(dateOf(r), now));
+  const feedLive = feedNotUpcoming.filter((r) => isLive(r.data, now, r.updated_at)).sort((a, b) => dateMs(b) - dateMs(a));
+  const feedPast = feedNotUpcoming.filter((r) => !isLive(r.data, now, r.updated_at));
 
   // sport chips: every sport actually present across both lists, in canonical
   // order. Hidden entirely when there's nothing to choose between.
   const present = new Set([...(own || []), ...feed].map(sportOf).filter(Boolean));
   const sportChips = ICON_SPORTS.filter((s) => present.has(s));
 
-  const row = (r: Row, opts: { privacy?: boolean; upcoming?: boolean } = {}) => (
+  const row = (r: Row, opts: { privacy?: boolean; upcoming?: boolean; live?: boolean } = {}) => (
     <MatchRow key={r.id} record={r.data} href={href(r)}
       date={relativeDate(dateOf(r), now)}
       upcoming={opts.upcoming}
+      live={opts.live}
       privacy={opts.privacy ? (r.is_public ? "public" : "private") : null} />
   );
 
@@ -148,9 +153,15 @@ export default function Landing({ userId, email }: { userId: string | null; emai
                   <>
                     <div className="ml-subhead">Upcoming</div>
                     {ownUpcoming.map((r) => row(r, { privacy: true, upcoming: true }))}
-                    {ownPast.length > 0 && <div className="ml-subhead">Past</div>}
                   </>
                 )}
+                {ownLive.length > 0 && (
+                  <>
+                    <div className="ml-subhead">Live</div>
+                    {ownLive.map((r) => row(r, { privacy: true, live: true }))}
+                  </>
+                )}
+                {ownPast.length > 0 && (ownUpcoming.length > 0 || ownLive.length > 0) && <div className="ml-subhead">Past</div>}
                 {ownPast.slice(0, ownLimit).map((r) => row(r, { privacy: true }))}
                 {ownPast.length > ownLimit && (
                   <button className="ml-more" onClick={() => setOwnLimit((n) => n + PAGE)}>Show older</button>
@@ -165,9 +176,15 @@ export default function Landing({ userId, email }: { userId: string | null; emai
           <>
             <div className="ml-subhead">Upcoming</div>
             {feedUpcoming.map((r) => row(r, { upcoming: true }))}
-            {feedPast.length > 0 && <div className="ml-subhead">Past</div>}
           </>
         )}
+        {feedLive.length > 0 && (
+          <>
+            <div className="ml-subhead">Live</div>
+            {feedLive.map((r) => row(r, { live: true }))}
+          </>
+        )}
+        {feedPast.length > 0 && (feedUpcoming.length > 0 || feedLive.length > 0) && <div className="ml-subhead">Past</div>}
         {feedPast.map((r) => row(r))}
         {!feedFiltered.length && !loading && <p className="ml-note">No public matches{sportFilter ? ` for ${SPORTS[sportFilter].label}` : ""} yet.</p>}
         {loading && <p className="ml-note">Loading…</p>}
