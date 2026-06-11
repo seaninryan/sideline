@@ -176,6 +176,19 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-game .mt-big.sm{min-height:54px; font-size:14.5px;}
 .mt-game .gm-team{min-height:96px; font-size:21px; letter-spacing:1px;}
 .mt-game .mt-add{padding:10px 16px;}
+/* event buttons carry a leading icon (mode-aware flags / cards / corner) */
+.mt-big.ev{display:inline-flex; align-items:center; justify-content:center; gap:8px;}
+.mt-big.ev svg{margin-top:-1px;}
+/* phase banner at the top of game mode — colour + a pulsing dot signal the live state */
+.gm-phase{display:flex; align-items:center; gap:9px; margin-bottom:12px; padding:9px 13px; border-radius:9px;
+  font-family:var(--font-oswald); font-weight:700; font-size:14px; letter-spacing:.6px; text-transform:uppercase;
+  background:#ece4cf; color:#5a6b5f; border:1px solid var(--line);}
+.gm-phase .dot{width:9px; height:9px; border-radius:50%; background:currentColor; flex:none;}
+.gm-phase--play{background:#dff3e4; color:#177a3e; border-color:#bce3c8;}
+.gm-phase--play .dot{background:#1f9d3f; animation:gmpulse 1.6s infinite;}
+.gm-phase--ht{background:#fdf0c8; color:#8a6d1a; border-color:#f0e0a8;}
+.gm-phase--over{background:#eceae6; color:#6b6b6b; border-color:#ddd7c8;}
+@keyframes gmpulse{0%{box-shadow:0 0 0 0 rgba(31,157,63,.45);}70%{box-shadow:0 0 0 7px rgba(31,157,63,0);}100%{box-shadow:0 0 0 0 rgba(31,157,63,0);}}
 /* last entry + undo ride the bottom of the screen (sticky, like the scoreboard at the top) */
 .mt-game .gm-undo{position:sticky; bottom:0; margin-top:auto; display:flex; align-items:center; gap:10px;
   background:var(--paper); border-top:1px solid var(--line); padding:10px 2px; z-index:5;}
@@ -187,9 +200,13 @@ textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-mon
 .mt-game .nw-in{flex:1 1 140px; font-size:16px; padding:11px 10px; border:1px solid var(--line); border-radius:10px; font-family:var(--font-oswald); background:#fffdf6;}
 /* touch devices: 16px+ inputs stop iOS zooming the page when a field is focused */
 @media (hover:none){.mt-settings input,.mt-settings select,.mt-live input,.mt-live select,.mt-sel{font-size:16px;}}
-/* touch devices: the scoreboard pins to the top while scrolling, so the score
-   stays in view during live entry (needs overflow:clip on .mt-root, not hidden) */
-@media (hover:none){.mt-board{position:sticky; top:0; z-index:25; box-shadow:0 10px 22px -14px rgba(12,59,42,.55);}}
+/* the editor's top chrome (header + scoreboard + tabs) pins while the body scrolls, so
+   the score + controls stay in view during live entry (needs overflow:clip on .mt-root,
+   not hidden — see .mt-root above). The max-height/overflow guard means an opened panel
+   scrolls inside the frozen block rather than covering the whole screen. Editor only:
+   the public poster (.pm-root) has no .mt-frozen, so its header stays in normal flow. */
+.mt-frozen{position:sticky; top:0; z-index:30; background:var(--paper); max-height:100vh; overflow-y:auto;
+  box-shadow:0 10px 22px -14px rgba(12,59,42,.55);}
 .mt-settings input[type=text],.mt-settings input[type=datetime-local]{font-family:var(--font-oswald); font-size:12px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; width:120px;}
 .mt-settings input[type=datetime-local]{width:auto;}
 .mt-settings input[type=color]{width:26px; height:26px; border:1px solid var(--line); border-radius:6px; padding:0; background:none;}
@@ -422,6 +439,7 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .rp-slot.ed { cursor: pointer; }
 .rp-slot.ed:hover { background: rgba(255,255,255,.08); }
 .rp-slot.picked { background: rgba(245,197,24,.22); outline: 2px solid #f5c518; }
+.rp-slot.dim { opacity: .3; cursor: default; }
 .rp-slot .nm { font-family: var(--font-oswald); font-weight: 500; font-size: 13px; color: #eaf3ee; text-align: center; line-height: 1.15; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
 .rp-subhead { text-align: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #8fb0a3; margin: 12px 0 2px; }
 .rp-edit { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 154px; background: rgba(0,0,0,.30); border-radius: 11px; padding: 11px 9px; }

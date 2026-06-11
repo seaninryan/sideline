@@ -27,6 +27,7 @@ import LinkTeams from "@/components/LinkTeams";
 import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
 import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
+import { whoToken, onPitchNums } from "@/lib/event-line";
 import TeamPicker from "@/components/TeamPicker";
 import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
@@ -69,6 +70,31 @@ function downloadBlob(blob, name) {
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+// little flag on a pole — the GAA goal (green) / point (white) motif, matching the chart
+function Flag({ fill }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" style={{ flex: "none" }}>
+      <line x1="3.5" y1="1.5" x2="3.5" y2="14.5" stroke="#3a3a3a" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3.5 2 L13 4.4 L3.5 7.6 Z" fill={fill} stroke="#3a3a3a" strokeWidth="0.9" strokeLinejoin="round" />
+    </svg>
+  );
+}
+// icon for a live-entry event button; goal/point are mode-aware (GAA flags vs a soccer ball)
+function evIcon(key, mode) {
+  switch (key) {
+    case "goal": case "goalfree": case "og": return mode === "goals" ? <span aria-hidden="true">⚽</span> : <Flag fill="#1f9d3f" />;
+    case "point": case "pointfree": case "point65": case "point45": return <Flag fill="#fbfbf5" />;
+    case "yellow": return <span aria-hidden="true">🟨</span>;
+    case "red": return <span aria-hidden="true">🟥</span>;
+    case "corner": return <span aria-hidden="true">🚩</span>;
+    case "sub": return <span aria-hidden="true">🔁</span>;
+    case "half": return <span aria-hidden="true">▶️</span>;
+    case "ht": return <span aria-hidden="true">⏸️</span>;
+    case "ft": return <span aria-hidden="true">🏁</span>;
+    default: return null;
+  }
 }
 
 export default function MatchTracker({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
@@ -133,7 +159,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // Keyed on curId so it only fires on open, never mid-session (won't yank the user off a tab).
   useEffect(() => { if (curId) setTab(phase === "over" ? "details" : "game"); /* eslint-disable-next-line */ }, [curId]);
   // switching tabs closes any open Advanced editor and resets the game-mode stage
-  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setEditLineup(false); setGmStage({ stage: "team" }); }, [tab]);
+  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setEditLineup(false); setGmStage({ stage: "event" }); }, [tab]);
   const [userUid, setUserUid] = useState("");
   useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); }); }, []);
 
@@ -152,7 +178,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [lvEvent, setLvEvent] = useState(null); // pending player event awaiting a "Who?" tap
   // game mode is a tab (tab === "game"); gmStage holds the staged-entry position.
   // stages: "team" → "event" → "who"; "subOff" → "subOn" for substitutions.
-  const [gmStage, setGmStage] = useState({ stage: "team" });
+  const [gmStage, setGmStage] = useState({ stage: "event" });
 
   // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
   // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
@@ -335,17 +361,54 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // ---- live append helpers ----
   const append = (text) => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setRaw((r) => r.replace(/\s*$/, "") + "\n" + text); };
   // substitution: tap the player going off (pitch) and the one coming on (subs), either order
-  const completeSub = (onName, offName) => {
-    append(`${new Date().getMinutes()} ${onName} for ${offName}`);
+  // on/off are player objects (or "unknown"); team picks which roster to qualify against
+  const completeSub = (on, off, team = "us") => {
+    const onTok = whoToken(on, team, whoCtx()), offTok = whoToken(off, team, whoCtx());
+    append(`${new Date().getMinutes()} ${onTok} for ${offTok}`);
     setSubPick(null);
-    setSavedMsg(`Sub added — ${onName} for ${offName}`); setTimeout(() => setSavedMsg(""), 2500);
+    setSavedMsg(`Sub added — ${onTok} for ${offTok}`); setTimeout(() => setSavedMsg(""), 2500);
+  };
+  // game-mode flow helpers (event → team → player, all events on page 1)
+  const evLabel = (key) => (key === "sub" ? "Sub" : (LIVE_EVENTS.find((e) => e.key === key) || {}).label || key);
+  const pickGmTeam = (team) => {
+    const ev = gmStage.ev;
+    if (ev === "sub") return setGmStage({ stage: "subOff", team });
+    if (LIVE_PLAYER_EVENTS.includes(ev) && (team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) return setGmStage({ stage: "who", ev, team });
+    addLive(ev, null, team); setGmStage({ stage: "event" });
+  };
+  // who's currently on the pitch for a side (starters ± committed subs) and who's benched
+  const onPitchSet = (team) => onPitchNums(team === "them" ? oppRoster : usRoster, parsed.notes.filter((n) => n.type === "sub" && n.side === team));
+  const benchSet = (team) => {
+    const roster = team === "them" ? oppRoster : usRoster;
+    const on = onPitchSet(team);
+    return new Set((roster?.players || []).map((p) => p.num).filter((n) => !on.has(n)));
+  };
+  // pick a player on `team`: jersey pitch when the roster has a formation, else the flat
+  // who-grid. allowUnknown adds a team-level "Unknown" choice (scores/cards, not subs);
+  // eligible (a Set of shirt numbers) restricts the pickable players (used by the sub flow).
+  const gmPicker = (team, onPick, opts = {}) => {
+    const { selected = null, allowUnknown = false, eligible = null } = opts;
+    const roster = team === "them" ? oppRoster : usRoster;
+    const c = team === "them" ? [colorThem, colorThem2] : [colorUs, colorUs2];
+    if (roster && roster.formation && roster.formation.length)
+      return (
+        <>
+          <RosterPitch roster={roster} color1={c[0]} color2={c[1]} onPick={(p) => p && onPick(p)} selected={selected} eligible={eligible} />
+          {allowUnknown && <div className="mt-frow" style={{ marginTop: 8 }}><button className="mt-big sm" onClick={() => onPick("unknown")}>Unknown</button></div>}
+        </>
+      );
+    return whoGrid((p) => {
+      if (p === "unknown") return allowUnknown && onPick(p);
+      if (eligible && !eligible.has(p.num)) return;
+      onPick(p);
+    }, team);
   };
   const tapPitch = (p) => {
-    if (subPick && subPick.role === "on") return completeSub(subPick.name, p.name);
+    if (subPick && subPick.role === "on") return completeSub(subPick, p, "us");
     setSubPick(subPick && subPick.role === "off" && subPick.num === p.num ? null : { role: "off", ...p });
   };
   const tapBench = (p) => {
-    if (subPick && subPick.role === "off") return completeSub(p.name, subPick.name);
+    if (subPick && subPick.role === "off") return completeSub(p, subPick, "us");
     setSubPick(subPick && subPick.role === "on" && subPick.num === p.num ? null : { role: "on", ...p });
   };
   // lineup tools route every tap through here; default falls through to the sub flow
@@ -381,12 +444,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // (wrong by a beat? fix it in the notation after — same as everything else)
   // build a notation line for an event; live entry passes the wall clock,
   // the insert forms pass their stepper minute and their own team toggle
+  const whoCtx = () => ({ usName: myTeam, themName, usRoster, oppRoster });
   const buildEventLine = (ev, team, player, min) => {
     const themTok = themName || "Opposition";
     const usTok = (myTeam || "").trim() || "My Team";
-    const who = team === "them"
-      ? (player && player !== "unknown" ? (player.num ? `${themTok} ${player.num}` : themTok) : themTok)
-      : (player && player !== "unknown" ? player.name : usTok);
+    const who = whoToken(player, team, whoCtx());
     switch (ev) {
       case "goal": return `${min} ${who} goal`;
       case "point": return `${min} ${who}`;
@@ -581,7 +643,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const m = (text || "").match(/^(\d{1,2})[:.]?(\d{2})?/);
     return m ? (m[2] != null ? parseInt(m[2], 10) : parseInt(m[1], 10)) % 60 : 0;
   };
-  const openInsert = (b) => { setBlkEdit(null); setLineupEdit(null); setBlkIns({ afterIdx: b.idx, minute: anchorMinute(b.text), stage: "team", team: null, ev: null, on: null, off: null, noteText: "", noteMin: false }); };
+  const openInsert = (b) => { setBlkEdit(null); setLineupEdit(null); setBlkIns({ afterIdx: b.idx, minute: anchorMinute(b.text), stage: "event", team: null, ev: null, on: null, off: null, noteText: "", noteMin: false }); };
   const openLineup = () => {
     setBlkEdit(null); setBlkIns(null);
     const lines = raw.split("\n");
@@ -601,11 +663,13 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setBlkIns(null);
     setSavedMsg(`Inserted "${line}"`); setTimeout(() => setSavedMsg(""), 1800);
   };
-  // event picked in the insert flow (mirrors game mode): player events open the Who? grid
-  // when we have a roster for that side; everything else commits straight away
-  const insEvent = (key) => {
-    if (LIVE_PLAYER_EVENTS.includes(key) && (blkIns.team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) setBlkIns({ ...blkIns, stage: "who", ev: key });
-    else insCommit(buildEventLine(key, blkIns.team, null, blkIns.minute));
+  // team picked in the insert flow (event → team → player, mirrors game mode): player
+  // events open the Who? picker when we have a roster; everything else commits straight away
+  const insPickTeam = (team) => {
+    const ev = blkIns.ev;
+    if (ev === "sub") return setBlkIns({ ...blkIns, stage: "subOff", team, off: null, on: null });
+    if (LIVE_PLAYER_EVENTS.includes(ev) && (team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) return setBlkIns({ ...blkIns, stage: "who", team });
+    insCommit(buildEventLine(ev, team, null, blkIns.minute));
   };
   const subWho = (p) => (p && p !== "unknown" ? (p.name || String(p.num)) : "");
   const noteLine = () => (blkIns && blkIns.noteText.trim() ? (blkIns.noteMin ? `${blkIns.minute} ${blkIns.noteText.trim()}` : blkIns.noteText.trim()) : "");
@@ -646,7 +710,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     : chunk(starters.map((p) => p.num), 3);
   // live entry: "Who?" buttons laid out like the lineup pitch, plus the sport-relevant events
   const liveRows = formationRows.map((row) => row.map((n) => roster.find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length);
-  const liveEvents = LIVE_EVENTS.filter((ev) => effMode !== "goals" || !ev.gaa)
+  const liveEvents = LIVE_EVENTS.filter((ev) => (effMode === "goals" ? !ev.gaa : !ev.goalsOnly))
     .filter((ev) => !(ev.key === "point65" && sportLabel === "Gaelic Football") && !(ev.key === "point45" && /hurling|camogie/i.test(sportLabel || "")));
   // match phase gates the buttons: before throw-in or at half time only "Start half"
   // works (anything else would land in the roster block / dead time), after FT nothing.
@@ -724,6 +788,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   return (
     <div className="mt-root">
 
+      {/* frozen top chrome — header + scoreboard + tabs stay pinned while the body scrolls */}
+      <div className="mt-frozen">
       {/* persistent header */}
       {!nw && (
         <AppHeader
@@ -762,7 +828,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
         />
       )}
-      {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
       {!nw && modal && (
         <div className="mt-panel">
@@ -918,6 +983,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         ))}
       </div>
       )}
+      </div>{/* /mt-frozen */}
+      {savedMsg && <div className="mt-toast">{savedMsg}</div>}
 
       <div className="mt-body">
         {view === "new" && (
@@ -991,9 +1058,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         )}
         {view === "game" && (
           <div className="mt-game">
-            <div className="mt-row" style={{ marginBottom: 12 }}>
-              <span className="mt-h" style={{ margin: 0, flex: 1 }}>
-                {phase === "pre" ? "Before throw-in" : phase === "ht" ? "Half time" : phase === "over" ? "Full time" : `Half ${halfMarks.filter((m) => !m.marker).length} — in play`}
+            <div className={"gm-phase gm-phase--" + phase}>
+              <span className="dot" />
+              <span className="lbl">
+                {phase === "pre" ? "Before throw-in" : phase === "ht" ? "Half time" : phase === "over" ? "Full time" : `Half ${halfMarks.filter((m) => !m.marker).length} · in play`}
               </span>
             </div>
 
@@ -1004,70 +1072,68 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               </p>
             )}
 
-            {/* stage 1 — who? (+ phase-gated match controls) */}
+            {/* stage 1 — what happened? all events here; team is picked next where it matters */}
+            {phase !== "over" && gmStage.stage === "event" && (
+              (phase === "pre" || phase === "ht") ? (
+                <>
+                  <div className="mt-grid">
+                    <button className="mt-big gm-team ev" onClick={() => addLive("half", null)}>{evIcon("half")}<span>Start half</span></button>
+                  </div>
+                  <p className="mt-note" style={{ marginTop: 10, marginBottom: 0 }}>
+                    {phase === "pre" ? "Tap Start half at throw-in to open scoring." : "Half time — Start half opens the second half."}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>What happened?</p>
+                  <div className="mt-grid">
+                    {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
+                      <button key={ev.key} className="mt-big ev" onClick={() => setGmStage({ stage: "team", ev: ev.key })}>{evIcon(ev.key, effMode)}<span>{ev.label}</span></button>
+                    ))}
+                    <button className="mt-big ev" onClick={() => setGmStage({ stage: "team", ev: "sub" })}>{evIcon("sub")}<span>Sub</span></button>
+                  </div>
+                  <div className="mt-grid" style={{ marginTop: 10 }}>
+                    <button className="mt-big ev" onClick={() => addLive("ht", null)}>{evIcon("ht")}<span>HT</span></button>
+                    <button className="mt-big ev" onClick={() => addLive("ft", null)}>{evIcon("ft")}<span>FT</span></button>
+                  </div>
+                </>
+              )
+            )}
+
+            {/* stage 2 — which team? (scores, cards, corner, sub) */}
             {phase !== "over" && gmStage.stage === "team" && (
               <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} — which team?</p>
                 <div className="mt-grid">
-                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setGmStage({ stage: "event", team: "us" })}>{usName}</button>
-                  <button className="mt-big gm-team" disabled={phase !== "play"} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setGmStage({ stage: "event", team: "them" })}>{themName}</button>
+                  <button className="mt-big gm-team" style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => pickGmTeam("us")}>{usName}</button>
+                  <button className="mt-big gm-team" style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => pickGmTeam("them")}>{themName}</button>
                 </div>
-                {(phase === "pre" || phase === "ht") && (
-                  <div className="mt-grid" style={{ marginTop: 10 }}>
-                    <button className="mt-big gm-team" onClick={() => addLive("half", null)}>Start half</button>
-                  </div>
-                )}
-                {phase === "play" && (
-                  <div className="mt-grid" style={{ marginTop: 10 }}>
-                    <button className="mt-big" onClick={() => setGmStage({ stage: "subOff" })}>Sub</button>
-                    <button className="mt-big" onClick={() => addLive("ht", null)}>HT</button>
-                    <button className="mt-big" onClick={() => addLive("ft", null)}>FT</button>
-                  </div>
-                )}
-                <p className="mt-note" style={{ marginTop: 10, marginBottom: 0 }}>
-                  {phase === "pre" ? "Tap Start half at throw-in to open scoring." : phase === "ht" ? "Half time — Start half opens the second half." : phase === "over" ? "Full time — match closed. Undo the FT line to keep adding." : "Tap the team the next event belongs to."}
-                </p>
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "event" })}>← Back</button>
               </>
             )}
 
-            {/* stage 2 — what happened? */}
-            {phase !== "over" && gmStage.stage === "event" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.team === "us" ? usName : themName} — what happened?</p>
-                <div className="mt-grid">
-                  {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
-                    <button key={ev.key} className="mt-big ev" onClick={() => {
-                      // our player events wait for a "Who?" tap; everything else lands straight in the notation
-                      if (LIVE_PLAYER_EVENTS.includes(ev.key) && (gmStage.team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) setGmStage({ ...gmStage, stage: "who", ev: ev.key });
-                      else { addLive(ev.key, null, gmStage.team); setGmStage({ stage: "team" }); }
-                    }}>{ev.label}</button>
-                  ))}
-                </div>
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team" })}>← Back</button>
-              </>
-            )}
-
-            {/* stage 3 — which player? */}
+            {/* stage 3 — which player? (scores / cards) */}
             {phase !== "over" && gmStage.stage === "who" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{liveEvents.find((ev) => ev.key === gmStage.ev).label} — who?</p>
-                {whoGrid((p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "team" }); }, gmStage.team)}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "event", team: gmStage.team })}>← Back</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} · {gmStage.team === "them" ? themName : usName} — who?</p>
+                {gmPicker(gmStage.team, (p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "event" }); }, { allowUnknown: true })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team", ev: gmStage.ev })}>← Back</button>
               </>
             )}
 
-            {/* sub flow — off then on, same line shape as the Lineup tab */}
+            {/* sub flow — off then on, on the team's jersey pitch */}
             {phase !== "over" && gmStage.stage === "subOff" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Substitution — who goes off?</p>
-                {whoGrid((p) => p !== "unknown" && setGmStage({ stage: "subOn", off: p }))}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team" })}>← Back</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.team === "them" ? themName : usName} sub — who goes off?</p>
+                {gmPicker(gmStage.team, (p) => setGmStage({ ...gmStage, stage: "subOn", off: p }), { eligible: onPitchSet(gmStage.team) })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team", ev: "sub" })}>← Back</button>
               </>
             )}
             {phase !== "over" && gmStage.stage === "subOn" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.off.name} off — who comes on?</p>
-                {whoGrid((p) => { if (p === "unknown") return; completeSub(p.name, gmStage.off.name); setGmStage({ stage: "team" }); })}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "subOff" })}>← Back</button>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.off.name || gmStage.off.num} off — who comes on?</p>
+                {gmPicker(gmStage.team, (p) => { completeSub(p, gmStage.off, gmStage.team); setGmStage({ stage: "event" }); }, { eligible: benchSet(gmStage.team) })}
+                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ ...gmStage, stage: "subOff" })}>← Back</button>
               </>
             )}
 
@@ -1266,58 +1332,57 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                         <p className="mt-h" style={{ margin: "0 0 6px" }}>Insert after "{b.text.slice(0, 24)}…"</p>
                         {blkIns.stage !== "note" && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
 
-                        {/* stage 1 — who / sub / note */}
-                        {blkIns.stage === "team" && (
+                        {/* stage 1 — what happened? (+ sub / note) */}
+                        {blkIns.stage === "event" && (
                           <>
-                            <div className="mt-grid" style={{ marginTop: 7 }}>
-                              <button className="mt-big sm" style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setBlkIns({ ...blkIns, stage: "event", team: "us" })}>{usName}</button>
-                              <button className="mt-big sm" style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setBlkIns({ ...blkIns, stage: "event", team: "them" })}>{themName}</button>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>What happened?</p>
+                            <div className="mt-grid">
+                              {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
+                                <button key={ev.key} className="mt-big sm ev" onClick={() => setBlkIns({ ...blkIns, stage: "team", ev: ev.key })}>{evIcon(ev.key, effMode)}<span>{ev.label}</span></button>
+                              ))}
                             </div>
                             <div className="mt-grid" style={{ marginTop: 7 }}>
-                              <button className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, stage: "sub", team: "us", on: null, off: null })}>Sub</button>
+                              <button className="mt-big sm ev" onClick={() => setBlkIns({ ...blkIns, stage: "team", ev: "sub" })}>{evIcon("sub")}<span>Sub</span></button>
                               <button className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, stage: "note" })}>Note</button>
                             </div>
                             <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button></div>
                           </>
                         )}
 
-                        {/* stage 2 — what happened? */}
-                        {blkIns.stage === "event" && (
+                        {/* stage 2 — which team? */}
+                        {blkIns.stage === "team" && (
                           <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{blkIns.team === "us" ? usName : themName} — what happened?</p>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} — which team?</p>
                             <div className="mt-grid">
-                              {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
-                                <button key={ev.key} className="mt-big sm" onClick={() => insEvent(ev.key)}>{ev.label}</button>
-                              ))}
+                              <button className="mt-big sm" style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => insPickTeam("us")}>{usName}</button>
+                              <button className="mt-big sm" style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => insPickTeam("them")}>{themName}</button>
                             </div>
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team", team: null })}>← Back</button></div>
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event", ev: null })}>← Back</button></div>
                           </>
                         )}
 
                         {/* stage 3 — which player? */}
                         {blkIns.stage === "who" && (
                           <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{(liveEvents.find((ev) => ev.key === blkIns.ev) || {}).label} — who?</p>
-                            {whoGrid((p) => insCommit(buildEventLine(blkIns.ev, blkIns.team, p, blkIns.minute)), blkIns.team)}
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event", ev: null })}>← Back</button></div>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} · {blkIns.team === "them" ? themName : usName} — who?</p>
+                            {gmPicker(blkIns.team, (p) => insCommit(buildEventLine(blkIns.ev, blkIns.team, p, blkIns.minute)), { allowUnknown: true })}
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button></div>
                           </>
                         )}
 
-                        {/* sub flow */}
-                        {blkIns.stage === "sub" && (
+                        {/* sub flow — off then on, on the team's jersey pitch (eligibility tracked) */}
+                        {blkIns.stage === "subOff" && (
                           <>
-                            <div className="mt-grid" style={{ marginTop: 7 }}>
-                              <button className={"mt-big sm" + (blkIns.team === "us" ? " on" : "")} style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => setBlkIns({ ...blkIns, team: "us", on: null, off: null })}>{usName}</button>
-                              <button className={"mt-big sm" + (blkIns.team === "them" ? " on" : "")} style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => setBlkIns({ ...blkIns, team: "them", on: null, off: null })}>{themName}</button>
-                            </div>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who came on?{blkIns.on ? ` — ${subWho(blkIns.on)}` : ""}</p>
-                            {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, on: p }), blkIns.team)}
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>Who went off?{blkIns.off ? ` — ${subWho(blkIns.off)}` : ""}</p>
-                            {whoGrid((p) => p !== "unknown" && setBlkIns({ ...blkIns, off: p }), blkIns.team)}
-                            <div className="mt-blkrow">
-                              <button className="mt-add" disabled={!(blkIns.on && blkIns.off)} onClick={() => insCommit(`${blkIns.minute} ${subWho(blkIns.on)} for ${subWho(blkIns.off)}`)}>OK</button>
-                              <button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team", team: null })}>← Back</button>
-                            </div>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{blkIns.team === "them" ? themName : usName} sub — who goes off?</p>
+                            {gmPicker(blkIns.team, (p) => setBlkIns({ ...blkIns, stage: "subOn", off: p }), { eligible: onPitchSet(blkIns.team) })}
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button></div>
+                          </>
+                        )}
+                        {blkIns.stage === "subOn" && (
+                          <>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{subWho(blkIns.off)} off — who comes on?</p>
+                            {gmPicker(blkIns.team, (p) => insCommit(`${blkIns.minute} ${whoToken(p, blkIns.team, whoCtx())} for ${whoToken(blkIns.off, blkIns.team, whoCtx())}`), { eligible: benchSet(blkIns.team) })}
+                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "subOff" })}>← Back</button></div>
                           </>
                         )}
 
@@ -1332,12 +1397,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                             {notePhantom && <p className="mt-note" style={{ color: "#c0392b", margin: "4px 0 0" }}>Careful — a minuted line with no note keyword reads as a score. Leave the minute off for a plain note.</p>}
                             <div className="mt-blkrow">
                               <button className="mt-add" disabled={!noteLine()} onClick={() => insCommit(noteLine())}>OK</button>
-                              <button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button>
+                              <button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event" })}>← Back</button>
                             </div>
                           </>
                         )}
 
-                        {["event", "who", "sub"].includes(blkIns.stage) && (
+                        {["event", "team", "who", "subOff", "subOn"].includes(blkIns.stage) && (
                           <p className="mt-note" style={{ margin: "8px 0 0" }}>Lands by minute within the half — may sit further down than where you tapped.</p>
                         )}
                       </div>

@@ -10,12 +10,15 @@ type Player = TeamRoster["players"][number];
 // edit its name + number in place (rename / renumber — a clashing number bumps
 // the other player), ⇄ Swap two players' positions, or ↕ Move a player to
 // another line / the bench. All mutations go through `onChange(newRoster)`.
-export default function RosterPitch({ roster, color1, color2, editable = false, onChange }: {
+export default function RosterPitch({ roster, color1, color2, editable = false, onChange, onPick, selected = null, eligible = null }: {
   roster: TeamRoster;
   color1?: string;
   color2?: string;
   editable?: boolean;
   onChange?: (r: TeamRoster) => void;
+  onPick?: (p: Player) => void;   // pick mode: tap a jersey to select that player (used by the sub flow)
+  selected?: number | null;       // shirt number to highlight while picking
+  eligible?: Set<number> | null;  // pick mode: only these numbers are tappable (others dimmed)
 }) {
   const c1 = color1 || "#f5c518", c2 = color2 || "#1f7a4d";
   const [editNum, setEditNum] = useState<number | null>(null);
@@ -40,6 +43,7 @@ export default function RosterPitch({ roster, color1, color2, editable = false, 
   const setModeBtn = (m: "swap" | "move") => { setEditNum(null); setPick(null); setMode((cur) => (cur === m ? null : m)); };
 
   const tap = (p: Player) => {
+    if (onPick) return onPick(p);
     if (!editable) return;
     if (mode === "swap") {
       if (pick == null) return setPick(p.num);
@@ -78,9 +82,10 @@ export default function RosterPitch({ roster, color1, color2, editable = false, 
         </div>
       );
     }
-    const picked = !!mode && pick === p.num;
+    const picked = (!!onPick && selected === p.num) || (!!mode && pick === p.num);
+    const dim = !!onPick && !!eligible && !eligible.has(p.num);
     return (
-      <button className={"rp-slot" + (editable ? " ed" : "") + (picked ? " picked" : "")} key={p.num} onClick={() => tap(p)} disabled={!editable}>
+      <button className={"rp-slot" + (editable || onPick ? " ed" : "") + (picked ? " picked" : "") + (dim ? " dim" : "")} key={p.num} onClick={() => tap(p)} disabled={(!editable && !onPick) || dim}>
         <Jersey num={p.num} c1={c1} c2={c2} size={jerseySize} />
         <span className="nm">{p.name || "—"}</span>
       </button>
