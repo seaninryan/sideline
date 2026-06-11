@@ -523,3 +523,11 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .ml-squad{display:block; font-size:10px; font-weight:400; color:var(--muted); line-height:1;}
 .sh-squad{display:block; font-size:11px; font-weight:400; color:var(--muted);}
 .tl-squad{display:block; font-size:11px; color:var(--muted);}
+
+/* Live-update: one-shot score-header flash (brand tint fading out). */
+@keyframes pmScoreFlash {
+  0%   { background-color: rgba(245, 197, 24, 0.55); }
+  100% { background-color: transparent; }
+}
+.pm-score-wrap { border-radius: 12px; }
+.pm-score-wrap.pm-pulse { animation: pmScoreFlash 1s ease-out; }

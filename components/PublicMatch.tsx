@@ -20,6 +20,7 @@ import type { Model } from "@/lib/types";
 export default function PublicMatch({ model: initialModel, id }: { model: Model; id: string }) {
   const [model, setModel] = useState<Model>(initialModel);
   const prevModel = useRef<Model>(initialModel);
+  const [pulse, setPulse] = useState(0);
   const m = model;
   const margin = Math.abs(m.totals.us.total - m.totals.them.total);
   const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
@@ -59,6 +60,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   useEffect(() => {
     const apply = (row: any) => {
       const next = applyNameDisplay(buildModel(row.data), row.name_display || row.data?.nameDisplay || "full");
+      if (scoreChanged(prevModel.current, next)) setPulse((p) => p + 1);
       prevModel.current = next;
       setModel(next);
     };
@@ -109,21 +111,23 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         const themTotal = gpTotal(m.totals.them.g, m.totals.them.p, m.effMode);
         const phase = (m.halfMarks || []).some((mk: any) => mk.marker === "FT") ? "over" : "play";
         return (
-          <ScoreHeader
-            homeName={usIsHome ? m.usName : m.themName}
-            awayName={usIsHome ? m.themName : m.usName}
-            homeStr={usIsHome ? m.totals.us.str : m.totals.them.str}
-            awayStr={usIsHome ? m.totals.them.str : m.totals.us.str}
-            homeColors={usIsHome ? [m.colorUs, m.colorUs2] : [m.colorThem, m.colorThem2]}
-            awayColors={usIsHome ? [m.colorThem, m.colorThem2] : [m.colorUs, m.colorUs2]}
-            grade={m.grade || m.sport || ""}
-            dateStr={m.dateStr}
-            homeTotal={usIsHome ? usTotal : themTotal}
-            awayTotal={usIsHome ? themTotal : usTotal}
-            phase={phase}
-            homeSquad={usIsHome ? m.usSquad : m.oppSquad}
-            awaySquad={usIsHome ? m.oppSquad : m.usSquad}
-          />
+          <div key={pulse} className={pulse > 0 ? "pm-score-wrap pm-pulse" : "pm-score-wrap"}>
+            <ScoreHeader
+              homeName={usIsHome ? m.usName : m.themName}
+              awayName={usIsHome ? m.themName : m.usName}
+              homeStr={usIsHome ? m.totals.us.str : m.totals.them.str}
+              awayStr={usIsHome ? m.totals.them.str : m.totals.us.str}
+              homeColors={usIsHome ? [m.colorUs, m.colorUs2] : [m.colorThem, m.colorThem2]}
+              awayColors={usIsHome ? [m.colorThem, m.colorThem2] : [m.colorUs, m.colorUs2]}
+              grade={m.grade || m.sport || ""}
+              dateStr={m.dateStr}
+              homeTotal={usIsHome ? usTotal : themTotal}
+              awayTotal={usIsHome ? themTotal : usTotal}
+              phase={phase}
+              homeSquad={usIsHome ? m.usSquad : m.oppSquad}
+              awaySquad={usIsHome ? m.oppSquad : m.usSquad}
+            />
+          </div>
         );
       })()}
 
