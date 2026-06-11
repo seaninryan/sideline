@@ -6,14 +6,11 @@ import { addPlayer } from "@/lib/team-roster";
 import { mkId } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
 import RosterPitch from "@/components/RosterPitch";
+import PrivacyControl from "@/components/PrivacyControl";
+import { privacyLevel, levelToColumns, type PrivacyLevel } from "@/lib/privacy";
 import type { TeamRecord, TeamRoster, NameDisplay } from "@/lib/types";
 
 const EMPTY: TeamRoster = { formation: [], players: [] };
-const NAME_OPTS: { v: NameDisplay; label: string }[] = [
-  { v: "full", label: "Full" },
-  { v: "initials", label: "Initials" },
-  { v: "none", label: "None" },
-];
 
 export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord | null; onDone: () => void }) {
   const [id] = useState(() => initial?.id || mkId());
@@ -25,15 +22,19 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
   const [pick, setPick] = useState<null | "c1" | "c2">(null);
 
   // sharing (existing teams only)
-  const [isPub, setIsPub] = useState(!!initial?.is_public);
+  const [level, setLevel] = useState<PrivacyLevel>(privacyLevel(!!initial?.is_public, initial?.listed));
   const [nameDisp, setNameDisp] = useState<NameDisplay>(initial?.name_display || "full");
   const [shareBusy, setShareBusy] = useState(false);
 
-  const doPublish = async () => { setShareBusy(true); await teamStore.publish(id, nameDisp); setIsPub(true); setShareBusy(false); };
-  const doUnpublish = async () => { setShareBusy(true); await teamStore.unpublish(id); setIsPub(false); setShareBusy(false); };
+  const applyLevel = async (next: PrivacyLevel) => {
+    setShareBusy(true);
+    setLevel(next);
+    await teamStore.setPrivacy(id, levelToColumns(next));
+    setShareBusy(false);
+  };
   const changeNameDisp = async (v: NameDisplay) => {
     setNameDisp(v);
-    if (isPub) { setShareBusy(true); await teamStore.setNameDisplay(id, v); setShareBusy(false); }
+    if (level !== "private") { setShareBusy(true); await teamStore.setNameDisplay(id, v); setShareBusy(false); }
   };
 
   const chooseSport = (s: string) => {
@@ -89,23 +90,14 @@ export default function TeamEditor({ initial, onDone }: { initial?: TeamRecord |
 
       {initial && (
         <div className="mt-live" style={{ marginTop: 16 }}>
-          <label className="mt-row" style={{ alignItems: "center" }}>
-            <span className="mt-h" style={{ margin: 0, flex: 1 }}>Public</span>
-            <button role="switch" aria-checked={isPub} disabled={shareBusy}
-              className={"sw" + (isPub ? " on" : "")} onClick={() => (isPub ? doUnpublish() : doPublish())}>
-              <span className="sw-k" />
-            </button>
-          </label>
-          {isPub && (
-            <>
-              <p className="mt-note" style={{ margin: "10px 0 4px" }}>Player names on the public page:</p>
-              <div className="mt-grid">
-                {NAME_OPTS.map((o) => (
-                  <button key={o.v} className={"mt-big sm" + (nameDisp === o.v ? " on" : "")} disabled={shareBusy} onClick={() => changeNameDisp(o.v)}>{o.label}</button>
-                ))}
-              </div>
-            </>
-          )}
+          <PrivacyControl
+            level={level}
+            onLevel={applyLevel}
+            link={typeof location !== "undefined" ? location.origin + "/t/" + (initial?.short_code || id) : undefined}
+            nameDisplay={nameDisp}
+            onNameDisplay={changeNameDisp}
+            busy={shareBusy}
+          />
         </div>
       )}
     </div>

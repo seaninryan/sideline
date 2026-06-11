@@ -11,14 +11,15 @@ const sb = createClient();
 interface TeamRow {
   id: string; owner?: string; short_code?: string | null;
   name: string; color1?: string | null; color2?: string | null;
-  sport?: string | null; roster: TeamRoster;
-  is_public?: boolean | null; name_display?: NameDisplay | null; updated_at?: string;
+  sport?: string | null; roster: TeamRoster; squad?: string | null;
+  is_public?: boolean | null; listed?: boolean | null; name_display?: NameDisplay | null; updated_at?: string;
 }
 
 const toRecord = (r: TeamRow): TeamRecord => ({
   id: r.id, owner: r.owner, short_code: r.short_code ?? null,
   name: r.name, color1: r.color1 ?? undefined, color2: r.color2 ?? undefined,
-  sport: r.sport ?? undefined, roster: r.roster,
+  sport: r.sport ?? undefined, roster: r.roster, squad: r.squad ?? "",
+  listed: r.listed ?? true,
   is_public: !!r.is_public, name_display: r.name_display ?? "full", updated_at: r.updated_at,
 });
 
@@ -50,7 +51,7 @@ export const teamStore = {
   },
   // upsert a team; returns the saved id (with a freshly-minted short_code on create) or null on failure
   async set(t: TeamRecord): Promise<string | null> {
-    const row = { id: t.id, name: t.name, color1: t.color1 ?? null, color2: t.color2 ?? null, sport: t.sport ?? null, roster: t.roster, updated_at: new Date().toISOString() };
+    const row = { id: t.id, name: t.name, color1: t.color1 ?? null, color2: t.color2 ?? null, sport: t.sport ?? null, roster: t.roster, squad: t.squad ?? "", updated_at: new Date().toISOString() };
     const { error } = await sb.from("teams").upsert(row);
     if (error) { console.warn("team save failed", error.message); return null; }
     await ensureShortCode(t.id);
@@ -75,19 +76,14 @@ export const teamStore = {
   },
   // Global feed of public teams (own + others), newest first. Offset-paginated.
   async listPublic({ offset = 0, limit = 5 }: { offset?: number; limit?: number } = {}): Promise<TeamRecord[]> {
-    const { data, error } = await sb.from("teams").select("*").eq("is_public", true)
+    const { data, error } = await sb.from("teams").select("*").eq("is_public", true).eq("listed", true)
       .order("updated_at", { ascending: false }).range(offset, offset + limit - 1);
     if (error) { console.warn("public teams failed", error.message); return []; }
     return (data as TeamRow[] || []).map(toRecord);
   },
-  // Make a team public with a name-privacy setting (mints a short_code if needed).
-  async publish(id: string, nameDisplay: NameDisplay): Promise<boolean> {
-    await ensureShortCode(id);
-    const { error } = await sb.from("teams").update({ is_public: true, name_display: nameDisplay }).eq("id", id);
-    return !error;
-  },
-  async unpublish(id: string): Promise<boolean> {
-    const { error } = await sb.from("teams").update({ is_public: false }).eq("id", id);
+  async setPrivacy(id: string, cols: { is_public: boolean; listed: boolean }): Promise<boolean> {
+    if (cols.is_public) await ensureShortCode(id);
+    const { error } = await sb.from("teams").update(cols).eq("id", id);
     return !error;
   },
   async setNameDisplay(id: string, v: NameDisplay): Promise<boolean> {
