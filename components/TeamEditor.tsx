@@ -25,12 +25,18 @@ export default function TeamEditor({ initial, userId, onDone }: { initial?: Team
   // sharing (existing teams only)
   const [level, setLevel] = useState<PrivacyLevel>(privacyLevel(!!initial?.is_public, initial?.listed));
   const [nameDisp, setNameDisp] = useState<NameDisplay>(initial?.name_display || "full");
+  const [slug, setSlug] = useState(initial?.short_code || id);
+  const [copied, setCopied] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const teamUrl = typeof location !== "undefined" ? `${location.origin}/t/${slug}` : "";
+  const copyLink = () => { navigator.clipboard?.writeText(teamUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   const applyLevel = async (next: PrivacyLevel) => {
     setShareBusy(true);
     setLevel(next);
     await teamStore.setPrivacy(id, levelToColumns(next));
+    // publishing mints a short_code — pull it back so the link shows the code, not the UUID
+    if (next !== "private") { const t = await teamStore.get(id); if (t?.short_code) setSlug(t.short_code); }
     setShareBusy(false);
   };
   const changeNameDisp = async (v: NameDisplay) => {
@@ -100,7 +106,9 @@ export default function TeamEditor({ initial, userId, onDone }: { initial?: Team
           <PrivacyControl
             level={level}
             onLevel={applyLevel}
-            link={typeof location !== "undefined" ? location.origin + "/t/" + (initial?.short_code || id) : undefined}
+            link={teamUrl || undefined}
+            copied={copied}
+            onCopy={copyLink}
             nameDisplay={nameDisp}
             onNameDisplay={changeNameDisp}
             busy={shareBusy}
