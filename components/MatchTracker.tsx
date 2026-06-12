@@ -22,7 +22,6 @@ import {
 import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
 import ShareImageModal from "@/components/ShareImageModal";
-import LinkTeams from "@/components/LinkTeams";
 import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
 import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
@@ -194,7 +193,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   }, [userUid]);
   const [share, setShare] = useState(false);
   const [shareModel, setShareModel] = useState(null);
-  const [link, setLink] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState(null);
   const [awayTeamId, setAwayTeamId] = useState(null);
   const [oppRoster, setOppRoster] = useState(SAMPLE_RECORD.oppRoster || null);
@@ -288,16 +286,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     return () => clearTimeout(t);
     // eslint-disable-next-line
   }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad]);
-  // legacy matches (no team links) get a gentle one-time "Link teams?" nudge on open
-  const linkNudged = useRef(false);
-  useEffect(() => { linkNudged.current = false; }, [curId]);
-  useEffect(() => {
-    if (curId && !homeTeamId && !awayTeamId && !linkNudged.current && !nw) {
-      linkNudged.current = true;
-      setSavedMsg("Tip: link this match to teams (🤝) for fixtures + opponent lineup");
-      setTimeout(() => setSavedMsg(""), 4000);
-    }
-  }, [curId, homeTeamId, awayTeamId, nw]);
   const applyRecord = (d) => {
     setRaw(d.raw); setMyTeam(d.myTeam || "My Team"); setScoringMode(d.scoringMode || "gaa");
     setAutoMode(d.autoMode !== undefined ? d.autoMode : true);
@@ -817,7 +805,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           menuItems={[
             { label: "＋ New", onClick: () => router.push("/m/new") },
             { label: "👥 Teams", onClick: () => router.push("/teams") },
-            { label: "🤝 Link teams", onClick: () => { setShare(false); setLink((o) => !o); } },
           ]}
         />
       )}
@@ -862,26 +849,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           onClose={() => setShare(false)}
           onShareImage={() => { setShare(false); doExport(); }}
           onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
-        />
-      )}
-
-      {!nw && link && curId && (
-        <LinkTeams
-          userId={userUid}
-          record={recordPayload()}
-          currentHomeAway={header.homeAway === "home" ? "home" : "away"}
-          onClose={() => setLink(false)}
-          onApply={(p) => {
-            setMyTeam(p.myTeam);
-            setColorUs(p.colorUs); setColorUs2(p.colorUs2); setColorThem(p.colorThem); setColorThem2(p.colorThem2);
-            if (p.label !== undefined) setLabel(p.label);
-            if (p.homeAway !== undefined) setHomeAway(p.homeAway);
-            if (p.opponent !== undefined) setOpponent(p.opponent);
-            if (p.usRoster !== undefined) setUsRoster(p.usRoster);
-            setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId); setOppRoster(p.oppRoster);
-            setUsSquad(p.usSquad || ""); setOppSquad(p.oppSquad || "");
-            setSavedMsg("Teams linked ✓"); setTimeout(() => setSavedMsg(""), 2000);
-          }}
         />
       )}
 

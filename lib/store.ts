@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 import { parseMatch } from "@/lib/parser";
 import { backfillNotation } from "@/lib/migrate-notation";
 import type { MatchRecord } from "@/lib/types";
+import { teamStore } from "@/lib/team-store";
+import { linkExistingMatchPatch } from "@/lib/team-link";
 
 const sb = createClient();
 
@@ -28,6 +30,27 @@ export async function loadAll() {
       const migrated = backfillNotation(cache[id]);
       if (migrated !== cache[id]) { cache[id] = migrated; await store.set(id, migrated); }
     } catch (e) { console.warn("backfill failed for", id, e); }
+  }));
+}
+
+// One-time, idempotent: link every cached match that has no team links yet to
+// its (sport, name) teams (find-or-create), seeding only missing rosters. Skips
+// already-linked matches and those with no derivable opponent, so it's a no-op
+// once complete. Resilient: one failure must not abort the rest.
+export async function linkUnlinkedMatches(userId: string | null) {
+  if (!userId) return;
+  const ids = Object.keys(cache).filter((id) => {
+    const d = cache[id];
+    return d && !d.homeTeamId && !d.awayTeamId && (d.opponent || "").trim() && (d.myTeam || "").trim();
+  });
+  await Promise.allSettled(ids.map(async (id) => {
+    const d = cache[id];
+    const sport = d.sport || "";
+    const usTeam = await teamStore.findOrCreate(userId, { name: d.myTeam!, sport });
+    const oppTeam = await teamStore.findOrCreate(userId, { name: d.opponent!, sport });
+    if (!usTeam || !oppTeam) return;
+    const patch = linkExistingMatchPatch(d, { usTeam, oppTeam, homeAway: d.homeAway || "away" });
+    await store.set(id, { ...d, ...patch });
   }));
 }
 
