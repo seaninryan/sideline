@@ -82,6 +82,13 @@ export const teamStore = {
     const { error } = await sb.from("teams").delete().eq("id", id);
     return !error;
   },
+  // Roster-only update for an existing team. Does NOT run the name-dedup/short-code
+  // logic that teamStore.set does (that could rename a team when duplicates exist).
+  async setRoster(id: string, roster: TeamRoster): Promise<boolean> {
+    const { error } = await sb.from("teams").update({ roster, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) { console.warn("team roster sync failed", error.message); return false; }
+    return true;
+  },
   async duplicate(src: TeamRecord): Promise<TeamRecord | null> {
     const copy = duplicateTeamRecord(src, mkId());
     const saved = await this.set(copy);            // collision-safe: bumps name again if needed
