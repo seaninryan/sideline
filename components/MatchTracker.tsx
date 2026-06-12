@@ -102,7 +102,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const router = useRouter();
   const [raw, setRaw] = useState(SAMPLE_RECORD.raw);
   const [myTeam, setMyTeam] = useState(SAMPLE_RECORD.myTeam || "Racoons");
-  const [sport, setSport] = useState(SAMPLE_RECORD.sport || ""); // "" = auto-detect; else a SPORTS key, which fixes the scoring mode
+  const [sport, setSport] = useState(SAMPLE_RECORD.sport || ""); // "" = unset (legacy/edge records → "goals"); a SPORTS key locks the scoring mode
   const [colorUs, setColorUs] = useState(SAMPLE_RECORD.colorUs || "#f5c518");
   const [colorUs2, setColorUs2] = useState(SAMPLE_RECORD.colorUs2 || "#1f7a4d");
   const [colorThem, setColorThem] = useState(SAMPLE_RECORD.colorThem || "#c0392b");
@@ -902,6 +902,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={sport}
             onChange={(e) => setSport(e.target.value)}>
+            {!sport && <option value="" disabled>— choose sport —</option>}
             {Object.entries(SPORTS).map(([k, s]) => <option key={k} value={k}>{s.emoji} {s.label}</option>)}
           </select>
         </label>
