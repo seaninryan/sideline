@@ -9,3 +9,19 @@ export function scoreChanged(prev: Model, next: Model): boolean {
     prev.totals.them.str !== next.totals.them.str
   );
 }
+
+// What the editor should do with a Realtime payload for the open match. The
+// editor both reads and writes the row, so it must ignore the echo of its own
+// saves (incoming savedAt <= the savedAt it last wrote) and never silently
+// clobber unsaved local edits (→ "conflict", surfaced as a Load-latest banner).
+export type Incoming = "ignore" | "apply" | "conflict" | "deleted";
+export function reconcileIncoming(args: {
+  event: "UPDATE" | "DELETE";
+  dirty: boolean;
+  localSavedAt: number;
+  incomingSavedAt: number;
+}): Incoming {
+  if (args.event === "DELETE") return "deleted";
+  if (args.incomingSavedAt <= args.localSavedAt) return "ignore"; // our own echo / stale
+  return args.dirty ? "conflict" : "apply";
+}

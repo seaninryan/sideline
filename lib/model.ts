@@ -1,7 +1,7 @@
 import { parseMatch } from "@/lib/parser";
 import { fmtDateDow, gpTotal } from "@/lib/util";
 import { htScore } from "@/lib/half-time";
-import { SPORTS } from "@/lib/constants";
+import { SPORTS, scoringModeForSport } from "@/lib/constants";
 import type { MatchRecord, Model } from "@/lib/types";
 
 export function buildModel(record: MatchRecord): Model {
@@ -10,7 +10,7 @@ export function buildModel(record: MatchRecord): Model {
   const sp = (SPORTS as Record<string, { label: string; mode: string }>)[sportKey];
   const settings = {
     myTeam: r.myTeam,
-    scoringMode: (sp ? sp.mode : (r.autoMode ? undefined : r.scoringMode)) as "gaa" | "goals" | undefined,
+    scoringMode: scoringModeForSport(r.sport),
     label: r.label,
     homeAway: r.homeAway,
     opponent: r.opponent,

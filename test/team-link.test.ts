@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { rosterToNotationLines, teamLinkPatch, swapHomeAway, teamsToPublish } from "@/lib/team-link";
+import { linkExistingMatchPatch } from "@/lib/team-link";
 import type { MatchRecord, TeamRecord } from "@/lib/types";
 
 describe("teamsToPublish", () => {
@@ -73,6 +74,44 @@ describe("swapHomeAway", () => {
     expect(p.homeTeamId).toBe("u1");
     expect(p.awayTeamId).toBe("o1");
     expect((p as any).raw).toBeUndefined();
+  });
+});
+
+describe("linkExistingMatchPatch", () => {
+  it("sets team ids by homeAway and seeds both rosters when absent", () => {
+    const rec = { raw: "" } as MatchRecord;
+    const patch = linkExistingMatchPatch(rec, { usTeam: us, oppTeam: opp, homeAway: "home" });
+    expect(patch.homeTeamId).toBe(us.id);
+    expect(patch.awayTeamId).toBe(opp.id);
+    expect(patch.usRoster).toEqual(us.roster);
+    expect(patch.oppRoster).toEqual(opp.roster);
+  });
+
+  it("away: us is the away id", () => {
+    const patch = linkExistingMatchPatch({ raw: "" } as MatchRecord, { usTeam: us, oppTeam: opp, homeAway: "away" });
+    expect(patch.homeTeamId).toBe(opp.id);
+    expect(patch.awayTeamId).toBe(us.id);
+  });
+
+  it("never clobbers existing rosters, names, or colours", () => {
+    const rec = {
+      raw: "", myTeam: "Custom Us", opponent: "Custom Them",
+      colorUs: "#111", colorThem: "#222",
+      usRoster: { formation: [[9]], players: [{ num: 9, name: "Mine", role: "starting" }] },
+      oppRoster: { formation: [[7]], players: [{ num: 7, name: "Theirs", role: "starting" }] },
+    } as MatchRecord;
+    const patch = linkExistingMatchPatch(rec, { usTeam: us, oppTeam: opp, homeAway: "home" });
+    expect(patch.usRoster).toBeUndefined();   // present already → not in patch
+    expect(patch.oppRoster).toBeUndefined();
+    expect((patch as any).myTeam).toBeUndefined();
+    expect((patch as any).opponent).toBeUndefined();
+    expect((patch as any).colorUs).toBeUndefined();
+  });
+
+  it("seeds squads only when blank", () => {
+    const withSquad = { ...us, squad: "Senior" };
+    const patch = linkExistingMatchPatch({ raw: "" } as MatchRecord, { usTeam: withSquad, oppTeam: opp, homeAway: "home" });
+    expect(patch.usSquad).toBe("Senior");
   });
 });
 

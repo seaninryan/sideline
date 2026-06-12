@@ -16,9 +16,7 @@ export interface MatchRecord {
   matchDate?: string;
   date?: string;
   myTeam?: string;
-  scoringMode?: "gaa" | "goals";
-  autoMode?: boolean;
-  sport?: string;
+  sport: string;
   colorUs?: string;
   colorUs2?: string;
   colorThem?: string;
@@ -36,6 +34,15 @@ export interface MatchRecord {
   legacyRaw?: string;
   notationV?: number;
   savedAt?: number;
+}
+
+export interface Profile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  is_admin: boolean;
+  created_at: string;
 }
 
 export interface MatchRow {

@@ -1,5 +1,5 @@
 // Shown in the footer at the bottom of the app — bump on every deployed change so a stale cached page is obvious.
-export const APP_VERSION = "v72";
+export const APP_VERSION = "v74";
 
 // Brand lockup — shared across the public page, the poster image, and the OG card.
 export const BRAND_HOME = "/";                       // home link target (relative — portable across prod/preview/localhost)
@@ -44,3 +44,8 @@ export const SPORTS: Record<string, { label: string; emoji: string; mode: string
   gaelic: { label: "Gaelic Football", emoji: "⚪", mode: "gaa" },
   soccer: { label: "Soccer", emoji: "⚽", mode: "goals" },
 };
+
+// Scoring mode is fully determined by sport. Unknown/blank → "goals" (soccer-family default).
+export function scoringModeForSport(sport?: string): "gaa" | "goals" {
+  return (SPORTS[sport ?? ""]?.mode as "gaa" | "goals") ?? "goals";
+}

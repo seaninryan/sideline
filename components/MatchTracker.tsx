@@ -19,10 +19,9 @@ import {
   gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
   fmtDate, fmtDateShort, fmtDateDow, toLocalInput, dateKey, MONTHS, pad2,
 } from "@/lib/util";
-import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS } from "@/lib/constants";
+import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS, scoringModeForSport } from "@/lib/constants";
 import ShareSheet from "@/components/ShareSheet";
 import ShareImageModal from "@/components/ShareImageModal";
-import LinkTeams from "@/components/LinkTeams";
 import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
 import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
@@ -37,6 +36,8 @@ import StatGrid from "@/components/StatGrid";
 import Scorers from "@/components/Scorers";
 import Timeline from "@/components/Timeline";
 import { htScore } from "@/lib/half-time";
+import { reconcileIncoming } from "@/lib/live-update";
+import { fetchIsAdmin } from "@/lib/viewer.client";
 import { useRouter } from "next/navigation";
 
 const sb = createClient();
@@ -101,9 +102,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const router = useRouter();
   const [raw, setRaw] = useState(SAMPLE_RECORD.raw);
   const [myTeam, setMyTeam] = useState(SAMPLE_RECORD.myTeam || "Racoons");
-  const [scoringMode, setScoringMode] = useState(SAMPLE_RECORD.scoringMode || "gaa");
-  const [autoMode, setAutoMode] = useState(SAMPLE_RECORD.autoMode !== undefined ? SAMPLE_RECORD.autoMode : true);
-  const [sport, setSport] = useState(SAMPLE_RECORD.sport || ""); // "" = auto-detect; else a SPORTS key, which fixes the scoring mode
+  const [sport, setSport] = useState(SAMPLE_RECORD.sport || ""); // "" = unset (legacy/edge records → "goals"); a SPORTS key locks the scoring mode
   const [colorUs, setColorUs] = useState(SAMPLE_RECORD.colorUs || "#f5c518");
   const [colorUs2, setColorUs2] = useState(SAMPLE_RECORD.colorUs2 || "#1f7a4d");
   const [colorThem, setColorThem] = useState(SAMPLE_RECORD.colorThem || "#c0392b");
@@ -131,7 +130,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [blkEdit, setBlkEdit] = useState(null);       // { idx, minute, rest, confirmDel } (Task 6)
   const [blkIns, setBlkIns] = useState(null);         // insert flow state (Task 7)
   const [lineupEdit, setLineupEdit] = useState(null); // preamble text while editing (Task 8)
-  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); }, [curId]);
+  const [remoteConflict, setRemoteConflict] = useState(false);
+  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setReTeam(null); }, [curId]);
   // undo stack of recent notation (raw) states — covers adds/edits/deletes/inserts
   const rawHist = useRef([]);
   const prevRawRef = useRef(raw);
@@ -161,7 +161,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // switching tabs closes any open Advanced editor and resets the game-mode stage
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setEditLineup(false); setGmStage({ stage: "event" }); }, [tab]);
   const [userUid, setUserUid] = useState("");
-  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); }); }, []);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); fetchIsAdmin(sb, (data && data.user && data.user.id) || null).then(setUserIsAdmin); }); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
@@ -185,6 +186,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [nw, setNw] = useState(null);
   const [showDetails, setShowDetails] = useState(false); // the date/teams/sport panel is collapsed behind "Edit details"
   const [nwTeams, setNwTeams] = useState([]); // TeamRecord[] loaded when the wizard opens
+  const [reTeam, setReTeam] = useState(null); // null | { sport, prevSport, home: TeamRecord|null, away: TeamRecord|null }
   // /m/new mounts the wizard before getUser resolves; once userUid arrives, load teams if the wizard is open
   useEffect(() => {
     if (userUid && nw && nwTeams.length === 0) teamStore.list(userUid).then(setNwTeams).catch(() => {});
@@ -192,7 +194,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   }, [userUid]);
   const [share, setShare] = useState(false);
   const [shareModel, setShareModel] = useState(null);
-  const [link, setLink] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState(null);
   const [awayTeamId, setAwayTeamId] = useState(null);
   const [oppRoster, setOppRoster] = useState(SAMPLE_RECORD.oppRoster || null);
@@ -200,7 +201,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [oppSquad, setOppSquad] = useState(SAMPLE_RECORD.oppSquad || "");
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
-  const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: SPORTS[sport] ? SPORTS[sport].mode : (autoMode ? undefined : scoringMode), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, scoringMode, autoMode, sport, label, homeAway, opponent, usRoster, oppRoster]);
+  const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: scoringModeForSport(sport), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, sport, label, homeAway, opponent, usRoster, oppRoster]);
   const { header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = SPORTS[sport] ? SPORTS[sport].label : header.sport; // chosen sport beats one named in the notation
@@ -235,7 +236,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       let ha = d.homeAway || "away";
       let grade = (d.label || "").trim();
       let emoji = "";
-      try { emoji = sportEmoji(d.sport, "", d.scoringMode); } catch (e) {}
+      try { emoji = sportEmoji(d.sport, "", scoringModeForSport(d.sport)); } catch (e) {}
       if (isPlaceholderLabel(grade) || !grade) grade = (d.myTeam || "").trim(); // pre-fix saves still show the team, not "New Match"
       const label = `${emoji ? emoji + " " : ""}${grade ? grade + " · " : ""}${opp} (${ha === "home" ? "H" : "A"})${d.date ? " — " + fmtDate(d.date) : ""}`;
       items.push({ id, label, date: d.date || null, savedAt: d.savedAt || 0 });
@@ -252,7 +253,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, scoringMode: effMode, autoMode, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, notationV: 2, ...(legacyRaw ? { legacyRaw } : {}) });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, notationV: 2, ...(legacyRaw ? { legacyRaw } : {}) });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -261,7 +262,9 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, saved]);
+  }, [curId, raw, matchDate, myTeam, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, saved]);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -277,50 +280,61 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     if (!curId || !dirty) return;
     const t = setTimeout(async () => {
       const ok = await store.set(curId, { ...recordPayload(), savedAt: Date.now() });
-      if (ok) { setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
+      // our save is now the latest copy — any pending cross-device conflict notice is moot.
+      if (ok) { setRemoteConflict(false); setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
       else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
       await refreshList();
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
-  }, [curId, dirty, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad]);
-  // legacy matches (no team links) get a gentle one-time "Link teams?" nudge on open
-  const linkNudged = useRef(false);
-  useEffect(() => { linkNudged.current = false; }, [curId]);
-  useEffect(() => {
-    if (curId && !homeTeamId && !awayTeamId && !linkNudged.current && !nw) {
-      linkNudged.current = true;
-      setSavedMsg("Tip: link this match to teams (🤝) for fixtures + opponent lineup");
-      setTimeout(() => setSavedMsg(""), 4000);
-    }
-  }, [curId, homeTeamId, awayTeamId, nw]);
-  // Re-pull the server copy (e.g. edits made on another device) on demand.
-  const doResync = async () => {
-    if (dirty && curId && !window.confirm("This match has unsaved changes here — load the server copy over them?")) return;
-    setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
-    setSavedMsg("Syncing…");
-    try {
-      await loadAll();
-      await refreshList();
-      if (curId && cache[curId]) doLoad(curId);
-      else if (curId) setCurId(null); // deleted on the other device
-      setSavedMsg("Synced ✓"); setTimeout(() => setSavedMsg(""), 2000);
-    } catch (e) { setSavedMsg("Sync failed — try again"); setTimeout(() => setSavedMsg(""), 4000); }
+  }, [curId, dirty, raw, matchDate, myTeam, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad]);
+  const applyRecord = (d) => {
+    setRaw(d.raw); setMyTeam(d.myTeam || "My Team");
+    setSport(d.sport || "");
+    setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
+    setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
+    setNameDisplay(d.nameDisplay || "full");
+    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || "");
+    setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
+    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
+    setUsSquad(d.usSquad || ""); setOppSquad(d.oppSquad || "");
+    setMatchDate(d.date || d.matchDate || toLocalInput(new Date()));
   };
   const doLoad = async (key) => {
     const id = key.replace(/^match:/, "");
     const d = await store.get(id);
     if (!d) return;
-    setRaw(d.raw); setMyTeam(d.myTeam || "My Team"); setScoringMode(d.scoringMode || "gaa");
-    setAutoMode(d.autoMode !== undefined ? d.autoMode : true);
-    setSport(d.sport || "");
-    setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
-    setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
-    setNameDisplay(d.nameDisplay || "full");
-    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || ""); setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
-    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
-    setUsSquad(d.usSquad || ""); setOppSquad(d.oppSquad || "");
-    setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
+    applyRecord(d); setCurId(id);
+  };
+  // Live-sync the open match across devices. Replaces the old manual Resync.
+  useEffect(() => {
+    if (!curId) return;
+    const apply = (rowData, event) => {
+      const incoming = rowData?.data;
+      const verdict = reconcileIncoming({
+        event,
+        dirty: dirtyRef.current,
+        localSavedAt: (cache[curId]?.savedAt) || 0,
+        incomingSavedAt: (incoming?.savedAt) || 0,
+      });
+      if (verdict === "deleted") { router.push("/"); return; }
+      if (verdict === "ignore") return;
+      if (verdict === "conflict") { setRemoteConflict(true); return; }
+      if (incoming) { cache[curId] = incoming; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setReTeam(null); applyRecord(incoming); }
+    };
+    const ch = sb
+      .channel(`editor:${curId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches", filter: `id=eq.${curId}` },
+          (payload) => apply(payload.new, "UPDATE"))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "matches", filter: `id=eq.${curId}` },
+          () => apply(null, "DELETE"))
+      .subscribe();
+    return () => { sb.removeChannel(ch); };
+  }, [curId]);
+  const doResyncLatest = async () => {
+    const { data } = await sb.from("matches").select("data").eq("id", curId).maybeSingle();
+    if (data?.data) { cache[curId] = data.data; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setReTeam(null); applyRecord(data.data); }
+    setRemoteConflict(false);
   };
   const doNew = async () => {
     // blank match: create + save immediately so it has a real /m/<uuid> home, then go there
@@ -328,12 +342,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const newRaw = "";
     const date = toLocalInput(new Date());
     const id = mkId();
-    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, myTeam: team, scoringMode: "gaa", autoMode: true, colorUs, colorUs2, colorThem, colorThem2, label: "", homeAway: "away", opponent: "", notationV: 2, savedAt: Date.now() });
+    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, myTeam: team, sport: "soccer", colorUs, colorUs2, colorThem, colorThem2, label: "", homeAway: "away", opponent: "", notationV: 2, savedAt: Date.now() });
     if (ok) {
       // route transition is in-place (same /m/[id] route → no remount), so reflect the new match locally
       setRaw(newRaw); setMatchDate(date); setMyTeam(team);
       setLabel(""); setHomeAway("away"); setOpponent(""); setUsRoster(null); setLegacyRaw(undefined);
-      setScoringMode("gaa"); setAutoMode(true); setCurId(id); setNw(null); setTab("game");
+      setSport("soccer"); setCurId(id); setNw(null); setReTeam(null); setTab("game");
       router.replace(`/m/${id}`);
     } else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
@@ -528,7 +542,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const enterShare = () => {
     setMenuOpen(false);
     if (!curId) { setSavedMsg("Save the match first, then share"); setTimeout(() => setSavedMsg(""), 2500); return; }
-    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null);
+    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null); setReTeam(null);
     setShare(true);
   };
   // Wizard now picks a Home team then an Away team (sport is chosen on stage 1).
@@ -545,18 +559,40 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, away: t }); }
   };
+  const reTeamPickHome = (t) => setReTeam({ ...reTeam, home: t });
+  const reTeamCreateHome = async (name, squad) => {
+    if (!userUid) return;
+    const t = await teamStore.findOrCreate(userUid, { name, sport: reTeam.sport, squad, color1: "#f5c518", color2: "#1f7a4d" });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setReTeam({ ...reTeam, home: t }); }
+  };
+  const reTeamPickAway = (t) => setReTeam({ ...reTeam, away: t });
+  const reTeamCreateAway = async (name, squad) => {
+    if (!userUid) return;
+    const t = await teamStore.findOrCreate(userUid, { name, sport: reTeam.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setReTeam({ ...reTeam, away: t }); }
+  };
+  const reTeamApply = () => {
+    if (!reTeam.home || !reTeam.away || pairingError(reTeam.home.sport, reTeam.away.sport)) return;
+    const patch = teamLinkPatch(recordPayload(), { usTeam: reTeam.home, oppTeam: reTeam.away, homeAway: homeAway || "home" });
+    setSport(reTeam.sport);
+    setMyTeam(patch.myTeam); setOpponent(patch.opponent);
+    setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
+    setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster);
+    setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
+    setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
+    setReTeam(null);
+  };
   const finishNew = async () => {
     if (creatingRef.current || !nw.home || !nw.away) return;
     if (pairingError(nw.home.sport, nw.away.sport)) return;
     creatingRef.current = true;
     try {
-      const sportKey = nw.sport || nw.home.sport || nw.away.sport || "";
-      const mode = SPORTS[sportKey] ? SPORTS[sportKey].mode : "gaa";
+      const sportKey = nw.sport || nw.home.sport || nw.away.sport || "soccer";
       const patch = teamLinkPatch({ label: "" }, { usTeam: nw.home, oppTeam: nw.away, homeAway: "home" });
       const label = nw.home.name;
       const rec = {
-        raw: "", matchDate: nw.date, date: nw.date, scoringMode: mode, autoMode: true,
-        sport: sportKey || undefined, notationV: 2, nameDisplay: "full", savedAt: Date.now(),
+        raw: "", matchDate: nw.date, date: nw.date,
+        sport: sportKey, notationV: 2, nameDisplay: "full", savedAt: Date.now(),
         ...patch, label,
       };
       setRaw(""); setMyTeam(patch.myTeam); setOpponent(patch.opponent); setLabel(label);
@@ -564,8 +600,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster); setLegacyRaw(undefined);
       setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
       setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
-      setSport(sportKey); setScoringMode(mode); setAutoMode(true);
-      setMatchDate(nw.date); setNw(null); setTab("game");
+      setSport(sportKey);
+      setMatchDate(nw.date); setNw(null); setReTeam(null); setTab("game");
       const id = mkId();
       const ok = await store.set(id, rec);
       if (ok) { setCurId(id); router.replace(`/m/${id}`); }
@@ -779,7 +815,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       {!nw && (
         <AppHeader
           email={userEmail}
-          backHref="/"
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
           primary={
             <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={enterShare}>
@@ -789,28 +824,21 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               </svg>
             </button>
           }
-          menuItems={[
-            { label: "＋ New", onClick: () => router.push("/m/new") },
-            { label: "👥 Teams", onClick: () => router.push("/teams") },
-            { label: "🤝 Link teams", onClick: () => { setShare(false); setLink((o) => !o); } },
-            { label: "🔄 Resync", onClick: doResync },
-            {
-              label: confirmDel ? "Tap again to delete" : "🗑 Delete",
-              danger: confirmDel,
-              keepOpen: !confirmDel,
-              onClick: () => {
-                if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
-                setConfirmDel(false); doDelete();
-              },
-            },
-          ]}
+          screen="editor"
+          isAdmin={userIsAdmin}
         />
+      )}
+      {!nw && remoteConflict && (
+        <div className="mt-warn">
+          Updated on another device.
+          <button className="mt-add alt" style={{ marginLeft: 8 }} onClick={doResyncLatest}>Load latest</button>
+        </div>
       )}
       {nw && (
         <AppHeader
           email={userEmail}
-          backHref="/"
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
+          screen="editor"
         />
       )}
 
@@ -841,26 +869,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           onClose={() => setShare(false)}
           onShareImage={() => { setShare(false); doExport(); }}
           onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
-        />
-      )}
-
-      {!nw && link && curId && (
-        <LinkTeams
-          userId={userUid}
-          record={recordPayload()}
-          currentHomeAway={header.homeAway === "home" ? "home" : "away"}
-          onClose={() => setLink(false)}
-          onApply={(p) => {
-            setMyTeam(p.myTeam);
-            setColorUs(p.colorUs); setColorUs2(p.colorUs2); setColorThem(p.colorThem); setColorThem2(p.colorThem2);
-            if (p.label !== undefined) setLabel(p.label);
-            if (p.homeAway !== undefined) setHomeAway(p.homeAway);
-            if (p.opponent !== undefined) setOpponent(p.opponent);
-            if (p.usRoster !== undefined) setUsRoster(p.usRoster);
-            setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId); setOppRoster(p.oppRoster);
-            setUsSquad(p.usSquad || ""); setOppSquad(p.oppSquad || "");
-            setSavedMsg("Teams linked ✓"); setTimeout(() => setSavedMsg(""), 2000);
-          }}
         />
       )}
 
@@ -895,7 +903,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
-        <label>My team <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
+        <label>{header.homeAway === "home" ? "Home team" : "Away team"} <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
         <label>
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => {
@@ -912,18 +920,44 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           const p = swapHomeAway(recordPayload());
           setHomeAway(p.homeAway); setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId);
         }}>⇄ Swap</button>
-        <label>Opponent <input type="text" value={header.opposition || ""} placeholder="Opponent"
+        <label>{header.homeAway === "home" ? "Away team" : "Home team"} <input type="text" value={header.opposition || ""} placeholder={header.homeAway === "home" ? "Away team" : "Home team"}
           onChange={(e) => setHeaderField("opposition", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorThem }} onClick={() => setColorPick(colorPick === "them" ? null : "them")} /><button className="mt-swatch" title="Secondary" style={{ background: colorThem2 }} onClick={() => setColorPick(colorPick === "them2" ? null : "them2")} /></label>
         <label>Sport
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
-            value={sport || (autoMode ? "auto" : scoringMode)}
-            onChange={(e) => { const v = e.target.value; if (v === "auto") { setSport(""); setAutoMode(true); } else if (SPORTS[v]) { setSport(v); setAutoMode(true); } }}>
-            <option value="auto">Auto: {sportLabel || (effMode === "gaa" ? "GAA scoring" : "goals only")}</option>
+            value={sport}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === sport) return;
+              setReTeam({ sport: v, prevSport: sport, home: null, away: null });
+              if (userUid) teamStore.list(userUid).then(setNwTeams).catch(() => {});
+            }}>
+            {!sport && <option value="" disabled>— choose sport —</option>}
             {Object.entries(SPORTS).map(([k, s]) => <option key={k} value={k}>{s.emoji} {s.label}</option>)}
-            {/* legacy explicit scoring choice, shown until a sport is picked */}
-            {!sport && !autoMode && <option value={scoringMode}>{scoringMode === "gaa" ? "GAA (goals & points)" : "Goals only (soccer)"}</option>}
           </select>
         </label>
+        {reTeam && (
+          <div className="mt-live" style={{ marginTop: 10 }}>
+            <div className="mt-row">
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>Re-pick teams for {SPORTS[reTeam.sport]?.label || "new sport"}</span>
+              <button className="mt-add alt" onClick={() => setReTeam(null)}>✕ Cancel</button>
+            </div>
+            {!reTeam.home ? (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
+                <TeamPicker teams={nwTeams} sport={reTeam.sport} onPick={reTeamPickHome} onCreate={reTeamCreateHome} />
+              </>
+            ) : (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Home team: <b>{reTeam.home.name}</b>. Now pick the away team{reTeam.away ? <> — <b>{reTeam.away.name}</b></> : ", or create one"}.</p>
+                <TeamPicker teams={nwTeams} sport={reTeam.sport} exclude={reTeam.home.id} onPick={reTeamPickAway} onCreate={reTeamCreateAway} />
+                <div className="mt-row" style={{ marginTop: 10 }}>
+                  <button className="mt-add alt" onClick={() => setReTeam({ ...reTeam, home: null, away: null })}>← Back</button>
+                  <button className="mt-add" style={{ flex: 1, marginLeft: 8 }} disabled={!reTeam.away} onClick={reTeamApply}>Apply {SPORTS[reTeam.sport]?.label} teams</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
       )}
 
@@ -1016,7 +1050,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {nw.stage === "home" && (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} side="us" onPick={nwPickHome} onCreate={nwCreateHome} />
+                <TeamPicker teams={nwTeams} sport={nw.sport} onPick={nwPickHome} onCreate={nwCreateHome} />
                 <div className="nw-nav">
                   <button className="nw-link" onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
                 </div>
@@ -1027,7 +1061,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {nw.stage === "away" && (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the away team{nw.away ? <> — <b>{nw.away.name}</b></> : ", or create one"}.</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} side="them" exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
+                <TeamPicker teams={nwTeams} sport={nw.sport} exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
                 <div className="nw-nav">
                   <button className="nw-link" onClick={() => setNw({ ...nw, stage: "home", away: null })}>← Back</button>
                   <button className="mt-big gm-team" style={{ flex: 1, marginLeft: 10 }} disabled={!nw.home || !nw.away} onClick={finishNew}>Create match →</button>
@@ -1394,6 +1428,18 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               </div>
             )}
           </>
+        )}
+        {view !== "game" && view !== "new" && curId && (
+          <section className="mt-danger">
+            <h3 className="mt-h">Danger</h3>
+            <button
+              className={"mt-add" + (confirmDel ? " danger" : "")}
+              onClick={() => {
+                if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
+                setConfirmDel(false); doDelete();
+              }}
+            >{confirmDel ? "Tap again to delete this match" : "🗑 Delete match"}</button>
+          </section>
         )}
       </div>
       <BrandFooter />

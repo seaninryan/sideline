@@ -11,11 +11,10 @@ const RECENT = 5;
 // With no query it shows the most-recent teams (+ "Show more"); typing filters
 // across all of them. A typed name with no exact match offers "Create '…'".
 export default function TeamPicker({
-  teams, sport, side, exclude, onPick, onCreate,
+  teams, sport, exclude, onPick, onCreate,
 }: {
   teams: TeamRecord[];
   sport?: string;
-  side: "us" | "them";
   exclude?: string | null;
   onPick: (t: TeamRecord) => void;
   onCreate: (name: string, squad: string) => void;
@@ -27,7 +26,9 @@ export default function TeamPicker({
   const all = filterTeams(teams, q, sport).filter((t) => t.id !== exclude);
   const shown = q.trim() ? all : (expanded ? all : all.slice(0, RECENT));
   const exact = all.some((t) => t.name.trim().toLowerCase() === q.trim().toLowerCase());
-  const fallback = side === "us" ? ["#f5c518", "#1f7a4d"] : ["#c0392b", "#2c5fa8"];
+  // Missing colours fall back to neutral grey — identical to the team page/list
+  // (TeamsList/TeamPage use #888/#555), so a team renders the same everywhere.
+  const fallback = ["#888", "#555"];
 
   return (
     <div className="tp">

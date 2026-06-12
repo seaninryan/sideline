@@ -41,7 +41,7 @@ const RACOONS: TeamRoster = {
 export const SAMPLE_RECORD: MatchRecord = {
   raw: SAMPLE,
   myTeam: "Racoons", opponent: "Wildebeests", label: "U13A Hurling", homeAway: "away",
-  sport: "hurling", scoringMode: "gaa", autoMode: true,
+  sport: "hurling",
   colorUs: "#f5c518", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8",
   nameDisplay: "full",
   usRoster: RACOONS,

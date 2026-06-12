@@ -6,5 +6,6 @@ export default async function TeamsPage() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect("/");
-  return <TeamsList userId={data.user.id} email={data.user.email ?? null} />;
+  const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", data.user.id).maybeSingle();
+  return <TeamsList userId={data.user.id} email={data.user.email ?? null} isAdmin={!!me?.is_admin} />;
 }
