@@ -6,7 +6,7 @@ import BrandFooter from "@/components/BrandFooter";
 import MatchRow from "@/components/MatchRow";
 import SportIcon, { ICON_SPORTS } from "@/components/SportIcon";
 import { createClient } from "@/lib/supabase/client";
-import { matchRowView, relativeDate, isUpcoming, isLive } from "@/lib/match-list";
+import { matchRowView, relativeDate, matchBucket } from "@/lib/match-list";
 import { SPORTS } from "@/lib/constants";
 import type { MatchRecord } from "@/lib/types";
 
@@ -72,17 +72,22 @@ export default function Landing({ userId, email }: { userId: string | null; emai
   const bySport = (r: Row) => !sportFilter || sportOf(r) === sportFilter;
   const ownByPrivacy = (own || []).filter((r) =>
     filter === "both" ? true : filter === "public" ? r.is_public : !r.is_public);
+  // one parse per row → its section; sort upcoming soonest-first, live most-recent-first,
+  // past stays date-desc (the query already orders it that way).
+  const bucketed = (rows: Row[]) => {
+    const tagged = rows.map((r) => ({ r, b: matchBucket(r.data, now, r.updated_at) }));
+    const pick = (b: string) => tagged.filter((t) => t.b === b).map((t) => t.r);
+    return {
+      upcoming: pick("upcoming").sort((a, b) => dateMs(a) - dateMs(b)),
+      live: pick("live").sort((a, b) => dateMs(b) - dateMs(a)),
+      past: pick("past"),
+    };
+  };
   const ownFiltered = ownByPrivacy.filter(bySport);
-  const ownUpcoming = ownFiltered.filter((r) => isUpcoming(dateOf(r), now)).sort((a, b) => dateMs(a) - dateMs(b));
-  const ownNotUpcoming = ownFiltered.filter((r) => !isUpcoming(dateOf(r), now));
-  const ownLive = ownNotUpcoming.filter((r) => isLive(r.data, now, r.updated_at)).sort((a, b) => dateMs(b) - dateMs(a));
-  const ownPast = ownNotUpcoming.filter((r) => !isLive(r.data, now, r.updated_at)); // already date-desc from the query
+  const { upcoming: ownUpcoming, live: ownLive, past: ownPast } = bucketed(ownFiltered);
 
   const feedFiltered = feed.filter(bySport);
-  const feedUpcoming = feedFiltered.filter((r) => isUpcoming(dateOf(r), now)).sort((a, b) => dateMs(a) - dateMs(b));
-  const feedNotUpcoming = feedFiltered.filter((r) => !isUpcoming(dateOf(r), now));
-  const feedLive = feedNotUpcoming.filter((r) => isLive(r.data, now, r.updated_at)).sort((a, b) => dateMs(b) - dateMs(a));
-  const feedPast = feedNotUpcoming.filter((r) => !isLive(r.data, now, r.updated_at));
+  const { upcoming: feedUpcoming, live: feedLive, past: feedPast } = bucketed(feedFiltered);
 
   // "Past" only gets its own subhead when an Upcoming or Live group precedes it.
   const pastSubhead = (up: Row[], live: Row[], past: Row[]) => past.length > 0 && (up.length > 0 || live.length > 0);

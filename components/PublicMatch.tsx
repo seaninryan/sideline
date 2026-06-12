@@ -147,7 +147,10 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
         const usIsHome = m.homeAway === "home";
         const usTotal = gpTotal(m.totals.us.g, m.totals.us.p, m.effMode);
         const themTotal = gpTotal(m.totals.them.g, m.totals.them.p, m.effMode);
-        const phase = (m.halfMarks || []).some((mk: any) => mk.marker === "FT") ? "over" : "play";
+        const finished = (m.halfMarks || []).some((mk: any) => mk.marker === "FT");
+        const started = (m.halfMarks || []).length > 0 || (m.timeline || []).length > 0;
+        const phase = finished ? "over" : started ? "play" : "pre";
+        const live = started && !finished;
         return (
           <div key={pulse} className={pulse > 0 ? "pm-score-wrap pm-pulse" : "pm-score-wrap"}>
             <ScoreHeader
@@ -162,6 +165,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
               homeTotal={usIsHome ? usTotal : themTotal}
               awayTotal={usIsHome ? themTotal : usTotal}
               phase={phase}
+              live={live}
               homeSquad={usIsHome ? m.usSquad : m.oppSquad}
               awaySquad={usIsHome ? m.oppSquad : m.usSquad}
             />

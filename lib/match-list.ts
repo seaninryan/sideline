@@ -94,22 +94,27 @@ export function isUpcoming(iso: string | undefined, now: number): boolean {
   return dayStartOf(t) > dayStartOf(now);
 }
 
-// True when a match is currently in progress: not a future fixture, has started
-// (≥1 event), has no FT marker, and either kickoff or the last edit is within the
-// last 3h. `now` and `updatedAt` are passed in so the function stays pure.
-export function isLive(rec: MatchRecord, now: number, updatedAt?: string): boolean {
-  const iso = rec.matchDate || rec.date;
-  if (isUpcoming(iso, now)) return false;
+// A match is on a past calendar day (its scheduled day is before today). No date
+// counts as not-past (a blank fixture sits in Upcoming until played).
+function isPastDay(iso: string | undefined, now: number): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  if (isNaN(t)) return false;
+  return dayStartOf(t) < dayStartOf(now);
+}
 
-  const recent = (s: string | undefined) => {
-    if (!s) return false;
-    const t = Date.parse(s);
-    if (isNaN(t)) return false;
-    const diff = now - t;
-    return diff >= 0 && diff < LIVE_WINDOW_MS;
-  };
-  if (!recent(iso) && !recent(updatedAt)) return false;
+// `iso` is within the last LIVE_WINDOW_MS of `now` (a future timestamp is excluded).
+function recentWithin(iso: string | undefined, now: number): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  if (isNaN(t)) return false;
+  const diff = now - t;
+  return diff >= 0 && diff < LIVE_WINDOW_MS;
+}
 
+// Parse a record once to learn whether the match has started (≥1 event) and
+// whether it has reached full time (an FT half-marker).
+function matchProgress(rec: MatchRecord): { started: boolean; finished: boolean } {
   const sp = (SPORTS as Record<string, { mode: string }>)[rec.sport || ""];
   const scoringMode = sp ? (sp.mode as "gaa" | "goals") : (rec.autoMode ? undefined : rec.scoringMode);
   const parsed = parseMatch(rec.raw, {
@@ -118,9 +123,26 @@ export function isLive(rec: MatchRecord, now: number, updatedAt?: string): boole
     label: rec.label, homeAway: rec.homeAway, opponent: rec.opponent,
   });
   const started = parsed.scoring.length > 0 || parsed.notes.length > 0 || parsed.halfMarks.length > 0;
-  if (!started) return false;
   const finished = parsed.halfMarks.some((m: { marker?: string }) => m.marker === "FT");
-  return !finished;
+  return { started, finished };
+}
+
+// Which match-list section a record belongs in. The lifecycle is
+// upcoming → live → past: a not-yet-started fixture (today or future) is
+// Upcoming; once it has events and no FT and was kicked off / edited within the
+// last 3h it is Live; full time, a stale unfinished match, or a not-started past
+// day all fall to Past. `now`/`updatedAt` are passed in so the function is pure.
+export function matchBucket(rec: MatchRecord, now: number, updatedAt?: string): "upcoming" | "live" | "past" {
+  const iso = rec.matchDate || rec.date;
+  const { started, finished } = matchProgress(rec);
+  if (finished) return "past";
+  if (!started) return isPastDay(iso, now) ? "past" : "upcoming";
+  return recentWithin(iso, now) || recentWithin(updatedAt, now) ? "live" : "past";
+}
+
+// True when a match is currently in progress (the Live section of the list).
+export function isLive(rec: MatchRecord, now: number, updatedAt?: string): boolean {
+  return matchBucket(rec, now, updatedAt) === "live";
 }
 
 // Human "2h ago" / "Yesterday" / "Tomorrow" / short-date, given an explicit
