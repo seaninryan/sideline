@@ -283,7 +283,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       const prev = cache[curId]; // pre-save copy, to detect which roster changed
       const usChanged = JSON.stringify(prev?.usRoster) !== JSON.stringify(usRoster);
       const oppChanged = JSON.stringify(prev?.oppRoster) !== JSON.stringify(oppRoster);
-      const ok = await store.set(curId, { ...recordPayload(), savedAt: Date.now() });
+      const payload = recordPayload();
+      const ok = await store.set(curId, { ...payload, savedAt: Date.now() });
       // our save is now the latest copy — any pending cross-device conflict notice is moot.
       if (ok) { setRemoteConflict(false); setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
       else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
@@ -294,7 +295,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             id, homeTeamId: d.homeTeamId, awayTeamId: d.awayTeamId,
             matchDate: d.matchDate, date: d.date, savedAt: d.savedAt,
           }));
-          const pushes = teamRosterPushes({ ...recordPayload(), id: curId }, matchList);
+          const pushes = teamRosterPushes({ ...payload, id: curId }, matchList);
           for (const p of pushes) {
             if (p.side === "us" ? usChanged : oppChanged) await teamStore.setRoster(p.teamId, p.roster);
           }
