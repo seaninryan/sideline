@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchRowView, relativeDate, isUpcoming } from "@/lib/match-list";
+import { matchRowView, relativeDate, isUpcoming, isLive } from "@/lib/match-list";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import type { MatchRecord } from "@/lib/types";
 
@@ -69,4 +69,41 @@ describe("isUpcoming", () => {
   it("today is not upcoming (already started)", () => expect(isUpcoming("2026-06-09T18:00:00", now)).toBe(false));
   it("a past day is not upcoming", () => expect(isUpcoming("2026-06-08T09:00:00", now)).toBe(false));
   it("empty / invalid → false", () => { expect(isUpcoming("", now)).toBe(false); expect(isUpcoming("nope", now)).toBe(false); });
+});
+
+describe("isLive", () => {
+  const NOW = Date.parse("2026-06-11T20:00:00");
+  // a started, unfinished match: one scoring event, no FT marker
+  const started = { raw: "20:00\n3 Rick goal", myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  const finished = { raw: "20:00\n3 Rick goal\nFT", myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  const empty = { raw: "", myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  const recentIso = "2026-06-11T19:30"; // 30m before NOW
+  const staleIso = "2026-06-11T15:00"; // 5h before NOW
+  const futureIso = "2026-06-12T19:00"; // tomorrow
+  const laterTodayIso = "2026-06-11T22:00"; // 2h after NOW, same calendar day
+
+  it("is live when started, unfinished, kickoff within 3h", () => {
+    expect(isLive({ ...started, matchDate: recentIso }, NOW)).toBe(true);
+  });
+  it("is not live once FT is recorded", () => {
+    expect(isLive({ ...finished, matchDate: recentIso }, NOW)).toBe(false);
+  });
+  it("is not live with no events", () => {
+    expect(isLive({ ...empty, matchDate: recentIso }, NOW)).toBe(false);
+  });
+  it("is not live when both kickoff and last edit are stale", () => {
+    expect(isLive({ ...started, matchDate: staleIso }, NOW, staleIso)).toBe(false);
+  });
+  it("is not live for a future calendar day", () => {
+    expect(isLive({ ...started, matchDate: futureIso }, NOW)).toBe(false);
+  });
+  it("is not live when kickoff is later today (a future time, same day)", () => {
+    expect(isLive({ ...started, matchDate: laterTodayIso }, NOW)).toBe(false);
+  });
+  it("is live when kickoff is missing but it was edited recently", () => {
+    expect(isLive({ ...started, matchDate: "" }, NOW, recentIso)).toBe(true);
+  });
+  it("is live when kickoff is stale but it was edited recently", () => {
+    expect(isLive({ ...started, matchDate: staleIso }, NOW, recentIso)).toBe(true);
+  });
 });

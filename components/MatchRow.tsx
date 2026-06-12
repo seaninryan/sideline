@@ -9,18 +9,19 @@ import type { MatchRecord } from "@/lib/types";
 // the winner stays full strength (`win`), a draw is neutral (`neu`). Each side
 // is an equal-width cell hugging the centre dash, so a long name ellipsises on
 // its own side instead of pushing the score across the divider.
-export default function MatchRow({ record, href, date, privacy = null, upcoming = false }: {
+export default function MatchRow({ record, href, date, privacy = null, upcoming = false, live = false }: {
   record: MatchRecord;
   href: string;
   date: string;
   privacy?: "public" | "private" | null;
   upcoming?: boolean;
+  live?: boolean;
 }) {
   const v = matchRowView(record);
   const cls = (side: "home" | "away") => (v.winner === "draw" ? "neu" : v.winner === side ? "win" : "lose");
   const flag = (c: [string, string]) => `linear-gradient(135deg, ${c[0]} 50%, ${c[1]} 50%)`;
   return (
-    <Link className={"ml-row" + (upcoming ? " upcoming" : "")} href={href}>
+    <Link className={"ml-row" + (upcoming ? " upcoming" : "") + (live ? " live" : "")} href={href}>
       <span className="ml-sport"><SportIcon sport={v.sport} size={18} /></span>
       <span className="ml-teams">
         <span className="ml-side home">
@@ -36,6 +37,7 @@ export default function MatchRow({ record, href, date, privacy = null, upcoming 
         </span>
       </span>
       <span className="ml-meta">
+        {live && <span className="ml-live" role="status" aria-label="Live match"><span aria-hidden="true">🔴 </span>LIVE</span>}
         <span className={"ml-date" + (upcoming ? " upcoming" : "")}>{upcoming ? `📅 ${date}` : date}</span>
         {privacy && <span className={"ml-priv " + privacy}>{privacy === "public" ? "◉ public" : "🔒 private"}</span>}
       </span>
