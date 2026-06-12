@@ -38,6 +38,7 @@ import Timeline from "@/components/Timeline";
 import { htScore } from "@/lib/half-time";
 import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
+import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
 
 const sb = createClient();
@@ -279,10 +280,26 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   useEffect(() => {
     if (!curId || !dirty) return;
     const t = setTimeout(async () => {
+      const prev = cache[curId]; // pre-save copy, to detect which roster changed
+      const usChanged = JSON.stringify(prev?.usRoster) !== JSON.stringify(usRoster);
+      const oppChanged = JSON.stringify(prev?.oppRoster) !== JSON.stringify(oppRoster);
       const ok = await store.set(curId, { ...recordPayload(), savedAt: Date.now() });
       // our save is now the latest copy — any pending cross-device conflict notice is moot.
       if (ok) { setRemoteConflict(false); setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
       else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
+      // Push the lineup to the linked team(s) when a roster changed and this is that team's latest match.
+      if (ok && (usChanged || oppChanged)) {
+        try {
+          const matchList = Object.entries(cache).map(([id, d]) => ({
+            id, homeTeamId: d.homeTeamId, awayTeamId: d.awayTeamId,
+            matchDate: d.matchDate, date: d.date, savedAt: d.savedAt,
+          }));
+          const pushes = teamRosterPushes({ ...recordPayload(), id: curId }, matchList);
+          for (const p of pushes) {
+            if (p.side === "us" ? usChanged : oppChanged) await teamStore.setRoster(p.teamId, p.roster);
+          }
+        } catch (e) { console.warn("team lineup sync failed", e); }
+      }
       await refreshList();
     }, 2500);
     return () => clearTimeout(t);
