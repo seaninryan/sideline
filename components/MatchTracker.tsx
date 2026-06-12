@@ -281,7 +281,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     if (!curId || !dirty) return;
     const t = setTimeout(async () => {
       const ok = await store.set(curId, { ...recordPayload(), savedAt: Date.now() });
-      if (ok) { setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
+      // our save is now the latest copy — any pending cross-device conflict notice is moot.
+      if (ok) { setRemoteConflict(false); setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
       else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
       await refreshList();
     }, 2500);
