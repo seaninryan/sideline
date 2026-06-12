@@ -37,6 +37,7 @@ import StatGrid from "@/components/StatGrid";
 import Scorers from "@/components/Scorers";
 import Timeline from "@/components/Timeline";
 import { htScore } from "@/lib/half-time";
+import { reconcileIncoming } from "@/lib/live-update";
 import { useRouter } from "next/navigation";
 
 const sb = createClient();
@@ -131,6 +132,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [blkEdit, setBlkEdit] = useState(null);       // { idx, minute, rest, confirmDel } (Task 6)
   const [blkIns, setBlkIns] = useState(null);         // insert flow state (Task 7)
   const [lineupEdit, setLineupEdit] = useState(null); // preamble text while editing (Task 8)
+  const [remoteConflict, setRemoteConflict] = useState(false);
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); }, [curId]);
   // undo stack of recent notation (raw) states — covers adds/edits/deletes/inserts
   const rawHist = useRef([]);
@@ -262,6 +264,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
   }, [curId, raw, matchDate, myTeam, effMode, autoMode, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, saved]);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   const doSave = async () => {
     const id = curId || mkId();
@@ -294,33 +298,54 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       setTimeout(() => setSavedMsg(""), 4000);
     }
   }, [curId, homeTeamId, awayTeamId, nw]);
-  // Re-pull the server copy (e.g. edits made on another device) on demand.
-  const doResync = async () => {
-    if (dirty && curId && !window.confirm("This match has unsaved changes here — load the server copy over them?")) return;
-    setBlkEdit(null); setBlkIns(null); setLineupEdit(null);
-    setSavedMsg("Syncing…");
-    try {
-      await loadAll();
-      await refreshList();
-      if (curId && cache[curId]) doLoad(curId);
-      else if (curId) setCurId(null); // deleted on the other device
-      setSavedMsg("Synced ✓"); setTimeout(() => setSavedMsg(""), 2000);
-    } catch (e) { setSavedMsg("Sync failed — try again"); setTimeout(() => setSavedMsg(""), 4000); }
-  };
-  const doLoad = async (key) => {
-    const id = key.replace(/^match:/, "");
-    const d = await store.get(id);
-    if (!d) return;
+  const applyRecord = (d) => {
     setRaw(d.raw); setMyTeam(d.myTeam || "My Team"); setScoringMode(d.scoringMode || "gaa");
     setAutoMode(d.autoMode !== undefined ? d.autoMode : true);
     setSport(d.sport || "");
     setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
     setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
     setNameDisplay(d.nameDisplay || "full");
-    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || ""); setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
+    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || "");
+    setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
     setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
     setUsSquad(d.usSquad || ""); setOppSquad(d.oppSquad || "");
-    setMatchDate(d.date || d.matchDate || toLocalInput(new Date())); setCurId(id);
+    setMatchDate(d.date || d.matchDate || toLocalInput(new Date()));
+  };
+  const doLoad = async (key) => {
+    const id = key.replace(/^match:/, "");
+    const d = await store.get(id);
+    if (!d) return;
+    applyRecord(d); setCurId(id);
+  };
+  // Live-sync the open match across devices. Replaces the old manual Resync.
+  useEffect(() => {
+    if (!curId) return;
+    const apply = (rowData, event) => {
+      const incoming = rowData?.data;
+      const verdict = reconcileIncoming({
+        event,
+        dirty: dirtyRef.current,
+        localSavedAt: (cache[curId]?.savedAt) || 0,
+        incomingSavedAt: (incoming?.savedAt) || 0,
+      });
+      if (verdict === "deleted") { router.push("/"); return; }
+      if (verdict === "ignore") return;
+      if (verdict === "conflict") { setRemoteConflict(true); return; }
+      if (incoming) { cache[curId] = incoming; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); applyRecord(incoming); }
+    };
+    const ch = sb
+      .channel(`editor:${curId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches", filter: `id=eq.${curId}` },
+          (payload) => apply(payload.new, "UPDATE"))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "matches", filter: `id=eq.${curId}` },
+          () => apply(null, "DELETE"))
+      .subscribe();
+    return () => { sb.removeChannel(ch); };
+  }, [curId]);
+  const doResyncLatest = async () => {
+    const { data } = await sb.from("matches").select("data").eq("id", curId).maybeSingle();
+    if (data?.data) { cache[curId] = data.data; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); applyRecord(data.data); }
+    setRemoteConflict(false);
   };
   const doNew = async () => {
     // blank match: create + save immediately so it has a real /m/<uuid> home, then go there
@@ -793,9 +818,14 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             { label: "＋ New", onClick: () => router.push("/m/new") },
             { label: "👥 Teams", onClick: () => router.push("/teams") },
             { label: "🤝 Link teams", onClick: () => { setShare(false); setLink((o) => !o); } },
-            { label: "🔄 Resync", onClick: doResync },
           ]}
         />
+      )}
+      {!nw && remoteConflict && (
+        <div className="mt-warn">
+          Updated on another device.
+          <button className="mt-add alt" style={{ marginLeft: 8 }} onClick={doResyncLatest}>Load latest</button>
+        </div>
       )}
       {nw && (
         <AppHeader
