@@ -47,12 +47,11 @@ export function resolveWho(token: string, a: TeamArg, b: TeamArg): WhoResult {
 type Side = "A" | "B";
 const other = (s: Side): Side => (s === "A" ? "B" : "A");
 
-export interface EventSettings { teamA: TeamArg; teamB: TeamArg; scoringMode?: "gaa" | "goals" }
+export interface EventSettings { teamA: TeamArg; teamB: TeamArg; scoringMode: "gaa" | "goals" }
 
 export interface TeamTotals { g: number; p: number; total: number; str: string }
 export interface ParsedEvents {
   mode: "gaa" | "goals";
-  detectedMode: "gaa" | "goals";
   totals: { A: TeamTotals; B: TeamTotals };
   result: "A" | "B" | "draw";
   scoring: any[];
@@ -94,25 +93,7 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     return { text: toks.join(" ").trim(), scoreToks: score.filter((t) => t !== "-") };
   };
 
-  // Detect sport from score shape over the event lines (no header sport now):
-  // a line carrying two score tokens (e.g. "0-2 1-3") is GAA; hyphen scores that
-  // only ever appear one-per-line read as a goals running scoreboard; else any
-  // internal hyphen => GAA; else goals. settings.scoringMode overrides.
-  let pairLines = 0, soloHyphens = 0;
-  for (const l of eventLines) {
-    const lead = l.trim().match(/^(\d{1,2})\b\s*(.*)$/);
-    if (!lead || timeRe.test(l)) continue;
-    const { scoreToks } = peelScore(lead[2]);
-    if (scoreToks.length >= 2) pairLines++;
-    else if (scoreToks.length === 1 && scoreToks[0].includes("-")) soloHyphens++;
-  }
-  const evText = eventLines.join("\n");
-  const detectedMode =
-    pairLines > 0 ? "gaa"
-    : soloHyphens > 0 && !/\bpoints?\b|\bpts?\b/i.test(evText) ? "goals"
-    : /\d+-\d+/.test(evText) ? "gaa"
-    : "goals";
-  const mode = (settings.scoringMode || detectedMode) as "gaa" | "goals";
+  const mode = settings.scoringMode;
 
   // resolve a "who" token against both teams
   const who = (txt: string) => resolveWho(txt, teamA, teamB);
@@ -338,5 +319,5 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     })
     .sort((a, b) => a.x - b.x);
 
-  return { mode, detectedMode, totals, result, scoring, notes, halfMarks, series, goalDots, chartMarkers, scorers: Object.values(scorers), leadChanges, timesLevel, maxLead, maxLeadSide, htLine, warnings };
+  return { mode, totals, result, scoring, notes, halfMarks, series, goalDots, chartMarkers, scorers: Object.values(scorers), leadChanges, timesLevel, maxLead, maxLeadSide, htLine, warnings };
 }

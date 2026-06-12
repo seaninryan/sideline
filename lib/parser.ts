@@ -20,7 +20,7 @@ export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
   const oppName = opponent || "Opposition";
   const teamA: TeamArg = { name: usName, roster: usRoster || { formation: [], players: [] } };
   const teamB: TeamArg = { name: oppName, roster: oppRoster || { formation: [], players: [] } };
-  const pe = parseEvents(events, { teamA, teamB, scoringMode: settings.scoringMode });
+  const pe = parseEvents(events, { teamA, teamB, scoringMode: settings.scoringMode ?? "goals" });
 
   const mapSide = (s: "A" | "B" | null) => (s === "A" ? "us" : "them"); // us = the myTeam side
   const scoring = pe.scoring.map((s: any) => ({ ...s, side: mapSide(s.side), usScore: s.aScore, themScore: s.bScore }));
@@ -41,7 +41,7 @@ export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
     result,
     leadChanges: pe.leadChanges, timesLevel: pe.timesLevel, maxLead: pe.maxLead,
     maxLeadSide: pe.maxLeadSide == null ? null : mapSide(pe.maxLeadSide),
-    warnings: pe.warnings, mode: pe.mode, detectedMode: pe.detectedMode,
+    warnings: pe.warnings, mode: pe.mode,
     htLine: pe.htLine, opp: opponent || null,
   } as ParsedMatch;
 }
