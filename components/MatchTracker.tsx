@@ -40,7 +40,7 @@ import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
-import { venueSeries } from "@/lib/home-away";
+import { venueSeries, venueItems } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -644,6 +644,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const themScorers = scorers.filter((s) => s.side === "them").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
   const usIsHome = homeAway === "home";
   const homeSeries = venueSeries(series, usIsHome);
+  const timelineHA = venueItems(timeline, usIsHome);
   const homeColor = usIsHome ? colorUs : colorThem;
   const awayColor = usIsHome ? colorThem : colorUs;
   const starters = roster.filter((p) => p.role === "starting");
@@ -1182,7 +1183,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
             {/* running timeline beneath the controls */}
             <p className="mt-h" style={{ marginTop: 16 }}>Timeline</p>
-            <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />
+            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} nameHome={usIsHome ? usName : themName} nameAway={usIsHome ? themName : usName} />
           </div>
         )}
 
@@ -1210,7 +1211,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             <Scorers home={usIsHome ? usScorers : themScorers} away={usIsHome ? themScorers : usScorers} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} mode={effMode} />
 
             <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
-            <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />
+            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} nameHome={usIsHome ? usName : themName} nameAway={usIsHome ? themName : usName} />
           </>
         )}
 

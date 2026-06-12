@@ -286,7 +286,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
       {(m.timeline && m.timeline.length > 0) && (
         <section className="pm-sec">
           <p className="pm-label">Timeline</p>
-          <Timeline timeline={m.timeline} halfMarks={m.halfMarks} colorUs={m.colorUs} colorUs2={m.colorUs2} colorThem={m.colorThem} colorThem2={m.colorThem2} usName={m.usName} themName={m.themName} />
+          <Timeline timeline={m.timelineHA} halfMarks={m.halfMarks} colorHome={m.homeColors[0]} colorHome2={m.homeColors[1]} colorAway={m.awayColors[0]} colorAway2={m.awayColors[1]} nameHome={m.homeName} nameAway={m.awayName} />
         </section>
       )}
 
