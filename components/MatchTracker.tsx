@@ -131,7 +131,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [blkIns, setBlkIns] = useState(null);         // insert flow state (Task 7)
   const [lineupEdit, setLineupEdit] = useState(null); // preamble text while editing (Task 8)
   const [remoteConflict, setRemoteConflict] = useState(false);
-  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); }, [curId]);
+  useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setReTeam(null); }, [curId]);
   // undo stack of recent notation (raw) states — covers adds/edits/deletes/inserts
   const rawHist = useRef([]);
   const prevRawRef = useRef(raw);
