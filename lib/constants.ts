@@ -44,3 +44,8 @@ export const SPORTS: Record<string, { label: string; emoji: string; mode: string
   gaelic: { label: "Gaelic Football", emoji: "⚪", mode: "gaa" },
   soccer: { label: "Soccer", emoji: "⚽", mode: "goals" },
 };
+
+// Scoring mode is fully determined by sport. Unknown/blank → "goals" (soccer-family default).
+export function scoringModeForSport(sport?: string): "gaa" | "goals" {
+  return (SPORTS[sport ?? ""]?.mode as "gaa" | "goals") ?? "goals";
+}
