@@ -43,15 +43,19 @@ export async function linkUnlinkedMatches(userId: string | null) {
     const d = cache[id];
     return d && !d.homeTeamId && !d.awayTeamId && (d.opponent || "").trim() && (d.myTeam || "").trim();
   });
-  await Promise.allSettled(ids.map(async (id) => {
-    const d = cache[id];
-    const sport = d.sport || "";
-    const usTeam = await teamStore.findOrCreate(userId, { name: d.myTeam!, sport });
-    const oppTeam = await teamStore.findOrCreate(userId, { name: d.opponent!, sport });
-    if (!usTeam || !oppTeam) return;
-    const patch = linkExistingMatchPatch(d, { usTeam, oppTeam, homeAway: d.homeAway || "away" });
-    await store.set(id, { ...d, ...patch });
-  }));
+  for (const id of ids) {
+    try {
+      const d = cache[id];
+      const sport = d.sport || "";
+      const usTeam = await teamStore.findOrCreate(userId, { name: d.myTeam!, sport });
+      const oppTeam = await teamStore.findOrCreate(userId, { name: d.opponent!, sport });
+      if (!usTeam || !oppTeam) continue;
+      const patch = linkExistingMatchPatch(d, { usTeam, oppTeam, homeAway: d.homeAway || "away" });
+      await store.set(id, { ...d, ...patch });
+    } catch (e) {
+      console.warn("link migration failed for", id, e);
+    }
+  }
 }
 
 // Derive the promoted columns from a record. `data` (jsonb) stays the source of truth.
