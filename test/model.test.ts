@@ -46,6 +46,16 @@ describe("canonical SAMPLE_RECORD", () => {
     expect(m.maxLead).toBe(5);
     expect(m.maxLeadSide).toBe("us");
   });
+  it("exposes neutral home/away view", () => {
+    // neutral home/away view (additive) — SAMPLE is homeAway:"away", so Racoons are away
+    expect(m.homeName).toBe("Wildebeests");
+    expect(m.awayName).toBe("Racoons");
+    expect(m.homeTotals.str).toBe("2-7");
+    expect(m.awayTotals.str).toBe("2-6");
+    expect(m.homeColors).toEqual([m.colorThem, m.colorThem2]);
+    expect(m.awayColors).toEqual([m.colorUs, m.colorUs2]);
+    expect(m.outcome).toEqual({ winner: "home", margin: 1 });
+  });
 });
 
 describe("buildModel themScorers — named opponent scorer", () => {

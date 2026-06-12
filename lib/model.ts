@@ -2,6 +2,7 @@ import { parseMatch } from "@/lib/parser";
 import { fmtDateDow, gpTotal } from "@/lib/util";
 import { htScore } from "@/lib/half-time";
 import { SPORTS, scoringModeForSport } from "@/lib/constants";
+import { matchOutcome } from "@/lib/home-away";
 import type { MatchRecord, Model } from "@/lib/types";
 
 export function buildModel(record: MatchRecord): Model {
@@ -45,6 +46,17 @@ export function buildModel(record: MatchRecord): Model {
 
   const ht = htScore(series, effMode);
 
+  const usIsHome = header.homeAway === "home";
+  const cUs = r.colorUs || "#f5c518", cUs2 = r.colorUs2 || "#1f7a4d";
+  const cThem = r.colorThem || "#c0392b", cThem2 = r.colorThem2 || "#2c5fa8";
+  const sqUs = r.usSquad || "", sqOpp = r.oppSquad || "";
+  const homeTotals = usIsHome ? totals.us : totals.them;
+  const awayTotals = usIsHome ? totals.them : totals.us;
+  const outcome = matchOutcome(
+    gpTotal(homeTotals.g, homeTotals.p, effMode),
+    gpTotal(awayTotals.g, awayTotals.p, effMode),
+  );
+
   return {
     grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
     usName, themName, dateStr: r.matchDate ? fmtDateDow(r.matchDate) : "",
@@ -53,11 +65,21 @@ export function buildModel(record: MatchRecord): Model {
     maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
     series, goalDots, chartMarkers, htLine, halfMarks,
     usScorers, themScorers, formationRows, starters, subs, missing, timeline,
-    colorUs: r.colorUs || "#f5c518", colorUs2: r.colorUs2 || "#1f7a4d",
-    colorThem: r.colorThem || "#c0392b", colorThem2: r.colorThem2 || "#2c5fa8",
+    colorUs: cUs, colorUs2: cUs2, colorThem: cThem, colorThem2: cThem2,
     nameDisplay: r.nameDisplay || "full",
     oppRoster: r.oppRoster || null,
-    usSquad: r.usSquad || "", oppSquad: r.oppSquad || "",
+    usSquad: sqUs, oppSquad: sqOpp,
+    // neutral home/away view (additive — sub-project ①)
+    homeName: usIsHome ? usName : themName,
+    awayName: usIsHome ? themName : usName,
+    homeColors: usIsHome ? [cUs, cUs2] : [cThem, cThem2],
+    awayColors: usIsHome ? [cThem, cThem2] : [cUs, cUs2],
+    homeTotals, awayTotals,
+    homeScorers: usIsHome ? usScorers : themScorers,
+    awayScorers: usIsHome ? themScorers : usScorers,
+    homeSquad: usIsHome ? sqUs : sqOpp,
+    awaySquad: usIsHome ? sqOpp : sqUs,
+    outcome,
     parsed,
   };
 }
