@@ -1004,7 +1004,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         {view === "new" && (
           <div className="mt-game nw">
             <div className="mt-row" style={{ marginBottom: 8 }}>
-              <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nw.stage === "home" ? "Home team" : nw.stage === "away" ? "Away team" : "New match"}</span>
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nw.stage === "home" ? "Your team" : nw.stage === "away" ? "Opponent" : "New match"}</span>
               <button className="mt-add alt" onClick={() => router.push("/")}>✕ Cancel</button>
             </div>
 
@@ -1049,7 +1049,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {/* stage 2 — home team */}
             {nw.stage === "home" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick your team, or create one.</p>
                 <TeamPicker teams={nwTeams} sport={nw.sport} side="us" onPick={nwPickHome} onCreate={nwCreateHome} />
                 <div className="nw-nav">
                   <button className="nw-link" onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
@@ -1060,7 +1060,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {/* stage 3 — away team (Create finishes) */}
             {nw.stage === "away" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the away team{nw.away ? <> — <b>{nw.away.name}</b></> : ", or create one"}.</p>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the opponent{nw.away ? <> — <b>{nw.away.name}</b></> : ", or create one"}.</p>
                 <TeamPicker teams={nwTeams} sport={nw.sport} side="them" exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
                 <div className="nw-nav">
                   <button className="nw-link" onClick={() => setNw({ ...nw, stage: "home", away: null })}>← Back</button>
