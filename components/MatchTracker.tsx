@@ -903,7 +903,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
-        <label>My team <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
+        <label>{header.homeAway === "home" ? "Home team" : "Away team"} <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
         <label>
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => {
@@ -920,7 +920,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           const p = swapHomeAway(recordPayload());
           setHomeAway(p.homeAway); setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId);
         }}>⇄ Swap</button>
-        <label>Opponent <input type="text" value={header.opposition || ""} placeholder="Opponent"
+        <label>{header.homeAway === "home" ? "Away team" : "Home team"} <input type="text" value={header.opposition || ""} placeholder={header.homeAway === "home" ? "Away team" : "Home team"}
           onChange={(e) => setHeaderField("opposition", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorThem }} onClick={() => setColorPick(colorPick === "them" ? null : "them")} /><button className="mt-swatch" title="Secondary" style={{ background: colorThem2 }} onClick={() => setColorPick(colorPick === "them2" ? null : "them2")} /></label>
         <label>Sport
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
