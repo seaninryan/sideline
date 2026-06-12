@@ -5,6 +5,7 @@ import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import SportIcon from "@/components/SportIcon";
 import { createClient } from "@/lib/supabase/client";
+import { fetchIsAdmin } from "@/lib/viewer.client";
 import { contrastOn } from "@/lib/util";
 import { SPORTS } from "@/lib/constants";
 import type { TeamRecord } from "@/lib/types";
@@ -17,7 +18,13 @@ export default function TeamPage({ team, isOwner, fixtures = [] }: { team: TeamR
   const sb = createClient();
   const now = Date.now();
   const [email, setEmail] = useState<string | null>(null);
-  useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    sb.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+      fetchIsAdmin(sb, data.user?.id ?? null).then(setIsAdmin);
+    });
+  }, []);
   const byNum = (n: number) => team.roster.players.find((p) => p.num === n);
   const subs = team.roster.players.filter((p) => p.role === "sub");
   const c1 = team.color1 || "#888", c2 = team.color2 || "#555";
@@ -29,10 +36,8 @@ export default function TeamPage({ team, isOwner, fixtures = [] }: { team: TeamR
         onSignIn={async () => { await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${location.origin}/auth/callback` } }); }}
         onSignOut={async () => { await sb.auth.signOut(); router.refresh(); }}
         primary={isOwner ? <button className="mt-btn" onClick={() => router.push("/teams")}>Edit</button> : null}
-        menuItems={email ? [
-          { label: "＋ New", onClick: () => router.push("/m/new") },
-          { label: "👥 Teams", onClick: () => router.push("/teams") },
-        ] : []}
+        screen="team"
+        isAdmin={isAdmin}
       />
 
       <div className="tp-id">

@@ -49,10 +49,18 @@ export default async function MatchPage({ params }: { params: { id: string } }) 
   }
 
   const row = await fetchRow(params.id);
+
+  let isAdmin = false;
+  if (viewerId && row && row.owner !== viewerId && !row.is_public) {
+    const { data: me } = await supabase.from("profiles").select("is_admin").eq("id", viewerId).maybeSingle();
+    isAdmin = !!me?.is_admin;
+  }
+
   const kind = resolveMatchView({
     found: !!row,
     isOwner: !!row && !!viewerId && row.owner === viewerId,
     isPublic: !!row && !!row.is_public,
+    isAdmin,
   });
 
   if (kind === "notfound") notFound();

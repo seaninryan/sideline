@@ -1,6 +1,6 @@
 import { parseMatch } from "@/lib/parser";
 import { gpTotal, fmtDateShort, MONTHS } from "@/lib/util";
-import { SPORTS, LIVE_WINDOW_MS } from "@/lib/constants";
+import { SPORTS, LIVE_WINDOW_MS, scoringModeForSport } from "@/lib/constants";
 import type { MatchRecord } from "@/lib/types";
 
 export interface RowView {
@@ -40,8 +40,7 @@ function resolveSportEmoji(sportKey: string | undefined, headerSport: string, mo
 // winner is decided on the running totals (us-perspective `result` isn't used so
 // the same function serves other people's matches in the public feed).
 export function matchRowView(rec: MatchRecord): RowView {
-  const sp = (SPORTS as Record<string, { mode: string }>)[rec.sport || ""];
-  const scoringMode = sp ? (sp.mode as "gaa" | "goals") : (rec.autoMode ? undefined : rec.scoringMode);
+  const scoringMode = scoringModeForSport(rec.sport);
   const parsed = parseMatch(rec.raw, {
     myTeam: rec.myTeam, scoringMode,
     usRoster: rec.usRoster, oppRoster: rec.oppRoster,
@@ -117,8 +116,7 @@ function recentWithin(iso: string | undefined, now: number): boolean {
 // Parse a record once to learn whether the match has started (≥1 event) and
 // whether it has reached full time (an FT half-marker).
 function matchProgress(rec: MatchRecord): { started: boolean; finished: boolean } {
-  const sp = (SPORTS as Record<string, { mode: string }>)[rec.sport || ""];
-  const scoringMode = sp ? (sp.mode as "gaa" | "goals") : (rec.autoMode ? undefined : rec.scoringMode);
+  const scoringMode = scoringModeForSport(rec.sport);
   const parsed = parseMatch(rec.raw, {
     myTeam: rec.myTeam, scoringMode,
     usRoster: rec.usRoster, oppRoster: rec.oppRoster,

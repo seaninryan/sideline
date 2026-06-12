@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { loadAll } from "@/lib/store";
+import { loadAll, linkUnlinkedMatches } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
 import MatchTracker from "@/components/MatchTracker";
 import BrandHeader from "@/components/BrandHeader";
 
@@ -10,7 +11,15 @@ import BrandHeader from "@/components/BrandHeader";
 export default function EditorApp({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
   const [phase, setPhase] = useState<"load" | "ready" | "error">("load");
   useEffect(() => {
-    loadAll().then(() => setPhase("ready")).catch(() => setPhase("error"));
+    loadAll()
+      .then(async () => {
+        try {
+          const { data } = await createClient().auth.getUser();
+          await linkUnlinkedMatches(data.user?.id ?? null);
+        } catch {}
+        setPhase("ready");
+      })
+      .catch(() => setPhase("error"));
   }, []);
   if (phase === "ready") return <MatchTracker initialId={initialId} wizard={wizard} />;
   const error = phase === "error";

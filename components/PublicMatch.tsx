@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { buildModel } from "@/lib/model";
 import { applyNameDisplay } from "@/lib/name-display";
 import { scoreChanged } from "@/lib/live-update";
+import { fetchIsAdmin } from "@/lib/viewer.client";
 import ShareImageModal from "@/components/ShareImageModal";
 import type { Model } from "@/lib/types";
 
@@ -59,7 +60,13 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   const [share, setShare] = useState(false);
   const [imgOpen, setImgOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
-  React.useEffect(() => { sb.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null)); }, []);
+  const [isAdmin, setIsAdmin] = useState(false);
+  React.useEffect(() => {
+    sb.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+      fetchIsAdmin(sb, data.user?.id ?? null).then(setIsAdmin);
+    });
+  }, []);
   // Live updates: rebuild the whole model from each Realtime UPDATE payload.
   useEffect(() => {
     let reconnectT: ReturnType<typeof setTimeout> | undefined;
@@ -124,7 +131,8 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
             </svg>
           </button>
         }
-        menuItems={email ? [{ label: "＋ New", onClick: () => router.push("/m/new") }] : []}
+        screen="public"
+        isAdmin={isAdmin}
       />
       {conn === "reconnecting" && <div className="pm-conn">Reconnecting…</div>}
       {conn === "reconnected" && <div className="pm-conn ok">Reconnected</div>}

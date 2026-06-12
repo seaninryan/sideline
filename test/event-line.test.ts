@@ -53,11 +53,11 @@ describe("whoToken end-to-end against the parser", () => {
   const B = { name: "Wildebeests", roster: oppRoster };
   it("a bare shared name is dropped, the qualified token scores for us", () => {
     // the un-qualified form really is ambiguous — this is the bug we fix
-    const amb = parseEvents("12:00\n5 Rick", { teamA: A, teamB: B });
+    const amb = parseEvents("12:00\n5 Rick", { teamA: A, teamB: B, scoringMode: "gaa" });
     expect(amb.totals.A.total).toBe(0);
     expect(amb.warnings.length).toBeGreaterThan(0);
     // the qualified token the editor now generates counts cleanly for us
-    const good = parseEvents(`12:00\n5 ${whoToken({ num: 11, name: "Rick" }, "us", ctx)}`, { teamA: A, teamB: B });
+    const good = parseEvents(`12:00\n5 ${whoToken({ num: 11, name: "Rick" }, "us", ctx)}`, { teamA: A, teamB: B, scoringMode: "gaa" });
     expect(good.totals.A.total).toBe(1);
     expect(good.warnings.length).toBe(0);
   });
