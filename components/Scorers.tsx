@@ -5,15 +5,15 @@ import { gpTotal } from "@/lib/util";
 // Combined scorers leaderboard for both teams, ordered by total. The kit jersey
 // (left) shows which team. Mode-aware columns: GAA shows Goals / Points / Frees
 // / Total; soccer shows just Goals. Shared by the editor + public page.
-export default function Scorers({ us = [], them = [], colorUs, colorUs2, colorThem, colorThem2, mode = "gaa" }: {
-  us?: any[]; them?: any[];
-  colorUs: string; colorUs2: string; colorThem: string; colorThem2: string;
+export default function Scorers({ home = [], away = [], colorHome, colorHome2, colorAway, colorAway2, mode = "gaa" }: {
+  home?: any[]; away?: any[];
+  colorHome: string; colorHome2: string; colorAway: string; colorAway2: string;
   mode?: string;
 }) {
   const gaa = mode !== "goals";
   const rows = [
-    ...us.map((s) => ({ ...s, c1: colorUs, c2: colorUs2 })),
-    ...them.map((s) => ({ ...s, c1: colorThem, c2: colorThem2 })),
+    ...home.map((s) => ({ ...s, c1: colorHome, c2: colorHome2 })),
+    ...away.map((s) => ({ ...s, c1: colorAway, c2: colorAway2 })),
   ].sort((a, b) => gpTotal(b.g, b.p, mode) - gpTotal(a.g, a.p, mode));
 
   if (!rows.length) return <p className="sc-empty">No scorers recorded.</p>;

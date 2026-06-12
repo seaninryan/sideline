@@ -1207,7 +1207,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             </div>
 
             <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>
-            <Scorers us={usScorers} them={themScorers} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} mode={effMode} />
+            <Scorers home={usIsHome ? usScorers : themScorers} away={usIsHome ? themScorers : usScorers} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} mode={effMode} />
 
             <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
             <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />

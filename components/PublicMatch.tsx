@@ -203,7 +203,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
       {/* scorers — both teams, combined leaderboard */}
       <section className="pm-sec">
         <p className="pm-label">Scorers</p>
-        <Scorers us={m.usScorers} them={m.themScorers} colorUs={m.colorUs} colorUs2={m.colorUs2} colorThem={m.colorThem} colorThem2={m.colorThem2} mode={m.effMode} />
+        <Scorers home={m.homeScorers} away={m.awayScorers} colorHome={m.homeColors[0]} colorHome2={m.homeColors[1]} colorAway={m.awayColors[0]} colorAway2={m.awayColors[1]} mode={m.effMode} />
       </section>
 
       {/* lineup — pitch when we have formation rows, else a flat starters list */}
