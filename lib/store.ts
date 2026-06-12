@@ -69,7 +69,7 @@ function matchCols(data: MatchRecord) {
     match_date: data.matchDate || data.date || null,
     my_team: data.myTeam || null,
     opponent: opp,
-    sport: data.sport || null,
+    sport: data.sport || "soccer",
     name_display: data.nameDisplay || "full",
     home_team_id: data.homeTeamId || null,
     away_team_id: data.awayTeamId || null,

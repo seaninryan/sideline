@@ -16,9 +16,7 @@ export interface MatchRecord {
   matchDate?: string;
   date?: string;
   myTeam?: string;
-  scoringMode?: "gaa" | "goals";
-  autoMode?: boolean;
-  sport?: string;
+  sport: string;
   colorUs?: string;
   colorUs2?: string;
   colorThem?: string;
