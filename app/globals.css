@@ -547,3 +547,13 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 }
 .pm-score-wrap { border-radius: 12px; }
 .pm-score-wrap.pm-pulse { animation: pmScoreFlash 1s ease-out; }
+
+/* Admin screens */
+.adm-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.adm-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.04); text-decoration: none; color: inherit; }
+.adm-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; }
+.adm-av-ph { display: grid; place-items: center; background: #1f7a4d; color: #fff; font-weight: 700; }
+.adm-id { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.adm-email { color: #b8b0a0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.adm-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: #b8b0a0; text-align: right; }
