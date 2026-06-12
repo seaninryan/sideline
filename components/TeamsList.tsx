@@ -29,7 +29,7 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
   const [feedLoading, setFeedLoading] = useState(false);
   const feedOffset = useRef(0);
 
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null);
 
   const loadCounts = async () => {
@@ -55,7 +55,7 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
   const flag = (t: TeamRecord) => `linear-gradient(135deg, ${t.color1 || "#888"} 50%, ${t.color2 || "#555"} 50%)`;
   const matchLabel = (n: number) => `${n} ${n === 1 ? "match" : "matches"}`;
   const meta = (t: TeamRecord, showMatches = false) => (
-    <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players{showMatches ? <> · {matchLabel(counts[t.id] || 0)}</> : null}</span>
+    <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players{showMatches && counts ? <> · {matchLabel(counts[t.id] || 0)}</> : null}</span>
   );
 
   const yoursFiltered = (teams || []).filter((t) =>
@@ -107,7 +107,7 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
                   <span className="tl-name">{t.name}{t.squad ? <span className="tl-squad">{t.squad}</span> : null}</span>
                   <span className={"tl-priv " + (t.is_public ? "public" : "private")}>{t.is_public ? "◉ public" : "🔒 private"}</span>
                   <button className="tl-dup" title="Duplicate" onClick={(e) => { e.stopPropagation(); dup(t); }}>⧉</button>
-                  {(counts[t.id] || 0) === 0 && (
+                  {counts && (counts[t.id] || 0) === 0 && (
                     <button
                       className={"tl-del" + (confirmDelId === t.id ? " danger" : "")}
                       title="Delete team"
