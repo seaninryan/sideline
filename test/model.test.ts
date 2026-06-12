@@ -53,7 +53,7 @@ describe("buildModel themScorers — named opponent scorer", () => {
   const record: MatchRecord = {
     raw: "18:00\n5 Morty goal\n10 Wildebeests 9 goal\n20 Wildebeests 9\n40 FT",
     myTeam: "Racoons", opponent: "Wildebeests",
-    sport: "hurling", scoringMode: "gaa", autoMode: true,
+    sport: "hurling",
     oppRoster,
     usRoster: { formation: [[10]], players: [{ num: 10, name: "Morty", role: "starting" }] },
   };
