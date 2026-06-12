@@ -68,6 +68,8 @@ html,body{margin:0;padding:0;background:#0c3b2a;}
   border:none; background:none; cursor:pointer; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap;}
 .mt-tab.on{color:var(--pitch); border-bottom-color:#f5c518; font-weight:600;}
 .mt-body{padding:18px 16px 22px;}
+.mt-danger { margin-top: 32px; padding-top: 16px; border-top: 1px solid #3a2222; }
+.mt-danger .mt-add.danger { background: #c0392b; color: #fff; }
 .mt-h{font-family:var(--font-oswald); text-transform:uppercase; letter-spacing:1.5px; font-size:12px; color:var(--muted); margin:0 0 10px;}
 /* shared 2×2 stat grid (v58) */
 .sg{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;}

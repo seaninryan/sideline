@@ -794,15 +794,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             { label: "👥 Teams", onClick: () => router.push("/teams") },
             { label: "🤝 Link teams", onClick: () => { setShare(false); setLink((o) => !o); } },
             { label: "🔄 Resync", onClick: doResync },
-            {
-              label: confirmDel ? "Tap again to delete" : "🗑 Delete",
-              danger: confirmDel,
-              keepOpen: !confirmDel,
-              onClick: () => {
-                if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
-                setConfirmDel(false); doDelete();
-              },
-            },
           ]}
         />
       )}
@@ -1394,6 +1385,18 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               </div>
             )}
           </>
+        )}
+        {!gm && !nw && curId && (
+          <section className="mt-danger">
+            <h3 className="mt-h">Danger</h3>
+            <button
+              className={"mt-add" + (confirmDel ? " danger" : "")}
+              onClick={() => {
+                if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 3500); return; }
+                setConfirmDel(false); doDelete();
+              }}
+            >{confirmDel ? "Tap again to delete this match" : "🗑 Delete match"}</button>
+          </section>
         )}
       </div>
       <BrandFooter />
