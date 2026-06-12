@@ -86,7 +86,9 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const dayStartOf = (ms: number) => { const x = new Date(ms); return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
 
-// True when the match is scheduled on a future calendar day (a fixture).
+// True when the match is scheduled on a future calendar day (a fixture). Exposed
+// as a tested utility; list bucketing goes through matchBucket (which also folds
+// in started/finished state), so this isn't called directly by the UI any more.
 export function isUpcoming(iso: string | undefined, now: number): boolean {
   if (!iso) return false;
   const t = Date.parse(iso);

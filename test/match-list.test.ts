@@ -135,4 +135,6 @@ describe("matchBucket", () => {
     expect(matchBucket({ ...finished, matchDate: recentIso }, NOW)).toBe("past"));
   it("started, unfinished, stale → past", () =>
     expect(matchBucket({ ...started, matchDate: staleIso }, NOW, staleIso)).toBe("past"));
+  it("started, unfinished, future same-day kickoff → past (not live)", () =>
+    expect(matchBucket({ ...started, matchDate: laterTodayIso }, NOW)).toBe("past"));
 });
