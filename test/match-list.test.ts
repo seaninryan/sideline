@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchRowView, relativeDate, isUpcoming, isLive } from "@/lib/match-list";
+import { matchRowView, relativeDate, isUpcoming, isLive, matchBucket } from "@/lib/match-list";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import type { MatchRecord } from "@/lib/types";
 
@@ -106,4 +106,35 @@ describe("isLive", () => {
   it("is live when kickoff is stale but it was edited recently", () => {
     expect(isLive({ ...started, matchDate: staleIso }, NOW, recentIso)).toBe(true);
   });
+});
+
+describe("matchBucket", () => {
+  const NOW = Date.parse("2026-06-11T20:00:00");
+  const started = { raw: "20:00\n3 Rick goal", myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  const finished = { raw: "20:00\n3 Rick goal\nFT", myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  const empty = { raw: "", myTeam: "Racoons", opponent: "Wildebeests" } as any;
+  const recentIso = "2026-06-11T19:30"; // 30m before NOW
+  const staleIso = "2026-06-11T15:00"; // 5h before NOW (same day)
+  const laterTodayIso = "2026-06-11T22:00"; // 2h after NOW, same day
+  const tomorrowIso = "2026-06-12T19:00";
+  const pastDayIso = "2026-06-09T19:00";
+
+  it("not-started, scheduled later today → upcoming", () =>
+    expect(matchBucket({ ...empty, matchDate: laterTodayIso }, NOW)).toBe("upcoming"));
+  it("not-started, just now (same day) → upcoming", () =>
+    expect(matchBucket({ ...empty, matchDate: recentIso }, NOW)).toBe("upcoming"));
+  it("not-started, future day → upcoming", () =>
+    expect(matchBucket({ ...empty, matchDate: tomorrowIso }, NOW)).toBe("upcoming"));
+  it("not-started, no date → upcoming", () =>
+    expect(matchBucket({ ...empty, matchDate: "" }, NOW)).toBe("upcoming"));
+  it("not-started, a past calendar day → past", () =>
+    expect(matchBucket({ ...empty, matchDate: pastDayIso }, NOW)).toBe("past"));
+  it("started, unfinished, recent → live", () =>
+    expect(matchBucket({ ...started, matchDate: recentIso }, NOW)).toBe("live"));
+  it("started, finished → past", () =>
+    expect(matchBucket({ ...finished, matchDate: recentIso }, NOW)).toBe("past"));
+  it("started, unfinished, stale → past", () =>
+    expect(matchBucket({ ...started, matchDate: staleIso }, NOW, staleIso)).toBe("past"));
+  it("started, unfinished, future same-day kickoff → past (not live)", () =>
+    expect(matchBucket({ ...started, matchDate: laterTodayIso }, NOW)).toBe("past"));
 });

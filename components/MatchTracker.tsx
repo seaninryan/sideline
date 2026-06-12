@@ -882,6 +882,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             homeTotal={usIsHome ? usTotal : themTotal}
             awayTotal={usIsHome ? themTotal : usTotal}
             phase={phase}
+            live={phase === "play" || phase === "ht"}
             homeSquad={usIsHome ? usSquad : oppSquad}
             awaySquad={usIsHome ? oppSquad : usSquad}
             action={<button className="sh-edit" onClick={() => { setShowDetails((o) => !o); if (showDetails) setColorPick(null); }}>{showDetails ? "▾ Hide" : "✎ Edit"}</button>}
