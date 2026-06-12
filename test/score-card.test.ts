@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildScoreCardSVG } from "@/lib/infographic";
+import { buildScoreCardSVG, buildInfographicSVG } from "@/lib/infographic";
 import { buildModel } from "@/lib/model";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import { BRAND_SITE, BRAND_WORDMARK } from "@/lib/constants";
@@ -37,5 +37,14 @@ describe("buildScoreCardSVG", () => {
     expect(svg).toContain(BRAND_WORDMARK);
     expect(svg).toContain(BRAND_SITE);
     expect(svg).toContain('<tspan fill="#f4efe1">HW</tspan>'); // the pill
+  });
+});
+
+describe("buildInfographicSVG", () => {
+  it("renders from a full model without throwing", () => {
+    const { svg } = buildInfographicSVG(buildModel(SAMPLE_RECORD));
+    expect(typeof svg).toBe("string");
+    expect(svg.length).toBeGreaterThan(100);
+    expect(svg).toContain("Wildebeests"); // home (SAMPLE is homeAway:"away")
   });
 });

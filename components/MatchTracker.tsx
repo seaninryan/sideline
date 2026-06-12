@@ -28,6 +28,7 @@ import { pairingError } from "@/lib/match-sport";
 import { whoToken, onPitchNums } from "@/lib/event-line";
 import TeamPicker from "@/components/TeamPicker";
 import { lineupBadges } from "@/lib/lineup-badges";
+import { buildModel } from "@/lib/model";
 import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
@@ -788,17 +789,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
   const doExport = () => {
     if (shareModel) { setShareModel(null); return; }
-    const ht = htScore(parsed.series, effMode);
-    const model = {
-      grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
-      usName, themName, dateStr: matchDate ? fmtDate(matchDate) : "",
-      totals, result, effMode, ht,
-      leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
-      series: parsed.series, goalDots: parsed.goalDots, chartMarkers, htLine: parsed.htLine, halfMarks,
-      usSquad, oppSquad,
-      usScorers, themScorers, formationRows, starters, subs, missing, timeline, oppRoster,
-      colorUs, colorUs2, colorThem, colorThem2,
-    };
+    const model = buildModel(recordPayload());
     const safe = (s) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
     setShareModel({ model, filename: `${safe(header.label || usName)}-${safe(themName)}.png`, title: `${usName} ${totals.us.str} – ${totals.them.str} ${themName}` });
   };
