@@ -186,6 +186,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [nw, setNw] = useState(null);
   const [showDetails, setShowDetails] = useState(false); // the date/teams/sport panel is collapsed behind "Edit details"
   const [nwTeams, setNwTeams] = useState([]); // TeamRecord[] loaded when the wizard opens
+  const [reTeam, setReTeam] = useState(null); // null | { sport, prevSport, home: TeamRecord|null, away: TeamRecord|null }
   // /m/new mounts the wizard before getUser resolves; once userUid arrives, load teams if the wizard is open
   useEffect(() => {
     if (userUid && nw && nwTeams.length === 0) teamStore.list(userUid).then(setNwTeams).catch(() => {});
@@ -319,7 +320,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       if (verdict === "deleted") { router.push("/"); return; }
       if (verdict === "ignore") return;
       if (verdict === "conflict") { setRemoteConflict(true); return; }
-      if (incoming) { cache[curId] = incoming; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); applyRecord(incoming); }
+      if (incoming) { cache[curId] = incoming; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setReTeam(null); applyRecord(incoming); }
     };
     const ch = sb
       .channel(`editor:${curId}`)
@@ -332,7 +333,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   }, [curId]);
   const doResyncLatest = async () => {
     const { data } = await sb.from("matches").select("data").eq("id", curId).maybeSingle();
-    if (data?.data) { cache[curId] = data.data; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); applyRecord(data.data); }
+    if (data?.data) { cache[curId] = data.data; setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setReTeam(null); applyRecord(data.data); }
     setRemoteConflict(false);
   };
   const doNew = async () => {
@@ -346,7 +347,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       // route transition is in-place (same /m/[id] route → no remount), so reflect the new match locally
       setRaw(newRaw); setMatchDate(date); setMyTeam(team);
       setLabel(""); setHomeAway("away"); setOpponent(""); setUsRoster(null); setLegacyRaw(undefined);
-      setSport("soccer"); setCurId(id); setNw(null); setTab("game");
+      setSport("soccer"); setCurId(id); setNw(null); setReTeam(null); setTab("game");
       router.replace(`/m/${id}`);
     } else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
@@ -541,7 +542,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const enterShare = () => {
     setMenuOpen(false);
     if (!curId) { setSavedMsg("Save the match first, then share"); setTimeout(() => setSavedMsg(""), 2500); return; }
-    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null);
+    setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null); setReTeam(null);
     setShare(true);
   };
   // Wizard now picks a Home team then an Away team (sport is chosen on stage 1).
@@ -557,6 +558,29 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     if (!userUid || !nw.sport) return;
     const t = await teamStore.findOrCreate(userUid, { name, sport: nw.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setNw({ ...nw, away: t }); }
+  };
+  const reTeamPickHome = (t) => setReTeam({ ...reTeam, home: t });
+  const reTeamCreateHome = async (name, squad) => {
+    if (!userUid) return;
+    const t = await teamStore.findOrCreate(userUid, { name, sport: reTeam.sport, squad, color1: "#f5c518", color2: "#1f7a4d" });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setReTeam({ ...reTeam, home: t }); }
+  };
+  const reTeamPickAway = (t) => setReTeam({ ...reTeam, away: t });
+  const reTeamCreateAway = async (name, squad) => {
+    if (!userUid) return;
+    const t = await teamStore.findOrCreate(userUid, { name, sport: reTeam.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
+    if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setReTeam({ ...reTeam, away: t }); }
+  };
+  const reTeamApply = () => {
+    if (!reTeam.home || !reTeam.away || pairingError(reTeam.home.sport, reTeam.away.sport)) return;
+    const patch = teamLinkPatch(recordPayload(), { usTeam: reTeam.home, oppTeam: reTeam.away, homeAway: homeAway || "home" });
+    setSport(reTeam.sport);
+    setMyTeam(patch.myTeam); setOpponent(patch.opponent);
+    setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
+    setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster);
+    setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
+    setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
+    setReTeam(null);
   };
   const finishNew = async () => {
     if (creatingRef.current || !nw.home || !nw.away) return;
@@ -577,7 +601,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
       setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
       setSport(sportKey);
-      setMatchDate(nw.date); setNw(null); setTab("game");
+      setMatchDate(nw.date); setNw(null); setReTeam(null); setTab("game");
       const id = mkId();
       const ok = await store.set(id, rec);
       if (ok) { setCurId(id); router.replace(`/m/${id}`); }
@@ -901,11 +925,39 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         <label>Sport
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={sport}
-            onChange={(e) => setSport(e.target.value)}>
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === sport) return;
+              setReTeam({ sport: v, prevSport: sport, home: null, away: null });
+              if (userUid) teamStore.list(userUid).then(setNwTeams).catch(() => {});
+            }}>
             {!sport && <option value="" disabled>— choose sport —</option>}
             {Object.entries(SPORTS).map(([k, s]) => <option key={k} value={k}>{s.emoji} {s.label}</option>)}
           </select>
         </label>
+        {reTeam && (
+          <div className="mt-live" style={{ marginTop: 10 }}>
+            <div className="mt-row">
+              <span className="mt-h" style={{ margin: 0, flex: 1 }}>Re-pick teams for {SPORTS[reTeam.sport]?.label || "new sport"}</span>
+              <button className="mt-add alt" onClick={() => setReTeam(null)}>✕ Cancel</button>
+            </div>
+            {!reTeam.home ? (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick your team, or create one.</p>
+                <TeamPicker teams={nwTeams} sport={reTeam.sport} side="us" onPick={reTeamPickHome} onCreate={reTeamCreateHome} />
+              </>
+            ) : (
+              <>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Your team: <b>{reTeam.home.name}</b>. Now pick the opponent{reTeam.away ? <> — <b>{reTeam.away.name}</b></> : ", or create one"}.</p>
+                <TeamPicker teams={nwTeams} sport={reTeam.sport} side="them" exclude={reTeam.home.id} onPick={reTeamPickAway} onCreate={reTeamCreateAway} />
+                <div className="mt-row" style={{ marginTop: 10 }}>
+                  <button className="mt-add alt" onClick={() => setReTeam({ ...reTeam, home: null, away: null })}>← Back</button>
+                  <button className="mt-add" style={{ flex: 1, marginLeft: 8 }} disabled={!reTeam.away} onClick={reTeamApply}>Apply {SPORTS[reTeam.sport]?.label} teams</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
       )}
 
