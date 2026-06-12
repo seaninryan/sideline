@@ -944,12 +944,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {!reTeam.home ? (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
-                <TeamPicker teams={nwTeams} sport={reTeam.sport} side="us" onPick={reTeamPickHome} onCreate={reTeamCreateHome} />
+                <TeamPicker teams={nwTeams} sport={reTeam.sport} onPick={reTeamPickHome} onCreate={reTeamCreateHome} />
               </>
             ) : (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Home team: <b>{reTeam.home.name}</b>. Now pick the away team{reTeam.away ? <> — <b>{reTeam.away.name}</b></> : ", or create one"}.</p>
-                <TeamPicker teams={nwTeams} sport={reTeam.sport} side="them" exclude={reTeam.home.id} onPick={reTeamPickAway} onCreate={reTeamCreateAway} />
+                <TeamPicker teams={nwTeams} sport={reTeam.sport} exclude={reTeam.home.id} onPick={reTeamPickAway} onCreate={reTeamCreateAway} />
                 <div className="mt-row" style={{ marginTop: 10 }}>
                   <button className="mt-add alt" onClick={() => setReTeam({ ...reTeam, home: null, away: null })}>← Back</button>
                   <button className="mt-add" style={{ flex: 1, marginLeft: 8 }} disabled={!reTeam.away} onClick={reTeamApply}>Apply {SPORTS[reTeam.sport]?.label} teams</button>
@@ -1050,7 +1050,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {nw.stage === "home" && (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} side="us" onPick={nwPickHome} onCreate={nwCreateHome} />
+                <TeamPicker teams={nwTeams} sport={nw.sport} onPick={nwPickHome} onCreate={nwCreateHome} />
                 <div className="nw-nav">
                   <button className="nw-link" onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
                 </div>
@@ -1061,7 +1061,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {nw.stage === "away" && (
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the away team{nw.away ? <> — <b>{nw.away.name}</b></> : ", or create one"}.</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} side="them" exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
+                <TeamPicker teams={nwTeams} sport={nw.sport} exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
                 <div className="nw-nav">
                   <button className="nw-link" onClick={() => setNw({ ...nw, stage: "home", away: null })}>← Back</button>
                   <button className="mt-big gm-team" style={{ flex: 1, marginLeft: 10 }} disabled={!nw.home || !nw.away} onClick={finishNew}>Create match →</button>
