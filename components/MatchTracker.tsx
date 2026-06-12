@@ -40,6 +40,7 @@ import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
+import { venueSeries } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -641,6 +642,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
   const usScorers = scorers.filter((s) => s.side === "us").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
   const themScorers = scorers.filter((s) => s.side === "them").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const usIsHome = homeAway === "home";
+  const homeSeries = venueSeries(series, usIsHome);
+  const homeColor = usIsHome ? colorUs : colorThem;
+  const awayColor = usIsHome ? colorThem : colorUs;
   const starters = roster.filter((p) => p.role === "starting");
   const subs = roster.filter((p) => p.role === "sub");
   const missing = roster.filter((p) => p.role === "missing");
@@ -1198,7 +1203,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
             <p className="mt-h">Score progression</p>
             <div style={{ width: "100%" }}>
-              <ScoreChart series={series} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorUs={colorUs} colorThem={colorThem} nameUs={usName} nameThem={themName} mode={effMode} />
+              <ScoreChart series={homeSeries} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorHome={homeColor} colorAway={awayColor} mode={effMode} />
             </div>
 
             <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>
