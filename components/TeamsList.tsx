@@ -9,6 +9,7 @@ import TeamEditor from "@/components/TeamEditor";
 import { teamStore } from "@/lib/team-store";
 import { createClient } from "@/lib/supabase/client";
 import { SPORTS } from "@/lib/constants";
+import { countMatchesByTeam } from "@/lib/team-stats";
 import type { TeamRecord } from "@/lib/types";
 
 type Filter = "both" | "private" | "public";
@@ -28,7 +29,15 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
   const [feedLoading, setFeedLoading] = useState(false);
   const feedOffset = useRef(0);
 
-  const reload = () => teamStore.list(userId).then(setTeams);
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [confirmDelId, setConfirmDelId] = useState<string | null>(null);
+
+  const loadCounts = async () => {
+    const { data } = await sb.from("matches").select("home_team_id,away_team_id").eq("owner", userId);
+    setCounts(countMatchesByTeam((data as { home_team_id?: string | null; away_team_id?: string | null }[]) || []));
+  };
+
+  const reload = () => Promise.all([teamStore.list(userId).then(setTeams), loadCounts()]);
   const dup = async (t: TeamRecord) => { const d = await teamStore.duplicate(t); await reload(); if (d) setEditing(d); };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [userId]);
 
@@ -44,8 +53,9 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
   useEffect(() => { loadFeed(); /* first page */ /* eslint-disable-next-line */ }, []);
 
   const flag = (t: TeamRecord) => `linear-gradient(135deg, ${t.color1 || "#888"} 50%, ${t.color2 || "#555"} 50%)`;
-  const meta = (t: TeamRecord) => (
-    <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players</span>
+  const matchLabel = (n: number) => `${n} ${n === 1 ? "match" : "matches"}`;
+  const meta = (t: TeamRecord, showMatches = false) => (
+    <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players{showMatches && counts ? <> · {matchLabel(counts[t.id] || 0)}</> : null}</span>
   );
 
   const yoursFiltered = (teams || []).filter((t) =>
@@ -97,7 +107,19 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
                   <span className="tl-name">{t.name}{t.squad ? <span className="tl-squad">{t.squad}</span> : null}</span>
                   <span className={"tl-priv " + (t.is_public ? "public" : "private")}>{t.is_public ? "◉ public" : "🔒 private"}</span>
                   <button className="tl-dup" title="Duplicate" onClick={(e) => { e.stopPropagation(); dup(t); }}>⧉</button>
-                  {meta(t)}
+                  {counts && (counts[t.id] || 0) === 0 && (
+                    <button
+                      className={"tl-del" + (confirmDelId === t.id ? " danger" : "")}
+                      title="Delete team"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirmDelId !== t.id) { setConfirmDelId(t.id); setTimeout(() => setConfirmDelId((c) => (c === t.id ? null : c)), 3500); return; }
+                        setConfirmDelId(null);
+                        teamStore.del(t.id).then(reload);
+                      }}
+                    >{confirmDelId === t.id ? "Delete?" : "🗑"}</button>
+                  )}
+                  {meta(t, true)}
                 </div>
               ))}
               {yoursFiltered.length > yourLimit && (
