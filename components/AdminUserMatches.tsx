@@ -5,9 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import AppHeader from "@/components/AppHeader";
 import MatchRow from "@/components/MatchRow";
 import { relativeDate } from "@/lib/match-list";
-import type { Profile, MatchRow as Row } from "@/lib/types";
+import type { Profile, MatchRow as MatchRowType } from "@/lib/types";
 
-export default function AdminUserMatches({ profile, matches, email }: { profile: Profile; matches: Row[]; email: string | null }) {
+export type AdminMatch = Pick<MatchRowType, "id" | "data" | "is_public" | "short_code">;
+
+export default function AdminUserMatches({ profile, matches, email }: { profile: Profile; matches: AdminMatch[]; email: string | null }) {
   const sb = React.useMemo(() => createClient(), []);
   const router = useRouter();
   const now = Date.now();

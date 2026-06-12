@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, MatchRow } from "@/lib/types";
-import AdminUserMatches from "@/components/AdminUserMatches";
+import type { Profile } from "@/lib/types";
+import AdminUserMatches, { type AdminMatch } from "@/components/AdminUserMatches";
 
 export default async function AdminUserPage({ params }: { params: { id: string } }) {
   const supabase = await createClient();
@@ -16,5 +16,5 @@ export default async function AdminUserPage({ params }: { params: { id: string }
   const { data: rows } = await supabase
     .from("matches").select("id,data,is_public,short_code").eq("owner", params.id).order("updated_at", { ascending: false });
 
-  return <AdminUserMatches profile={profile as Profile} matches={(rows as MatchRow[]) ?? []} email={auth.user.email ?? null} />;
+  return <AdminUserMatches profile={profile as Profile} matches={(rows as AdminMatch[]) ?? []} email={auth.user.email ?? null} />;
 }
