@@ -28,11 +28,6 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   const [conn, setConn] = useState<null | "reconnecting" | "reconnected">(null);
   const wasConnected = useRef(false);
   const m = model;
-  const finished = (m.halfMarks || []).some((mk: any) => mk.marker === "FT");
-  const resTxt = m.outcome.winner === null ? "Level" : `${finished ? "Won" : "Leading"} by ${m.outcome.margin}`;
-  const resFull = resTxt;
-  const resBg = "#e7dec6";
-  const resFg = "#11241b";
   const homeShort = (m.homeName || "Home").split(" ")[0];
   const awayShort = (m.awayName || "Away").split(" ")[0];
 
