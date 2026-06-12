@@ -50,7 +50,7 @@ describe("teamRosterPushes", () => {
   });
 
   it("maps us→awayTeamId when homeAway is away", () => {
-    const rec = { ...base, id: "m1", homeAway: "away" };
+    const rec = { ...base, id: "m1", homeAway: "away" as const };
     const matches = [m("m1", { homeTeamId: "H", awayTeamId: "A", matchDate: "2026-02-01" })];
     expect(teamRosterPushes(rec, matches)).toEqual([
       { teamId: "A", side: "us", roster: roster(7) },
