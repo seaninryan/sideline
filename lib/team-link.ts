@@ -41,6 +41,26 @@ export function teamLinkPatch(
   };
 }
 
+// Conservative patch for migrating an EXISTING unlinked match: set the team ids
+// and seed any MISSING rosters/squads, but never overwrite names, colours, or
+// rosters the user already has. (teamLinkPatch is the new-match variant and DOES
+// overwrite those — don't use it for migration.) Only defined keys are returned,
+// so absent fields stay untouched on store.set merge.
+export function linkExistingMatchPatch(
+  record: MatchRecord,
+  { usTeam, oppTeam, homeAway }: { usTeam: TeamRecord; oppTeam: TeamRecord; homeAway: "home" | "away" },
+): Partial<MatchRecord> {
+  const patch: Partial<MatchRecord> = {
+    homeTeamId: homeAway === "home" ? usTeam.id : oppTeam.id,
+    awayTeamId: homeAway === "home" ? oppTeam.id : usTeam.id,
+  };
+  if (!(record.usRoster && record.usRoster.formation.length)) patch.usRoster = clone(usTeam.roster);
+  if (!(record.oppRoster && record.oppRoster.formation.length)) patch.oppRoster = clone(oppTeam.roster);
+  if (!record.usSquad && usTeam.squad) patch.usSquad = usTeam.squad;
+  if (!record.oppSquad && oppTeam.squad) patch.oppSquad = oppTeam.squad;
+  return patch;
+}
+
 // The team ids a match publish should also flip public (both sides — the
 // opponent team is one of the owner's records too). De-duped, nulls dropped.
 export function teamsToPublish(record: MatchRecord): string[] {
