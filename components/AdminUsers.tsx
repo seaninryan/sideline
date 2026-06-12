@@ -13,7 +13,7 @@ export default function AdminUsers({ stats, email }: { stats: UserStat[]; email:
   const now = Date.now();
   return (
     <div className="mt-root">
-      <AppHeader email={email} screen="admin" isAdmin backHref="/"
+      <AppHeader email={email} screen="admin" isAdmin
         onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }} />
       <div className="ml-page">
         <h2 className="mt-h">Users ({stats.length})</h2>

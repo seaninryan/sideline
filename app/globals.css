@@ -337,8 +337,6 @@ table.sc-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 /* --- App shell (v46) --- */
 /* logo is now a <Link>; keep the wordmark white (not visited-link purple). .mt-go keeps its own colour. */
 .mt-logo, .mt-logo:visited, .mt-logo:hover { color: #fff; text-decoration: none; }
-.ah-back { color: rgba(244,239,225,.82); font-size: 13px; text-decoration: none; margin-left: 8px; align-self: center; }
-.ah-back:hover { color: #fff; text-decoration: underline; }
 .ah-icn { display: inline-flex; align-items: center; justify-content: center; }
 
 /* "⋯" overflow menu (v53) */

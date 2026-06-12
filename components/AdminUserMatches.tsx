@@ -15,7 +15,7 @@ export default function AdminUserMatches({ profile, matches, email }: { profile:
   const now = Date.now();
   return (
     <div className="mt-root">
-      <AppHeader email={email} screen="admin-user" isAdmin backHref="/admin"
+      <AppHeader email={email} screen="admin-user" isAdmin
         onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }} />
       <div className="ml-page">
         <h2 className="mt-h">{profile.full_name || profile.email} · {matches.length} matches</h2>

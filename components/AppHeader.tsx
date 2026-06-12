@@ -15,7 +15,6 @@ export default function AppHeader({
   email = null,
   onSignIn,
   onSignOut,
-  backHref = null,
   primary = null,
   screen,
   isAdmin = false,
@@ -23,7 +22,6 @@ export default function AppHeader({
   email?: string | null;
   onSignIn?: () => void;
   onSignOut?: () => void;
-  backHref?: string | null;
   primary?: React.ReactNode;
   screen: HeaderScreen;
   isAdmin?: boolean;
@@ -61,7 +59,6 @@ export default function AppHeader({
           <span className="mt-chant">{BRAND_CHANT}</span>
         </span>
       </Link>
-      {backHref && <Link className="ah-back" href={backHref}>‹ matches</Link>}
       <div className="grow" />
       {primary}
       {!email && onSignIn && <button className="mt-btn" onClick={onSignIn}>Sign in</button>}

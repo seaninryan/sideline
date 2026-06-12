@@ -54,7 +54,6 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
   const header = (
     <AppHeader
       email={email}
-      backHref="/"
       onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
       primary={<button className="mt-btn solid" onClick={() => router.push("/m/new")}>＋ New</button>}
       screen="teams"

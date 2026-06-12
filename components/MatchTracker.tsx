@@ -795,7 +795,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       {!nw && (
         <AppHeader
           email={userEmail}
-          backHref="/"
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
           primary={
             <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={enterShare}>
@@ -818,7 +817,6 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       {nw && (
         <AppHeader
           email={userEmail}
-          backHref="/"
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
           screen="editor"
         />
@@ -1385,7 +1383,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             )}
           </>
         )}
-        {!gm && !nw && curId && (
+        {view !== "game" && view !== "new" && curId && (
           <section className="mt-danger">
             <h3 className="mt-h">Danger</h3>
             <button
