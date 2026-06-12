@@ -1,21 +1,14 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BRAND_CHANT } from "@/lib/constants";
-
-// One entry in the "⋯" overflow menu. `keepOpen` lets an item (e.g. a
-// confirm-first Delete) leave the menu open after the first tap.
-export type AhMenuItem = {
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  keepOpen?: boolean;
-};
+import { buildHeaderMenu, type HeaderScreen } from "@/lib/header-menu";
 
 // The persistent header used on every screen. Left side is always the brand
 // (logo + wordmark) and an optional back link. The right side is at most ONE
-// visible primary action plus a single "⋯" overflow menu — screen-specific page
-// actions on top, the account block (email + Sign out, later Settings) below a
+// visible primary action plus a single "⋯" overflow menu — nav items built
+// from buildHeaderMenu on top, the account block (email + Sign out) below a
 // divider. Signed-out users get an inline Sign in button instead of the account
 // block. Reuses the editor's `mt-bar`/`mt-btn` styling.
 export default function AppHeader({
@@ -24,17 +17,21 @@ export default function AppHeader({
   onSignOut,
   backHref = null,
   primary = null,
-  menuItems = [],
+  screen,
+  isAdmin = false,
 }: {
   email?: string | null;
   onSignIn?: () => void;
   onSignOut?: () => void;
   backHref?: string | null;
   primary?: React.ReactNode;
-  menuItems?: AhMenuItem[];
+  screen: HeaderScreen;
+  isAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const navItems = buildHeaderMenu({ screen, email, isAdmin });
 
   // close on outside click / Escape
   useEffect(() => {
@@ -48,7 +45,7 @@ export default function AppHeader({
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  const hasMenu = menuItems.length > 0 || !!email;
+  const hasMenu = navItems.length > 0 || !!email;
 
   return (
     <div className="mt-bar">
@@ -79,23 +76,16 @@ export default function AppHeader({
           >⋯</button>
           {open && (
             <div className="ah-menu" role="menu">
-              {menuItems.map((it, i) => (
-                <button
-                  key={i}
-                  role="menuitem"
-                  className={"ah-menu-item" + (it.danger ? " danger" : "")}
-                  onClick={() => { it.onClick(); if (!it.keepOpen) setOpen(false); }}
-                >{it.label}</button>
+              {navItems.map((it) => (
+                <button key={it.href} role="menuitem" className="ah-menu-item"
+                  onClick={() => { setOpen(false); router.push(it.href); }}>{it.label}</button>
               ))}
               {email && (
                 <>
-                  {menuItems.length > 0 && <div className="ah-menu-div" />}
+                  {navItems.length > 0 && <div className="ah-menu-div" />}
                   <div className="ah-menu-acct">{email}</div>
-                  <button
-                    role="menuitem"
-                    className="ah-menu-item"
-                    onClick={() => { setOpen(false); onSignOut && onSignOut(); }}
-                  >Sign out</button>
+                  <button role="menuitem" className="ah-menu-item"
+                    onClick={() => { setOpen(false); onSignOut && onSignOut(); }}>Sign out</button>
                 </>
               )}
             </div>

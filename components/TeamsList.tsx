@@ -14,7 +14,7 @@ import type { TeamRecord } from "@/lib/types";
 type Filter = "both" | "private" | "public";
 const PAGE = 5;
 
-export default function TeamsList({ userId, email }: { userId: string; email: string | null }) {
+export default function TeamsList({ userId, email, isAdmin = false }: { userId: string; email: string | null; isAdmin?: boolean }) {
   const router = useRouter();
   const sb = createClient();
   const [teams, setTeams] = useState<TeamRecord[] | null>(null);
@@ -57,6 +57,8 @@ export default function TeamsList({ userId, email }: { userId: string; email: st
       backHref="/"
       onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
       primary={<button className="mt-btn solid" onClick={() => router.push("/m/new")}>＋ New</button>}
+      screen="teams"
+      isAdmin={isAdmin}
     />
   );
 

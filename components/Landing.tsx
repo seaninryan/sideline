@@ -14,7 +14,7 @@ interface Row { id: string; short_code: string | null; is_public?: boolean; data
 type Filter = "both" | "personal" | "public";
 const PAGE = 5;
 
-export default function Landing({ userId, email }: { userId: string | null; email: string | null }) {
+export default function Landing({ userId, email, isAdmin = false }: { userId: string | null; email: string | null; isAdmin?: boolean }) {
   const sb = useMemo(() => createClient(), []);
   const router = useRouter();
   const now = Date.now();
@@ -112,7 +112,8 @@ export default function Landing({ userId, email }: { userId: string | null; emai
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         primary={email ? <button className="mt-btn solid" onClick={() => router.push("/m/new")}>＋ New</button> : null}
-        menuItems={email ? [{ label: "👥 Teams", onClick: () => router.push("/teams") }] : []}
+        screen="landing"
+        isAdmin={isAdmin}
       />
 
       <div className="ml-page">

@@ -37,6 +37,7 @@ import Scorers from "@/components/Scorers";
 import Timeline from "@/components/Timeline";
 import { htScore } from "@/lib/half-time";
 import { reconcileIncoming } from "@/lib/live-update";
+import { fetchIsAdmin } from "@/lib/viewer.client";
 import { useRouter } from "next/navigation";
 
 const sb = createClient();
@@ -162,7 +163,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // switching tabs closes any open Advanced editor and resets the game-mode stage
   useEffect(() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setEditLineup(false); setGmStage({ stage: "event" }); }, [tab]);
   const [userUid, setUserUid] = useState("");
-  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); }); }, []);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  useEffect(() => { sb.auth.getUser().then(({ data }) => { setUserEmail((data && data.user && data.user.email) || ""); setUserUid((data && data.user && data.user.id) || ""); fetchIsAdmin(sb, (data && data.user && data.user.id) || null).then(setUserIsAdmin); }); }, []);
 
   // substitution (lineup tab): tap a pitch player and a sub, either order
   const [subPick, setSubPick] = useState(null); // {role:"off"|"on", num, name}
@@ -802,10 +804,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               </svg>
             </button>
           }
-          menuItems={[
-            { label: "＋ New", onClick: () => router.push("/m/new") },
-            { label: "👥 Teams", onClick: () => router.push("/teams") },
-          ]}
+          screen="editor"
+          isAdmin={userIsAdmin}
         />
       )}
       {!nw && remoteConflict && (
@@ -819,6 +819,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           email={userEmail}
           backHref="/"
           onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
+          screen="editor"
         />
       )}
 
