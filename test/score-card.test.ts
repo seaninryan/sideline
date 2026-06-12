@@ -13,10 +13,21 @@ describe("buildScoreCardSVG", () => {
     expect(svg.startsWith("<svg")).toBe(true);
   });
   it("shows both team names and the score", () => {
+    // SAMPLE: homeAway=away → Wildebeests=home (left, 2-7), Racoons=away (right, 2-6)
     expect(svg).toContain("Racoons");
     expect(svg).toContain("Wildebeests");
     expect(svg).toContain("2-6");
     expect(svg).toContain("2-7");
+  });
+  it("shows neutral result (Wildebeests won by 1)", () => {
+    expect(svg).toContain("Won by 1");
+  });
+  it("shows home team (Wildebeests) on the left and away team (Racoons) on the right", () => {
+    const homePos = svg.indexOf("Wildebeests");
+    const awayPos = svg.indexOf("Racoons");
+    expect(homePos).toBeGreaterThan(-1);
+    expect(awayPos).toBeGreaterThan(-1);
+    expect(homePos).toBeLessThan(awayPos);
   });
   it("shows no individual player names", () => {
     expect(svg).not.toContain("Rick");
