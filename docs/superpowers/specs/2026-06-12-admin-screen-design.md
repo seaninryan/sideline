@@ -28,8 +28,27 @@ appears on every screen" a one-line change.
   write — deferred).
 - **Match listing reuse:** the admin user-detail page renders the existing
   `<MatchRow>` component (the same row the main screen uses).
-- **Menu architecture:** a pure `buildHeaderMenu` owns the duplicated nav +
-  account items; the editor's unique actions stay in a per-screen prop.
+- **Menu architecture:** a pure `buildHeaderMenu` owns *all* menu navigation;
+  combined with the editor cleanups below, no screen needs page-specific menu
+  items, so the `⋯` menu becomes 100% helper-driven (the `menuItems`/`pageItems`
+  injection prop is removed entirely).
+
+### Editor menu cleanups (folded in)
+
+The menu centralisation empties the editor's menu, so we also resolve the three
+editor-specific items rather than leave them behind:
+
+- **Resync → removed, replaced by editor realtime.** The editor doesn't
+  subscribe to realtime today (only `PublicMatch` does). Give the editor the
+  same Supabase `postgres_changes` subscription so cross-device edits flow in
+  live; then the manual Resync button is genuinely redundant and is removed.
+- **Link teams → removed after a one-time migration.** Link teams is a
+  legacy-only affordance (fires only for matches with no `homeTeamId`/
+  `awayTeamId`). A one-time client migration links every unlinked match to its
+  teams (find-or-create), after which the panel, the nudge, and the menu item
+  are all removed.
+- **Delete → moved into a "Danger" section at the bottom of the match body**
+  (confirm-first), out of the menu.
 
 ## 1. Database (one-time migrations in Supabase)
 
@@ -154,43 +173,44 @@ callback).
 
 ### `AppHeader` changes — `components/AppHeader.tsx`
 
-New props:
+Props:
 
 - `screen: HeaderScreen` (required) — which screen is rendering.
 - `isAdmin?: boolean` (default `false`).
-- Rename `menuItems` → `pageItems` (page-specific action items; same
-  `AhMenuItem[]` shape — danger/keepOpen still supported). Only the editor
-  passes any.
+- **`menuItems` / `pageItems` is removed.** After the editor cleanups, no screen
+  injects menu actions; the menu is built entirely from `buildHeaderMenu`. The
+  `AhMenuItem` type and its `keepOpen`/`danger` plumbing become unused and are
+  deleted (the body Delete in §5c uses the editor's own `confirmDel` state + a
+  plain button, not a menu item).
 
 Render order inside the `⋯` menu:
 
-1. `pageItems` (editor's Link teams / Resync / Delete), if any.
-2. divider (if both `pageItems` and nav items exist).
-3. nav items from `buildHeaderMenu`, rendered as router navigations
-   (`AppHeader` already a client component; use `useRouter().push(item.href)`).
-4. divider + account block (email + Sign out), as today.
+1. nav items from `buildHeaderMenu`, rendered as router navigations
+   (`AppHeader` is already a client component; use `useRouter().push(item.href)`).
+2. divider + account block (email + Sign out), as today.
 
-`hasMenu` becomes: `pageItems.length || navItems.length || email`.
+`hasMenu` becomes: `navItems.length || email`.
 
 ### Caller updates
 
 Every `AppHeader` usage passes `screen` and (where known) `isAdmin`, and stops
 hand-rolling New/Teams:
 
-| Caller | screen | isAdmin source | pageItems |
-|---|---|---|---|
-| `Landing` | `landing` | prop from `app/page.tsx` | — |
-| `MatchTracker` editor | `editor` | client `is_admin` fetch | Link teams, Resync, Delete |
-| `MatchTracker` wizard (`nw`) | `editor` | — | — |
-| `PublicMatch` | `public` | client `is_admin` fetch | — |
-| `TeamsList` | `teams` | prop from `app/teams/page.tsx` | — |
-| `TeamPage` | `team` | client `is_admin` fetch | — |
-| `AdminUsers` | `admin` | true (gated) | — |
-| `AdminUserMatches` | `admin-user` | true (gated) | — |
+| Caller | screen | isAdmin source |
+|---|---|---|
+| `Landing` | `landing` | prop from `app/page.tsx` |
+| `MatchTracker` editor | `editor` | client `is_admin` fetch |
+| `MatchTracker` wizard (`nw`) | `editor` | — |
+| `PublicMatch` | `public` | client `is_admin` fetch |
+| `TeamsList` | `teams` | prop from `app/teams/page.tsx` |
+| `TeamPage` | `team` | client `is_admin` fetch |
+| `AdminUsers` | `admin` | true (gated) |
+| `AdminUserMatches` | `admin-user` | true (gated) |
 
-Screen-specific **primary** buttons (Landing/TeamsList New, editor Share,
-TeamPage Edit) stay exactly as they are via the existing `primary` prop — they
-are deliberate per-screen emphasis, not duplicated nav.
+The editor no longer passes any menu items (Link teams / Resync / Delete are all
+gone — see §5). Screen-specific **primary** buttons (Landing/TeamsList New,
+editor Share, TeamPage Edit) stay exactly as they are via the existing `primary`
+prop — they are deliberate per-screen emphasis, not duplicated nav.
 
 ### Client-side `is_admin` for client-rendered headers
 
@@ -278,32 +298,128 @@ RLS policy, `fetchRow` already returns private rows for admins, so the admin
 branch renders `<PublicMatch>` (read-only, with `applyNameDisplay`). Existing
 tests get the new `isAdmin: false` field; add cases for the admin override.
 
+## 5. Editor cleanups
+
+### 5a. Editor realtime → remove Resync
+
+Give `MatchTracker` the same Supabase realtime subscription `PublicMatch` has:
+subscribe to `postgres_changes` (UPDATE + DELETE) on the open match's row
+(`id = curId`), resubscribing when `curId` changes and tearing down on unmount.
+The editor both reads *and* writes the row (auto-save), so unlike `PublicMatch`
+it must (a) ignore the echo of its own saves and (b) not clobber unsaved local
+edits. A pure helper keeps that decision testable:
+
+```ts
+// lib/live-update.ts (alongside the existing scoreChanged)
+export type Incoming = "ignore" | "apply" | "conflict" | "deleted";
+export function reconcileIncoming(args: {
+  event: "UPDATE" | "DELETE";
+  dirty: boolean;            // editor has unsaved local changes
+  localSavedAt: number;      // savedAt of our last write
+  incomingSavedAt: number;   // savedAt carried in the payload record
+}): Incoming;
+//  DELETE                                   -> "deleted"
+//  UPDATE & incomingSavedAt <= localSavedAt -> "ignore"   (our own echo / stale)
+//  UPDATE & !dirty                          -> "apply"    (refresh editor from payload)
+//  UPDATE & dirty                           -> "conflict" (another device changed it)
+```
+
+Editor wiring:
+
+- `"apply"` → refresh editor state from the payload (the `doLoad` field-setters,
+  fed from `payload.new.data` instead of a `store.get`).
+- `"conflict"` → show a non-destructive banner *"Updated on another device —
+  Load latest"*; tapping it applies the payload (last-write-wins, the old
+  Resync confirm, now inline). No silent overwrite of local edits.
+- `"deleted"` → notice + `router.push("/")` (mirrors today's
+  "deleted on the other device" path).
+- Reconnect/`SUBSCRIBED`-after-drop → re-fetch the row once to catch up
+  (as `PublicMatch` does).
+
+Then delete the **Resync** menu item and `doResync`. Tested in
+`test/live-update.test.ts` (extend the existing file).
+
+### 5b. Link-teams migration → remove Link teams
+
+A conservative pure patch (separate from `teamLinkPatch`, which overwrites
+names/colours/`oppRoster`) that only fills links + *missing* rosters:
+
+```ts
+// lib/team-link.ts
+export function linkExistingMatchPatch(
+  record: MatchRecord,
+  { usTeam, oppTeam, homeAway }: { usTeam: TeamRecord; oppTeam: TeamRecord; homeAway: "home" | "away" },
+);
+//  sets homeTeamId/awayTeamId from homeAway;
+//  seeds usRoster ONLY if absent (like teamLinkPatch) AND oppRoster ONLY if absent;
+//  seeds usSquad/oppSquad ONLY if blank;
+//  leaves myTeam, opponent, label, and all colours untouched.
+```
+
+A one-time client migration `linkUnlinkedMatches()` (runs once after `loadAll()`
+on app boot, mirroring how `migrateLegacyNotation` runs):
+
+- For each owned match with **no** `homeTeamId` and **no** `awayTeamId` and a
+  non-blank `opponent`: `teamStore.findOrCreate` both sides (sport from the
+  match), apply `linkExistingMatchPatch`, `store.set`.
+- Naturally **idempotent**: skips already-linked matches, so once complete it's a
+  no-op; matches with no derivable opponent are simply left unlinked.
+
+Then remove the legacy **Link teams** affordances from `MatchTracker`: the
+`link` state, the panel render (`onClose={() => setLink(false)}`), the
+"Link teams?" nudge effect (the `linkNudged` block), and the menu item.
+`linkExistingMatchPatch` tested in `test/team-link.test.ts` (links set, existing
+rosters/colours preserved, missing rosters seeded).
+
+### 5c. Delete → Danger zone in the body
+
+Render a small **Danger** section once at the bottom of the editor body (after
+the tab panels, inside the `!gm && !nw` editor view) containing the confirm-first
+Delete button — reusing the existing `confirmDel` state + `doDelete` (the
+3.5s auto-disarm and "Tap again to delete" wording move here verbatim). Remove
+the Delete entry from the menu. The never-saved-match safety net in game mode is
+unaffected.
+
 ## Testing
 
 - `test/header-menu.test.ts` — `buildHeaderMenu` per screen × signed-in/out ×
   admin/non-admin; suppression rules; ordering.
 - `test/admin.test.ts` — `aggregateUserStats` grouping/zeros/counts/ordering.
 - `test/match-view.test.ts` — extend for the `isAdmin` override branch.
+- `test/live-update.test.ts` — extend for `reconcileIncoming`
+  (echo/apply/conflict/deleted).
+- `test/team-link.test.ts` — `linkExistingMatchPatch` (links set; existing
+  rosters/colours preserved; missing rosters/squads seeded).
 
 ## Scope / YAGNI
 
-- No moderation or delete actions in v1.
+- No moderation or delete actions on the admin screen in v1.
 - No `last_sign_in` (needs per-session writes).
 - Counts aggregated client-side from admin-readable rows — fine at this scale;
   can become a DB view if user count grows.
-- Admin menu item appears on every screen via the centralised helper (the
-  drift-prone New/Teams duplication is removed in the same change).
+- Admin menu item appears on every screen via the centralised helper; the menu
+  becomes 100% helper-driven (no per-screen injection prop), removing the
+  drift-prone New/Teams duplication.
+- The link migration is conservative: links + missing rosters only, never
+  overwriting existing names/colours/rosters; idempotent no-op once complete.
 
 ## Files touched
 
 **New:** `docs/admin-profiles-migration.sql`, `lib/header-menu.ts`,
 `lib/admin.ts`, `lib/viewer.client.ts`, `app/admin/page.tsx`,
 `app/admin/users/[id]/page.tsx`, `components/AdminUsers.tsx`,
-`components/AdminUserMatches.tsx`, plus the three new test files.
+`components/AdminUserMatches.tsx`, plus the new test files
+(`header-menu`, `admin`).
 
-**Changed:** `components/AppHeader.tsx` (props + self-deciding menu),
-`lib/match-view.ts` (+`isAdmin`), `app/m/[id]/page.tsx` (admin lookup + override),
-`app/page.tsx` & `app/teams/page.tsx` (pass `isAdmin`), `components/Landing.tsx`,
-`components/MatchTracker.tsx`, `components/PublicMatch.tsx`,
-`components/TeamsList.tsx`, `components/TeamPage.tsx` (new header props),
-`lib/types.ts` (a `Profile` type), `lib/constants.ts` (bump `APP_VERSION`).
+**Changed:** `components/AppHeader.tsx` (props + self-deciding menu, `pageItems`
+removed), `lib/match-view.ts` (+`isAdmin`), `app/m/[id]/page.tsx` (admin lookup +
+override), `app/page.tsx` & `app/teams/page.tsx` (pass `isAdmin`),
+`components/Landing.tsx`, `components/PublicMatch.tsx`, `components/TeamsList.tsx`,
+`components/TeamPage.tsx` (new header props), `lib/types.ts` (a `Profile` type),
+`lib/constants.ts` (bump `APP_VERSION`).
+
+**Changed (editor cleanups, §5):** `lib/live-update.ts` (+`reconcileIncoming`),
+`lib/team-link.ts` (+`linkExistingMatchPatch`), `lib/store.ts` or `EditorApp`
+(`linkUnlinkedMatches` migration after `loadAll`), `components/MatchTracker.tsx`
+(editor realtime subscription; Danger-zone Delete; remove Resync, Link-teams
+panel/nudge/state); test files `live-update`, `team-link` extended.
