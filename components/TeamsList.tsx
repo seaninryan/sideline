@@ -54,8 +54,8 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
 
   const flag = (t: TeamRecord) => `linear-gradient(135deg, ${t.color1 || "#888"} 50%, ${t.color2 || "#555"} 50%)`;
   const matchLabel = (n: number) => `${n} ${n === 1 ? "match" : "matches"}`;
-  const meta = (t: TeamRecord) => (
-    <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players · {matchLabel(counts[t.id] || 0)}</span>
+  const meta = (t: TeamRecord, showMatches = false) => (
+    <span className="tl-meta">{t.sport && SPORTS[t.sport] && <SportIcon sport={t.sport} size={15} />}{t.roster.players.length} players{showMatches ? <> · {matchLabel(counts[t.id] || 0)}</> : null}</span>
   );
 
   const yoursFiltered = (teams || []).filter((t) =>
@@ -119,7 +119,7 @@ export default function TeamsList({ userId, email, isAdmin = false }: { userId: 
                       }}
                     >{confirmDelId === t.id ? "Delete?" : "🗑"}</button>
                   )}
-                  {meta(t)}
+                  {meta(t, true)}
                 </div>
               ))}
               {yoursFiltered.length > yourLimit && (
