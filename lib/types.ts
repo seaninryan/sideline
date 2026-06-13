@@ -1,37 +1,24 @@
 export type NameDisplay = "full" | "initials" | "none";
 
 export interface Settings {
-  myTeam?: string;
+  homeTeam?: string;
+  awayTeam?: string;
   scoringMode?: "gaa" | "goals";
   sport?: string;
   label?: string;
-  homeAway?: "home" | "away";
-  opponent?: string;
-  usRoster?: TeamRoster;
-  oppRoster?: TeamRoster;
+  homeRoster?: TeamRoster;
+  awayRoster?: TeamRoster;
 }
 
 export interface MatchRecord {
   raw: string;
   matchDate?: string;
   date?: string;
-  myTeam?: string;
   sport: string;
-  colorUs?: string;
-  colorUs2?: string;
-  colorThem?: string;
-  colorThem2?: string;
   nameDisplay?: NameDisplay;
   homeTeamId?: string | null;
   awayTeamId?: string | null;
-  oppRoster?: TeamRoster;
-  usRoster?: TeamRoster;
   label?: string;
-  homeAway?: "home" | "away";
-  opponent?: string;
-  usSquad?: string;     // squad sub-line, snapshotted from the linked teams at link time
-  oppSquad?: string;
-  // ③.1 — home/away scaffold, derived on save from us/them + homeAway (torn out in ③.4).
   homeTeam?: string;
   awayTeam?: string;
   colorHome?: string;
@@ -70,9 +57,8 @@ export interface MatchRow {
 
 export interface ParsedMatch {
   mode: "gaa" | "goals";
-  opp: string | null;
-  totals: { us: { g: number; p: number; str: string }; them: { g: number; p: number; str: string } };
-  result: string;
+  away: string | null;
+  totals: { home: { g: number; p: number; str: string }; away: { g: number; p: number; str: string } };
   scorers: any[];
   roster: any[];
   formationRows: any[];
@@ -83,7 +69,7 @@ export interface ParsedMatch {
   leadChanges: number;
   timesLevel: number;
   maxLead: number;
-  maxLeadSide: "us" | "them" | null;
+  maxLeadSide: "home" | "away" | null;
   warnings: any[];
   scoring: any[];
   notes: any[];

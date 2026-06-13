@@ -1,6 +1,7 @@
 import { parseMatch } from "@/lib/parser";
 import { gpTotal, fmtDateShort, MONTHS } from "@/lib/util";
 import { SPORTS, LIVE_WINDOW_MS, scoringModeForSport } from "@/lib/constants";
+import { matchOutcome } from "@/lib/home-away";
 import type { MatchRecord } from "@/lib/types";
 
 export interface RowView {
@@ -42,42 +43,27 @@ function resolveSportEmoji(sportKey: string | undefined, headerSport: string, mo
 export function matchRowView(rec: MatchRecord): RowView {
   const scoringMode = scoringModeForSport(rec.sport);
   const parsed = parseMatch(rec.raw, {
-    myTeam: rec.myTeam, scoringMode,
-    usRoster: rec.usRoster, oppRoster: rec.oppRoster,
-    label: rec.label, homeAway: rec.homeAway, opponent: rec.opponent,
+    homeTeam: rec.homeTeam, awayTeam: rec.awayTeam, scoringMode,
+    homeRoster: rec.homeRoster, awayRoster: rec.awayRoster, label: rec.label,
   });
-  const { header, totals } = parsed;
+  const { totals } = parsed;
   const mode = parsed.mode;
-
-  const usTotal = gpTotal(totals.us.g, totals.us.p, mode);
-  const themTotal = gpTotal(totals.them.g, totals.them.p, mode);
-  const usIsHome = rec.homeAway === "home"; // homeAway "" (no opponent line) → us treated as away; fine for a list row
-
-  const usName = rec.myTeam || "My Team";
-  const themName = rec.opponent || header.opposition || "Opponent";
-  const usColors: [string, string] = [rec.colorUs || "#f5c518", rec.colorUs2 || "#1f7a4d"];
-  const themColors: [string, string] = [rec.colorThem || "#c0392b", rec.colorThem2 || "#2c5fa8"];
-
-  let winnerSide: "us" | "them" | "draw";
-  if (usTotal === themTotal) winnerSide = "draw";
-  else winnerSide = usTotal > themTotal ? "us" : "them";
-  const winner: RowView["winner"] =
-    winnerSide === "draw" ? "draw" : (winnerSide === "us") === usIsHome ? "home" : "away";
-
-  const usSquad = rec.usSquad || "";
-  const oppSquad = rec.oppSquad || "";
+  const homePts = gpTotal(totals.home.g, totals.home.p, mode);
+  const awayPts = gpTotal(totals.away.g, totals.away.p, mode);
+  const out = matchOutcome(homePts, awayPts);
+  const winner: RowView["winner"] = out.winner ?? "draw";
   return {
-    homeName: usIsHome ? usName : themName,
-    awayName: usIsHome ? themName : usName,
-    homeStr: usIsHome ? totals.us.str : totals.them.str,
-    awayStr: usIsHome ? totals.them.str : totals.us.str,
+    homeName: rec.homeTeam || "Home",
+    awayName: rec.awayTeam || parsed.away || "Away",
+    homeStr: totals.home.str,
+    awayStr: totals.away.str,
     winner,
-    sport: resolveSportKey(rec.sport, header.sport, mode),
-    sportEmoji: resolveSportEmoji(rec.sport, header.sport, mode),
-    homeColors: usIsHome ? usColors : themColors,
-    awayColors: usIsHome ? themColors : usColors,
-    homeSquad: usIsHome ? usSquad : oppSquad,
-    awaySquad: usIsHome ? oppSquad : usSquad,
+    sport: resolveSportKey(rec.sport, parsed.header.sport, mode),
+    sportEmoji: resolveSportEmoji(rec.sport, parsed.header.sport, mode),
+    homeColors: [rec.colorHome || "#f5c518", rec.colorHome2 || "#1f7a4d"],
+    awayColors: [rec.colorAway || "#c0392b", rec.colorAway2 || "#2c5fa8"],
+    homeSquad: rec.homeSquad || "",
+    awaySquad: rec.awaySquad || "",
   };
 }
 
@@ -118,9 +104,8 @@ function recentWithin(iso: string | undefined, now: number): boolean {
 function matchProgress(rec: MatchRecord): { started: boolean; finished: boolean } {
   const scoringMode = scoringModeForSport(rec.sport);
   const parsed = parseMatch(rec.raw, {
-    myTeam: rec.myTeam, scoringMode,
-    usRoster: rec.usRoster, oppRoster: rec.oppRoster,
-    label: rec.label, homeAway: rec.homeAway, opponent: rec.opponent,
+    homeTeam: rec.homeTeam, awayTeam: rec.awayTeam, scoringMode,
+    homeRoster: rec.homeRoster, awayRoster: rec.awayRoster, label: rec.label,
   });
   const started = parsed.scoring.length > 0 || parsed.notes.length > 0 || parsed.halfMarks.length > 0;
   const finished = parsed.halfMarks.some((m: { marker?: string }) => m.marker === "FT");

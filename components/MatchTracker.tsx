@@ -5,7 +5,7 @@ import MinuteStep from "@/components/MinuteStep";
 import ScoreChart from "@/components/ScoreChart";
 import { store, cache, loadAll } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
-import { parseMatch, isPlaceholderLabel } from "@/lib/parser";
+import { parseMatchLegacy, isPlaceholderLabel } from "@/lib/parser";
 import {
   deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
   eventLineMinute, rosterEnd,
@@ -204,7 +204,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [oppSquad, setOppSquad] = useState(SAMPLE_RECORD.oppSquad || "");
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
-  const parsed = useMemo(() => parseMatch(raw, { myTeam, scoringMode: scoringModeForSport(sport), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, sport, label, homeAway, opponent, usRoster, oppRoster]);
+  const parsed = useMemo(() => parseMatchLegacy(raw, { myTeam, scoringMode: scoringModeForSport(sport), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, sport, label, homeAway, opponent, usRoster, oppRoster]);
   const { header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = SPORTS[sport] ? SPORTS[sport].label : header.sport; // chosen sport beats one named in the notation
@@ -591,15 +591,19 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const t = await teamStore.findOrCreate(userUid, { name, sport: reTeam.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setReTeam({ ...reTeam, away: t }); }
   };
+  // ④a: teamLinkPatch is home/away now; the wizard picks home (.home) & away (.away)
+  // teams directly. The editor still holds us/them state where us = the home pick
+  // (homeAway "home"), so we map the patch's home→us / away→them onto the local
+  // setters. store.set's shim re-derives the canonical home/away on save.
   const reTeamApply = () => {
     if (!reTeam.home || !reTeam.away || pairingError(reTeam.home.sport, reTeam.away.sport)) return;
-    const patch = teamLinkPatch(recordPayload(), { usTeam: reTeam.home, oppTeam: reTeam.away, homeAway: homeAway || "home" });
+    const patch = teamLinkPatch(recordPayload(), { homeTeam: reTeam.home, awayTeam: reTeam.away });
     setSport(reTeam.sport);
-    setMyTeam(patch.myTeam); setOpponent(patch.opponent);
+    setMyTeam(patch.homeTeam); setOpponent(patch.awayTeam); setHomeAway("home");
     setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
-    setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster);
-    setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
-    setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
+    setUsRoster(patch.homeRoster); setOppRoster(patch.awayRoster);
+    setUsSquad(patch.homeSquad || ""); setOppSquad(patch.awaySquad || "");
+    setColorUs(patch.colorHome); setColorUs2(patch.colorHome2); setColorThem(patch.colorAway); setColorThem2(patch.colorAway2);
     setReTeam(null);
   };
   const finishNew = async () => {
@@ -608,18 +612,18 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     creatingRef.current = true;
     try {
       const sportKey = nw.sport || nw.home.sport || nw.away.sport || "soccer";
-      const patch = teamLinkPatch({ label: "" }, { usTeam: nw.home, oppTeam: nw.away, homeAway: "home" });
+      const patch = teamLinkPatch({ label: "" } as any, { homeTeam: nw.home, awayTeam: nw.away });
       const label = nw.home.name;
       const rec = {
         raw: "", matchDate: nw.date, date: nw.date,
-        sport: sportKey, notationV: 2, nameDisplay: "full", savedAt: Date.now(),
+        sport: sportKey, notationV: 3, nameDisplay: "full", savedAt: Date.now(),
         ...patch, label,
       };
-      setRaw(""); setMyTeam(patch.myTeam); setOpponent(patch.opponent); setLabel(label);
-      setHomeAway(patch.homeAway); setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
-      setUsRoster(patch.usRoster); setOppRoster(patch.oppRoster); setLegacyRaw(undefined);
-      setUsSquad(patch.usSquad || ""); setOppSquad(patch.oppSquad || "");
-      setColorUs(patch.colorUs); setColorUs2(patch.colorUs2); setColorThem(patch.colorThem); setColorThem2(patch.colorThem2);
+      setRaw(""); setMyTeam(patch.homeTeam); setOpponent(patch.awayTeam); setLabel(label);
+      setHomeAway("home"); setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
+      setUsRoster(patch.homeRoster); setOppRoster(patch.awayRoster); setLegacyRaw(undefined);
+      setUsSquad(patch.homeSquad || ""); setOppSquad(patch.awaySquad || "");
+      setColorUs(patch.colorHome); setColorUs2(patch.colorHome2); setColorThem(patch.colorAway); setColorThem2(patch.colorAway2);
       setSport(sportKey);
       setMatchDate(nw.date); setNw(null); setReTeam(null); setTab("game");
       const id = mkId();

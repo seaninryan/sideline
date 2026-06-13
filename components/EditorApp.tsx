@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { loadAll, linkUnlinkedMatches } from "@/lib/store";
+import { loadAll, linkUnlinkedMatches, migrateHomeAway } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import MatchTracker from "@/components/MatchTracker";
 import BrandHeader from "@/components/BrandHeader";
@@ -15,7 +15,9 @@ export default function EditorApp({ initialId = null, wizard = false }: { initia
       .then(async () => {
         try {
           const { data } = await createClient().auth.getUser();
-          await linkUnlinkedMatches(data.user?.id ?? null);
+          const uid = data.user?.id ?? null;
+          await linkUnlinkedMatches(uid);
+          await migrateHomeAway(uid);
         } catch {}
         setPhase("ready");
       })

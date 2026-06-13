@@ -1,4 +1,4 @@
-import type { MatchRecord, TeamRoster } from "@/lib/types";
+import type { TeamRoster } from "@/lib/types";
 
 const CLOCK_RE = /^\s*\d{1,2}:\d{2}\s*$/;
 
@@ -84,14 +84,17 @@ function rewriteOpponentRefs(line: string, teamBName: string): string {
  * Non-destructive: the original raw is kept in `legacyRaw`.
  * Idempotent: records already at notationV 2 are returned unchanged (same ref).
  */
+// `record` is typed `any` — this legacy lift reads/writes the old us/them shape
+// (usRoster/opponent/homeAway), which the home/away MatchRecord no longer declares;
+// the migrateHomeAway pass normalizes the result to v3 home/away afterwards.
 export function migrateLegacyNotation(
-  record: MatchRecord,
+  record: any,
   opts: { teamAName: string; teamBName: string }
-): MatchRecord {
+): any {
   // Idempotent guard
   if (record.notationV === 2) return record;
 
-  const lines = record.raw.split("\n");
+  const lines: string[] = record.raw.split("\n");
 
   // Find the index of the first clock line (HH:MM)
   const clockIdx = lines.findIndex((l) => CLOCK_RE.test(l));
@@ -176,7 +179,7 @@ export function migrateLegacyNotation(
 
 // Backfill a single record loaded from storage: migrate legacy → event-only,
 // deriving team names from the record itself. Idempotent (notationV===2 → same ref).
-export function backfillNotation(rec: MatchRecord): MatchRecord {
+export function backfillNotation(rec: any): any {
   if (rec.notationV === 2) return rec;
   // event-only raw that just lacks the stamp → mark it, never migrate (avoids wiping a seeded roster)
   if (!isLegacy(rec.raw || "")) return { ...rec, notationV: 2 };
