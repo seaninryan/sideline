@@ -6,14 +6,14 @@ import type { MatchRecord, TeamRoster } from "@/lib/types";
 
 describe("buildModel", () => {
   const m = buildModel(SAMPLE_RECORD);
-  it("carries totals + result", () => {
-    expect(m.totals.us.str).toBe("2-6");
-    expect(m.totals.them.str).toBe("2-7");
-    expect(m.result).toBe("Loss");
+  it("carries home/away totals + neutral outcome", () => {
+    expect(m.awayTotals.str).toBe("2-6"); // Racoons are away
+    expect(m.homeTotals.str).toBe("2-7"); // Wildebeests are home
+    expect(m.outcome).toEqual({ winner: "home", margin: 1 });
   });
-  it("names from record + parser", () => {
-    expect(m.usName).toBe("Racoons");
-    expect(m.themName).toBe("Wildebeests");
+  it("home/away names from record + parser", () => {
+    expect(m.awayName).toBe("Racoons");
+    expect(m.homeName).toBe("Wildebeests");
   });
   it("defaults nameDisplay to full", () => expect(m.nameDisplay).toBe("full"));
 });
@@ -23,9 +23,9 @@ describe("buildModel", () => {
 describe("canonical SAMPLE_RECORD", () => {
   const m = buildModel(SAMPLE_RECORD);
   it("reproduces Racoons 2-6, Wildebeests 2-7 (Loss)", () => {
-    expect(m.totals.us.str).toBe("2-6");
-    expect(m.totals.them.str).toBe("2-7");
-    expect(m.result).toBe("Loss");
+    expect(m.awayTotals.str).toBe("2-6");
+    expect(m.homeTotals.str).toBe("2-7");
+    expect(m.outcome).toEqual({ winner: "home", margin: 1 });
   });
   it("credits Rick 2-4 with 4 frees on side us", () => {
     const rick = m.parsed.scorers.find((s: any) => s.name === "Rick");
@@ -36,16 +36,16 @@ describe("canonical SAMPLE_RECORD", () => {
     expect(morty).toMatchObject({ g: 0, p: 1, side: "us" });
   });
   it("parses with no warnings", () => expect(m.parsed.warnings).toEqual([]));
-  it("exposes themScorers as an array (may be empty when scores are team-level)", () => {
-    // SAMPLE uses team-level opponent attribution ("Wildebeests free") so
-    // themScorers is empty — this confirms the field is always present and array-shaped.
-    expect(Array.isArray(m.themScorers)).toBe(true);
+  it("exposes homeScorers as an array (empty when scores are team-level)", () => {
+    // SAMPLE uses team-level opponent attribution ("Wildebeests free"); Wildebeests
+    // are home, so homeScorers is empty — confirms the field is present + array-shaped.
+    expect(Array.isArray(m.homeScorers)).toBe(true);
   });
   it("pins the discrete-sequence stats", () => {
     expect(m.leadChanges).toBe(1);
     expect(m.timesLevel).toBe(3);
     expect(m.maxLead).toBe(5);
-    expect(m.maxLeadSide).toBe("us");
+    expect(m.maxLeadVenue).toBe("away"); // us led; us is away
   });
   it("exposes neutral home/away view", () => {
     // neutral home/away view (additive) — SAMPLE is homeAway:"away", so Racoons are away
@@ -53,8 +53,8 @@ describe("canonical SAMPLE_RECORD", () => {
     expect(m.awayName).toBe("Racoons");
     expect(m.homeTotals.str).toBe("2-7");
     expect(m.awayTotals.str).toBe("2-6");
-    expect(m.homeColors).toEqual([m.colorThem, m.colorThem2]);
-    expect(m.awayColors).toEqual([m.colorUs, m.colorUs2]);
+    expect(m.homeColors).toEqual(["#c0392b", "#2c5fa8"]);
+    expect(m.awayColors).toEqual(["#f5c518", "#1f7a4d"]);
     expect(m.outcome).toEqual({ winner: "home", margin: 1 });
   });
   it("exposes homeRoster/awayRoster/maxLeadVenue by venue", () => {
@@ -72,6 +72,15 @@ describe("canonical SAMPLE_RECORD", () => {
     const usEvent = m.timeline.find((t: any) => t.side === "us");
     const mapped = m.timelineHA.find((t: any) => t.seq === usEvent.seq && t.half === usEvent.half);
     expect(mapped.side).toBe("away");
+  });
+  it("no longer exposes us/them output keys", () => {
+    const mm = buildModel(SAMPLE_RECORD);
+    for (const k of ["usName", "themName", "usScorers", "themScorers", "colorUs", "colorThem", "usSquad", "oppSquad", "maxLeadSide", "formationRows", "oppRoster", "totals", "result", "starters", "subs", "missing"]) {
+      expect(mm[k], k).toBeUndefined();
+    }
+    expect(mm.homeName).toBeTruthy();
+    expect(mm.homeScorers).toBeDefined();
+    expect(mm.homeRoster).toBeDefined();
   });
 });
 
@@ -97,14 +106,14 @@ describe("buildModel themScorers — named opponent scorer", () => {
     usRoster: { formation: [[10]], players: [{ num: 10, name: "Morty", role: "starting" }] },
   };
   const m = buildModel(record);
-  it("surfaces named opponent scorer in themScorers", () => {
-    expect(m.themScorers.length).toBeGreaterThan(0);
-    const gerald = m.themScorers.find((s: any) => s.name === "Gerald");
+  it("surfaces named opponent scorer in homeScorers", () => {
+    expect(m.homeScorers.length).toBeGreaterThan(0);
+    const gerald = m.homeScorers.find((s: any) => s.name === "Gerald");
     expect(gerald).toBeDefined();
-    expect(gerald).toMatchObject({ side: "them", g: 1 });
+    expect(gerald).toMatchObject({ side: "them", g: 1 }); // item retains its parser side tag
   });
-  it("usScorers still contains own-team scorer", () => {
-    const morty = m.usScorers.find((s: any) => s.name === "Morty");
+  it("awayScorers still contains own-team scorer", () => {
+    const morty = m.awayScorers.find((s: any) => s.name === "Morty");
     expect(morty).toMatchObject({ side: "us", g: 1 });
   });
 });

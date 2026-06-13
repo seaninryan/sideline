@@ -62,17 +62,14 @@ export function buildModel(record: MatchRecord): Model {
 
   return {
     grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
-    usName, themName, dateStr: r.matchDate ? fmtDateDow(r.matchDate) : "",
-    totals, result, effMode, ht,
+    dateStr: r.matchDate ? fmtDateDow(r.matchDate) : "",
+    effMode, ht,
     leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
-    maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
+    maxLead: parsed.maxLead,
     series, goalDots, chartMarkers, htLine, halfMarks,
-    usScorers, themScorers, formationRows, starters, subs, missing, timeline,
-    colorUs: cUs, colorUs2: cUs2, colorThem: cThem, colorThem2: cThem2,
+    timeline,
     nameDisplay: r.nameDisplay || "full",
-    oppRoster: r.oppRoster || null,
-    usSquad: sqUs, oppSquad: sqOpp,
-    // neutral home/away view (additive — sub-project ①)
+    // neutral home/away view
     homeName: usIsHome ? usName : themName,
     awayName: usIsHome ? themName : usName,
     homeColors: usIsHome ? [cUs, cUs2] : [cThem, cThem2],

@@ -23,18 +23,6 @@ export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
     s ? { ...s, name: redactName(s.name, s.num, mode), scorer: s.scorer ? redactName(s.scorer, s.num, mode) : s.scorer } : s;
   return {
     ...model,
-    usScorers: (model.usScorers || []).map(fixScorer),
-    themScorers: (model.themScorers || []).map(fixScorer),
-    starters: (model.starters || []).map(fixPlayer),
-    subs: (model.subs || []).map(fixPlayer),
-    missing: (model.missing || []).map(fixPlayer),
-    formationRows: model.formationRows, // rows of shirt numbers — no names to redact (and fixPlayer would corrupt the numbers into objects)
-    timeline: (model.timeline || []).map((t: any) =>
-      t && t.scorer ? { ...t, scorer: redactName(t.scorer, t.num, mode) } : t,
-    ),
-    ...(model.oppRoster
-      ? { oppRoster: { ...model.oppRoster, players: model.oppRoster.players.map(fixPlayer) } }
-      : {}),
     homeScorers: (model.homeScorers || []).map(fixScorer),
     awayScorers: (model.awayScorers || []).map(fixScorer),
     timelineHA: (model.timelineHA || []).map((t: any) =>

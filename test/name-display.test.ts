@@ -32,48 +32,35 @@ describe("redactName", () => {
 });
 
 describe("applyNameDisplay", () => {
-  it("redacts scorer + roster names but keeps team names", () => {
-    const model: any = {
-      usName: "Racoons", themName: "Wildebeests",
-      usScorers: [{ name: "Rick Sanchez", num: 10 }],
-      starters: [{ name: "Morty Smith", num: 11 }],
-      subs: [], missing: [], timeline: [{ scorer: "Rick Sanchez", num: 10 }],
-    };
-    const out = applyNameDisplay(model, "initials");
-    expect(out.usName).toBe("Racoons");
-    expect(out.usScorers[0].name).toBe("R.S.");
-    expect(out.starters[0].name).toBe("M.S.");
-    expect(out.timeline[0].scorer).toBe("R.S.");
-  });
   it("full mode returns the model unchanged", () => {
-    const model: any = { usScorers: [{ name: "Rick Sanchez" }] };
-    expect(applyNameDisplay(model, "full").usScorers[0].name).toBe("Rick Sanchez");
+    const model: any = { homeScorers: [{ name: "Rick Sanchez" }] };
+    expect(applyNameDisplay(model, "full")).toBe(model);
   });
-  it("redacts themScorers names with initials mode", () => {
+  it("redacts homeScorers + awayScorers names with initials mode", () => {
     const model: any = {
-      usScorers: [],
-      themScorers: [{ name: "Jerry Smith", num: 5 }],
-      starters: [], subs: [], missing: [], timeline: [],
+      homeScorers: [{ name: "Jerry Smith", num: 5 }],
+      awayScorers: [{ name: "Beth Smith", num: 7 }],
+      timelineHA: [],
     };
     const out = applyNameDisplay(model, "initials");
-    expect(out.themScorers[0].name).toBe("J.S.");
+    expect(out.homeScorers[0].name).toBe("J.S.");
+    expect(out.awayScorers[0].name).toBe("B.S.");
   });
-  it("redacts themScorers names with none mode", () => {
+  it("redacts homeScorers names with none mode", () => {
     const model: any = {
-      usScorers: [],
-      themScorers: [{ name: "Beth Smith", num: 7 }],
-      starters: [], subs: [], missing: [], timeline: [],
+      homeScorers: [{ name: "Beth Smith", num: 7 }],
+      awayScorers: [],
+      timelineHA: [],
     };
     const out = applyNameDisplay(model, "none");
-    expect(out.themScorers[0].name).toBe("#7");
+    expect(out.homeScorers[0].name).toBe("#7");
   });
-  it("leaves formationRows (shirt numbers, not players) untouched", () => {
-    const model: any = {
-      usScorers: [], themScorers: [], starters: [], subs: [], missing: [], timeline: [],
-      formationRows: [[1, 2, 3], [4, 5]],
-    };
-    expect(applyNameDisplay(model, "none").formationRows).toEqual([[1, 2, 3], [4, 5]]);
-    expect(applyNameDisplay(model, "initials").formationRows).toEqual([[1, 2, 3], [4, 5]]);
+  it("does not emit us/them keys from non-full redaction", () => {
+    const model: any = { homeScorers: [], awayScorers: [], timelineHA: [] };
+    const out = applyNameDisplay(model, "initials");
+    expect(out.usScorers).toBeUndefined();
+    expect(out.themScorers).toBeUndefined();
+    expect(out.starters).toBeUndefined();
   });
 });
 
