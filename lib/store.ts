@@ -74,7 +74,7 @@ export async function migrateHomeAway(userId: string | null) {
   const teams: TeamRecord[] = userId ? await teamStore.list(userId) : [];
   const byId: Record<string, TeamRecord> = {};
   teams.forEach((t) => { if (t.id) byId[t.id] = t; });
-  const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV !== 3);
+  const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV === 2);
   for (const id of ids) {
     try {
       const cur: any = cache[id];
@@ -109,7 +109,9 @@ export const store = {
   async set(id: string, data: any): Promise<boolean> {
     // ④a: editor still passes us/them; convert via recordHomeAway. Records from the
     // migration/Landing are already home/away (no myTeam) and pass through unchanged.
-    const rec: MatchRecord = data && data.myTeam !== undefined ? stripUsThem({ ...data, ...recordHomeAway(data) }) : data;
+    const rec: MatchRecord = data && data.myTeam !== undefined
+      ? { ...stripUsThem({ ...data, ...recordHomeAway(data) }), notationV: 3 }
+      : data;
     cache[id] = rec;
     const { error } = await sb.from("matches").upsert(Object.assign(
       { id, data: rec, updated_at: new Date().toISOString() }, matchCols(rec),

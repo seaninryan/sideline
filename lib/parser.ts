@@ -74,7 +74,7 @@ export function parseMatchLegacy(raw: string, s: UsThemSettings = {}): any {
     chartMarkers: p.chartMarkers.map(reside),
     series: p.series.map((x: any) => ({ ...x, us: usIsHome ? x.home : x.away, them: usIsHome ? x.away : x.home, usScore: usScore(x.homeScore, x.awayScore), themScore: usScore(x.awayScore, x.homeScore) })),
     header: { raw: "", sport: "", opposition: s.opponent || "", homeAway: s.homeAway || "", label: s.label || "" },
-    roster: (usIsHome ? s.usRoster : s.usRoster) ? (s.usRoster?.players || []) : [],
+    roster: s.usRoster ? (s.usRoster.players || []) : [],
     formationRows: s.usRoster?.formation || [],
   };
 }
