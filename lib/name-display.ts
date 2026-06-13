@@ -21,13 +21,28 @@ export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
   const fixPlayer = (p: any) => (p ? { ...p, name: redactName(p.name, p.num, mode) } : p);
   const fixScorer = (s: any) =>
     s ? { ...s, name: redactName(s.name, s.num, mode), scorer: s.scorer ? redactName(s.scorer, s.num, mode) : s.scorer } : s;
+  // A timeline event can name players in several fields: a score's `scorer` (and
+  // its `desc`, the raw peeled text shown when the scorer is unresolved), a card's
+  // `who`, and a sub's `on`/`off` — redact each (blank/team-level stay blank).
+  // KNOWN LIMITATION: a plain note's free-text `text` (e.g. "10 Jack miss") carries
+  // no resolved player field and uses loose shorthand, so it is NOT redacted — the
+  // owner's raw notation is shown verbatim. Structured player attributions above ARE
+  // redacted. Closing the note-text gap needs parser-level player resolution.
+  const fixTimeline = (t: any) => {
+    if (!t) return t;
+    let r = t;
+    if (t.scorer) r = { ...r, scorer: redactName(t.scorer, t.num, mode) };
+    if (t.desc) r = { ...r, desc: redactName(t.desc, t.num, mode) };
+    if (t.who) r = { ...r, who: redactName(t.who, t.num, mode) };
+    if (t.on) r = { ...r, on: redactName(t.on, t.onNum, mode) };
+    if (t.off) r = { ...r, off: redactName(t.off, t.offNum, mode) };
+    return r;
+  };
   return {
     ...model,
     homeScorers: (model.homeScorers || []).map(fixScorer),
     awayScorers: (model.awayScorers || []).map(fixScorer),
-    timelineHA: (model.timelineHA || []).map((t: any) =>
-      t && t.scorer ? { ...t, scorer: redactName(t.scorer, t.num, mode) } : t,
-    ),
+    timelineHA: (model.timelineHA || []).map(fixTimeline),
     ...(model.homeRoster
       ? { homeRoster: { ...model.homeRoster, players: model.homeRoster.players.map(fixPlayer) } }
       : {}),

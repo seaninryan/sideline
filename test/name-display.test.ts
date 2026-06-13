@@ -84,3 +84,35 @@ describe("applyNameDisplay redacts home/away keys", () => {
     expect(applyNameDisplay(base, "full")).toBe(base);
   });
 });
+
+describe("applyNameDisplay redacts timeline card + sub names", () => {
+  const base: any = {
+    timelineHA: [
+      { kind: "card", side: "home", card: "yellow", who: "Rick Sanchez", num: 10 },
+      { kind: "sub", side: "away", on: "Morty Smith", off: "Beth Smith", onNum: 7, offNum: 9 },
+      { kind: "card", side: "away", card: "red", who: "", num: null }, // team-level card → stays blank
+      { kind: "score", side: null, sure: false, scorer: "Rick Sanchez", desc: "Rick Sanchez", num: 10 }, // unresolved score: desc is shown
+    ],
+  };
+  it("initials redacts an unresolved score's desc (shown when scorer is unsure)", () => {
+    const r = applyNameDisplay(base, "initials");
+    expect(r.timelineHA[3].scorer).toBe("R.S.");
+    expect(r.timelineHA[3].desc).toBe("R.S.");
+  });
+  it("initials redacts card 'who' and sub 'on'/'off'", () => {
+    const r = applyNameDisplay(base, "initials");
+    expect(r.timelineHA[0].who).toBe("R.S.");
+    expect(r.timelineHA[1].on).toBe("M.S.");
+    expect(r.timelineHA[1].off).toBe("B.S.");
+  });
+  it("none falls back to shirt number for card/sub", () => {
+    const r = applyNameDisplay(base, "none");
+    expect(r.timelineHA[0].who).toBe("#10");
+    expect(r.timelineHA[1].on).toBe("#7");
+    expect(r.timelineHA[1].off).toBe("#9");
+  });
+  it("leaves a team-level card (blank who) blank", () => {
+    const r = applyNameDisplay(base, "none");
+    expect(r.timelineHA[2].who).toBe("");
+  });
+});
