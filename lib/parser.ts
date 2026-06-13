@@ -1,6 +1,6 @@
 import { parseEvents, TeamArg } from "@/lib/parse-events";
 import { migrateLegacyNotation, isLegacy } from "@/lib/migrate-notation";
-import type { ParsedMatch, Settings, TeamRoster } from "@/lib/types";
+import type { ParsedMatch, Settings } from "@/lib/types";
 
 export const isPlaceholderLabel = (s?: string): boolean =>
   ["", "new match", "my team", "match"].includes((s || "").trim().toLowerCase());
@@ -41,40 +41,4 @@ export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
     warnings: pe.warnings, mode: pe.mode,
     htLine: pe.htLine, away: awayName || null,
   } as ParsedMatch;
-}
-
-// ④a SHIM (deleted in ④b): lets the still-us/them editor keep its existing reads.
-// Maps the editor's us/them inputs → home/away, parses, then converts the home/away
-// ParsedMatch back to a us/them-shaped one. home = us-side iff homeAway === "home".
-type UsThemSettings = { myTeam?: string; opponent?: string; usRoster?: TeamRoster; oppRoster?: TeamRoster; homeAway?: "home" | "away"; scoringMode?: "gaa" | "goals"; label?: string };
-export function parseMatchLegacy(raw: string, s: UsThemSettings = {}): any {
-  const usIsHome = s.homeAway === "home";
-  const p = parseMatch(raw, {
-    homeTeam: usIsHome ? s.myTeam : s.opponent,
-    awayTeam: usIsHome ? s.opponent : s.myTeam,
-    homeRoster: usIsHome ? s.usRoster : s.oppRoster,
-    awayRoster: usIsHome ? s.oppRoster : s.usRoster,
-    scoringMode: s.scoringMode, label: s.label,
-  });
-  const v = (side: "home" | "away" | null) => side == null ? null : ((side === "home") === usIsHome ? "us" : "them");
-  const reside = (x: any) => (x && x.side !== undefined ? { ...x, side: v(x.side) } : x);
-  const usScore = (homeScore: string, awayScore: string) => usIsHome ? homeScore : awayScore;
-  const homeTot = p.totals.home as any, awayTot = p.totals.away as any;
-  return {
-    ...p,
-    opp: usIsHome ? (p.away || null) : (s.opponent || null),
-    totals: { us: usIsHome ? p.totals.home : p.totals.away, them: usIsHome ? p.totals.away : p.totals.home },
-    result: homeTot.total === awayTot.total ? "Draw"
-      : (homeTot.total > awayTot.total) === usIsHome ? "Win" : "Loss",
-    maxLeadSide: v(p.maxLeadSide),
-    scoring: p.scoring.map((x: any) => ({ ...x, side: v(x.side), usScore: usScore(x.homeScore, x.awayScore), themScore: usScore(x.awayScore, x.homeScore) })),
-    notes: p.notes.map(reside),
-    scorers: p.scorers.map(reside),
-    goalDots: p.goalDots.map(reside),
-    chartMarkers: p.chartMarkers.map(reside),
-    series: p.series.map((x: any) => ({ ...x, us: usIsHome ? x.home : x.away, them: usIsHome ? x.away : x.home, usScore: usScore(x.homeScore, x.awayScore), themScore: usScore(x.awayScore, x.homeScore) })),
-    header: { raw: "", sport: "", opposition: s.opponent || "", homeAway: s.homeAway || "", label: s.label || "" },
-    roster: s.usRoster ? (s.usRoster.players || []) : [],
-    formationRows: s.usRoster?.formation || [],
-  };
 }

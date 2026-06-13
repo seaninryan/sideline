@@ -5,7 +5,7 @@ import MinuteStep from "@/components/MinuteStep";
 import ScoreChart from "@/components/ScoreChart";
 import { store, cache, loadAll } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
-import { parseMatchLegacy, isPlaceholderLabel } from "@/lib/parser";
+import { parseMatch, isPlaceholderLabel } from "@/lib/parser";
 import {
   deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
   eventLineMinute, rosterEnd,
@@ -41,7 +41,6 @@ import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
-import { venueSeries, venueItems, sideToVenue, editorStateFromRecord } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -104,18 +103,17 @@ function evIcon(key, mode) {
 export default function MatchTracker({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
   const router = useRouter();
   const [raw, setRaw] = useState(SAMPLE_RECORD.raw);
-  const [myTeam, setMyTeam] = useState(SAMPLE_RECORD.myTeam || "Racoons");
+  const [homeTeam, setHomeTeam] = useState(SAMPLE_RECORD.homeTeam || "Home");
   const [sport, setSport] = useState(SAMPLE_RECORD.sport || ""); // "" = unset (legacy/edge records → "goals"); a SPORTS key locks the scoring mode
-  const [colorUs, setColorUs] = useState(SAMPLE_RECORD.colorUs || "#f5c518");
-  const [colorUs2, setColorUs2] = useState(SAMPLE_RECORD.colorUs2 || "#1f7a4d");
-  const [colorThem, setColorThem] = useState(SAMPLE_RECORD.colorThem || "#c0392b");
-  const [colorThem2, setColorThem2] = useState(SAMPLE_RECORD.colorThem2 || "#2c5fa8");
+  const [colorHome, setColorHome] = useState(SAMPLE_RECORD.colorHome || "#f5c518");
+  const [colorHome2, setColorHome2] = useState(SAMPLE_RECORD.colorHome2 || "#1f7a4d");
+  const [colorAway, setColorAway] = useState(SAMPLE_RECORD.colorAway || "#c0392b");
+  const [colorAway2, setColorAway2] = useState(SAMPLE_RECORD.colorAway2 || "#2c5fa8");
   const [nameDisplay, setNameDisplay] = useState(SAMPLE_RECORD.nameDisplay || "full");
   // header now lives on the record, not the notation
   const [label, setLabel] = useState(SAMPLE_RECORD.label || "");
-  const [homeAway, setHomeAway] = useState(SAMPLE_RECORD.homeAway || "away");
-  const [opponent, setOpponent] = useState(SAMPLE_RECORD.opponent || "");
-  const [usRoster, setUsRoster] = useState(SAMPLE_RECORD.usRoster || null);
+  const [awayTeam, setAwayTeam] = useState(SAMPLE_RECORD.awayTeam || "");
+  const [homeRoster, setHomeRoster] = useState(SAMPLE_RECORD.homeRoster || null);
   const [legacyRaw, setLegacyRaw] = useState(undefined);
   const [tab, setTab] = useState("details");
   const [matchDate, setMatchDate] = useState(SAMPLE_RECORD.matchDate || "2026-06-02T18:21");
@@ -123,7 +121,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [saved, setSaved] = useState([]);
   const [savedMsg, setSavedMsg] = useState("");
   const [userEmail, setUserEmail] = useState("");
-  const [colorPick, setColorPick] = useState(null); // which swatch is open: "us"|"us2"|"them"|"them2"
+  const [colorPick, setColorPick] = useState(null); // which swatch is open: "home"|"home2"|"away"|"away2"
   const [modal, setModal] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false); // "⋯" overflow menu in the top bar
   const [confirmDel, setConfirmDel] = useState(false); // Delete armed, waiting for the confirming second tap
@@ -178,14 +176,14 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [newName, setNewName] = useState("");
 
   // live entry: team -> event -> (player); each tap that completes an event adds it straight away
-  const [lvTeam, setLvTeam] = useState("us");
+  const [lvTeam, setLvTeam] = useState("home");
   const [lvEvent, setLvEvent] = useState(null); // pending player event awaiting a "Who?" tap
   // game mode is a tab (tab === "game"); gmStage holds the staged-entry position.
   // stages: "team" → "event" → "who"; "subOff" → "subOn" for substitutions.
   const [gmStage, setGmStage] = useState({ stage: "event" });
 
-  // new-match wizard: null when off, else {stage:"date"|"us"|"opp", date, team, label,
-  // sport (null = none supplied yet), homeAway, colors:[c,c2]|null, oppName}
+  // new-match wizard: null when off, else {stage:"date"|"home"|"away", date,
+  // sport (null = none supplied yet), home: TeamRecord|null, away: TeamRecord|null}
   const [nw, setNw] = useState(null);
   const [showDetails, setShowDetails] = useState(false); // the date/teams/sport panel is collapsed behind "Edit details"
   const [nwTeams, setNwTeams] = useState([]); // TeamRecord[] loaded when the wizard opens
@@ -199,25 +197,25 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const [shareModel, setShareModel] = useState(null);
   const [homeTeamId, setHomeTeamId] = useState(null);
   const [awayTeamId, setAwayTeamId] = useState(null);
-  const [oppRoster, setOppRoster] = useState(SAMPLE_RECORD.oppRoster || null);
-  const [usSquad, setUsSquad] = useState(SAMPLE_RECORD.usSquad || "");
-  const [oppSquad, setOppSquad] = useState(SAMPLE_RECORD.oppSquad || "");
+  const [awayRoster, setAwayRoster] = useState(SAMPLE_RECORD.awayRoster || null);
+  const [homeSquad, setHomeSquad] = useState(SAMPLE_RECORD.homeSquad || "");
+  const [awaySquad, setAwaySquad] = useState(SAMPLE_RECORD.awaySquad || "");
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
-  const parsed = useMemo(() => parseMatchLegacy(raw, { myTeam, scoringMode: scoringModeForSport(sport), label, homeAway, opponent, usRoster, oppRoster }), [raw, myTeam, sport, label, homeAway, opponent, usRoster, oppRoster]);
+  const parsed = useMemo(() => parseMatch(raw, { homeTeam, awayTeam, scoringMode: scoringModeForSport(sport), label, homeRoster, awayRoster }), [raw, homeTeam, awayTeam, sport, label, homeRoster, awayRoster]);
   const { header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = SPORTS[sport] ? SPORTS[sport].label : header.sport; // chosen sport beats one named in the notation
 
-  const usName = myTeam || "My Team";
-  const themName = header.opposition || "Opposition";
+  const homeName = homeTeam || "Home";
+  const awayName = awayTeam || "Away";
 
   // colours used across saved matches, most common first (suggestions in the picker)
   const usedColors = useMemo(() => {
     const count = {};
     for (const id of Object.keys(cache)) {
       const d = cache[id] || {};
-      ["colorUs", "colorUs2", "colorThem", "colorThem2"].forEach((k) => {
+      ["colorHome", "colorHome2", "colorAway", "colorAway2"].forEach((k) => {
         const c = (d[k] || "").toLowerCase();
         if (/^#[0-9a-f]{6}$/.test(c)) count[c] = (count[c] || 0) + 1;
       });
@@ -235,11 +233,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       const id = k.replace(/^match:/, "");
       const d = await store.get(id);
       if (!d) continue;
-      let opp = ((d.awayTeam ?? d.opponent) || "").trim() || "Opponent";
+      let opp = (d.awayTeam || "").trim() || "Opponent";
       let grade = (d.label || "").trim();
       let emoji = "";
       try { emoji = sportEmoji(d.sport, "", scoringModeForSport(d.sport)); } catch (e) {}
-      if (isPlaceholderLabel(grade) || !grade) grade = ((d.homeTeam ?? d.myTeam) || "").trim(); // pre-fix saves still show the team, not "New Match"
+      if (isPlaceholderLabel(grade) || !grade) grade = (d.homeTeam || "").trim(); // pre-fix saves still show the team, not "New Match"
       const label = `${emoji ? emoji + " " : ""}${grade ? grade + " · " : ""}${opp}${d.date ? " — " + fmtDate(d.date) : ""}`;
       items.push({ id, label, date: d.date || null, savedAt: d.savedAt || 0 });
     }
@@ -255,7 +253,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     })(); /* eslint-disable-next-line */
   }, []);
   // sport is undefined (not "") when unset so opening a pre-sport record doesn't read as dirty
-  const recordPayload = () => ({ raw, matchDate, date: matchDate, myTeam, sport: sport || undefined, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, notationV: 2, ...(legacyRaw ? { legacyRaw } : {}) });
+  const recordPayload = () => ({ raw, matchDate, date: matchDate, sport: sport || undefined, colorHome, colorHome2, colorAway, colorAway2, nameDisplay, label, homeTeam, awayTeam, homeRoster, homeTeamId, awayTeamId, awayRoster, homeSquad, awaySquad, notationV: 3, ...(legacyRaw ? { legacyRaw } : {}) });
   // unsaved changes? compare editor state against the cached server record
   const dirty = useMemo(() => {
     if (!curId) return true; // new match, never saved
@@ -264,7 +262,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const p = recordPayload();
     return Object.keys(p).some((k) => k !== "date" && d[k] !== p[k]);
     // eslint-disable-next-line
-  }, [curId, raw, matchDate, myTeam, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, legacyRaw, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad, saved]);
+  }, [curId, raw, matchDate, homeTeam, awayTeam, sport, colorHome, colorHome2, colorAway, colorAway2, nameDisplay, label, homeRoster, awayRoster, legacyRaw, homeTeamId, awayTeamId, homeSquad, awaySquad, saved]);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
@@ -282,15 +280,15 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     if (!curId || !dirty) return;
     const t = setTimeout(async () => {
       const prev = cache[curId]; // pre-save copy, to detect which roster changed
-      const usChanged = JSON.stringify(prev?.usRoster) !== JSON.stringify(usRoster);
-      const oppChanged = JSON.stringify(prev?.oppRoster) !== JSON.stringify(oppRoster);
+      const homeChanged = JSON.stringify(prev?.homeRoster) !== JSON.stringify(homeRoster);
+      const awayChanged = JSON.stringify(prev?.awayRoster) !== JSON.stringify(awayRoster);
       const payload = recordPayload();
       const ok = await store.set(curId, { ...payload, savedAt: Date.now() });
       // our save is now the latest copy — any pending cross-device conflict notice is moot.
       if (ok) { setRemoteConflict(false); setSavedMsg("Auto-saved ✓"); setTimeout(() => setSavedMsg(""), 1200); }
       else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
       // Push the lineup to the linked team(s) when a roster changed and this is that team's latest match.
-      if (ok && (usChanged || oppChanged)) {
+      if (ok && (homeChanged || awayChanged)) {
         try {
           const matchList = Object.entries(cache).map(([id, d]) => ({
             id, homeTeamId: d.homeTeamId, awayTeamId: d.awayTeamId,
@@ -298,7 +296,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           }));
           const pushes = teamRosterPushes({ ...payload, id: curId }, matchList);
           for (const p of pushes) {
-            if (p.side === "us" ? usChanged : oppChanged) await teamStore.setRoster(p.teamId, p.roster);
+            if (p.side === "home" ? homeChanged : awayChanged) await teamStore.setRoster(p.teamId, p.roster);
           }
         } catch (e) { console.warn("team lineup sync failed", e); }
       }
@@ -306,21 +304,18 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line
-  }, [curId, dirty, raw, matchDate, myTeam, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad]);
+  }, [curId, dirty, raw, matchDate, homeTeam, awayTeam, sport, colorHome, colorHome2, colorAway, colorAway2, nameDisplay, label, homeRoster, homeTeamId, awayTeamId, awayRoster, homeSquad, awaySquad]);
   const applyRecord = (d) => {
-    // Records are home/away (v3); the editor state is still us/them, so map via the
-    // editorStateFromRecord shim (home → us), with a us/them fallback for any record
-    // not yet migrated. (④b removes this when the editor state becomes home/away.)
-    const s = editorStateFromRecord(d);
-    setRaw(d.raw); setMyTeam(s.myTeam);
+    // Records are home/away (v3) — guaranteed by the load-time migration. Read directly.
+    setRaw(d.raw); setHomeTeam(d.homeTeam || "Home");
     setSport(d.sport || "");
-    setColorUs(s.colorUs); setColorUs2(s.colorUs2);
-    setColorThem(s.colorThem); setColorThem2(s.colorThem2);
+    setColorHome(d.colorHome || "#f5c518"); setColorHome2(d.colorHome2 || "#1f7a4d");
+    setColorAway(d.colorAway || "#c0392b"); setColorAway2(d.colorAway2 || "#2c5fa8");
     setNameDisplay(d.nameDisplay || "full");
-    setLabel(d.label || ""); setHomeAway(s.homeAway); setOpponent(s.opponent);
-    setUsRoster(s.usRoster); setLegacyRaw(d.legacyRaw);
-    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(s.oppRoster);
-    setUsSquad(s.usSquad); setOppSquad(s.oppSquad);
+    setLabel(d.label || ""); setAwayTeam(d.awayTeam || "");
+    setHomeRoster(d.homeRoster || null); setLegacyRaw(d.legacyRaw);
+    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setAwayRoster(d.awayRoster || null);
+    setHomeSquad(d.homeSquad || ""); setAwaySquad(d.awaySquad || "");
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date()));
   };
   const doLoad = async (key) => {
@@ -361,22 +356,22 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   };
   const doNew = async () => {
     // blank match: create + save immediately so it has a real /m/<uuid> home, then go there
-    const team = myTeam.trim() || "My Team";
+    const team = homeTeam.trim() || "Home";
     const newRaw = "";
     const date = toLocalInput(new Date());
     const id = mkId();
-    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, myTeam: team, sport: "soccer", colorUs, colorUs2, colorThem, colorThem2, label: "", homeAway: "away", opponent: "", notationV: 2, savedAt: Date.now() });
+    const ok = await store.set(id, { raw: newRaw, matchDate: date, date, homeTeam: team, sport: "soccer", colorHome, colorHome2, colorAway, colorAway2, label: "", awayTeam: "", notationV: 3, savedAt: Date.now() });
     if (ok) {
       // route transition is in-place (same /m/[id] route → no remount), so reflect the new match locally
-      setRaw(newRaw); setMatchDate(date); setMyTeam(team);
-      setLabel(""); setHomeAway("away"); setOpponent(""); setUsRoster(null); setLegacyRaw(undefined);
+      setRaw(newRaw); setMatchDate(date); setHomeTeam(team);
+      setLabel(""); setAwayTeam(""); setHomeRoster(null); setLegacyRaw(undefined);
       setSport("soccer"); setCurId(id); setNw(null); setReTeam(null); setTab("game");
       router.replace(`/m/${id}`);
     } else { setSavedMsg("NOT saved — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
   const doDuplicate = () => {
     setCurId(null);
-    setSavedMsg("Editing a new copy — change the date/opponent, then Save");
+    setSavedMsg("Editing a new copy — change the date/away team, then Save");
     setTimeout(() => setSavedMsg(""), 3500);
   };
   const doDelete = async () => {
@@ -386,24 +381,23 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     else { setSavedMsg("NOT deleted — check connection"); setTimeout(() => setSavedMsg(""), 6000); }
   };
 
-  // edit header (opponent / home-away / label) — now record fields, not the notation
+  // edit header (away team / label) — now record fields, not the notation
   const setHeaderField = (field, value) => {
     if (field === "label") setLabel(value);
-    else if (field === "opposition") setOpponent(value);
-    else if (field === "homeAway") setHomeAway(value);
+    else if (field === "away") setAwayTeam(value);
   };
-  // My team edits follow through to the header label, unless the user typed their own label (e.g. a grade).
-  const onMyTeamChange = (v) => {
+  // Home team edits follow through to the header label, unless the user typed their own label (e.g. a grade).
+  const onHomeTeamChange = (v) => {
     const cur = (header.label || "").trim();
-    if (isPlaceholderLabel(cur) || cur === myTeam.trim()) setHeaderField("label", v.trim() || "My Team");
-    setMyTeam(v);
+    if (isPlaceholderLabel(cur) || cur === homeTeam.trim()) setHeaderField("label", v.trim() || "Home");
+    setHomeTeam(v);
   };
 
   // ---- live append helpers ----
   const append = (text) => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setRaw((r) => r.replace(/\s*$/, "") + "\n" + text); };
   // substitution: tap the player going off (pitch) and the one coming on (subs), either order
   // on/off are player objects (or "unknown"); team picks which roster to qualify against
-  const completeSub = (on, off, team = "us") => {
+  const completeSub = (on, off, team = "home") => {
     const onTok = whoToken(on, team, whoCtx()), offTok = whoToken(off, team, whoCtx());
     append(`${new Date().getMinutes()} ${onTok} for ${offTok}`);
     setSubPick(null);
@@ -414,13 +408,13 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const pickGmTeam = (team) => {
     const ev = gmStage.ev;
     if (ev === "sub") return setGmStage({ stage: "subOff", team });
-    if (LIVE_PLAYER_EVENTS.includes(ev) && (team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) return setGmStage({ stage: "who", ev, team });
+    if (LIVE_PLAYER_EVENTS.includes(ev) && (team === "home" || (awayRoster && awayRoster.players && awayRoster.players.length))) return setGmStage({ stage: "who", ev, team });
     addLive(ev, null, team); setGmStage({ stage: "event" });
   };
   // who's currently on the pitch for a side (starters ± committed subs) and who's benched
-  const onPitchSet = (team) => onPitchNums(team === "them" ? oppRoster : usRoster, parsed.notes.filter((n) => n.type === "sub" && n.side === team));
+  const onPitchSet = (team) => onPitchNums(team === "away" ? awayRoster : homeRoster, parsed.notes.filter((n) => n.type === "sub" && n.side === team));
   const benchSet = (team) => {
-    const roster = team === "them" ? oppRoster : usRoster;
+    const roster = team === "away" ? awayRoster : homeRoster;
     const on = onPitchSet(team);
     return new Set((roster?.players || []).map((p) => p.num).filter((n) => !on.has(n)));
   };
@@ -429,8 +423,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // eligible (a Set of shirt numbers) restricts the pickable players (used by the sub flow).
   const gmPicker = (team, onPick, opts = {}) => {
     const { selected = null, allowUnknown = false, eligible = null } = opts;
-    const roster = team === "them" ? oppRoster : usRoster;
-    const c = team === "them" ? [colorThem, colorThem2] : [colorUs, colorUs2];
+    const roster = team === "away" ? awayRoster : homeRoster;
+    const c = team === "away" ? [colorAway, colorAway2] : [colorHome, colorHome2];
     if (roster && roster.formation && roster.formation.length)
       return (
         <>
@@ -444,35 +438,38 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       onPick(p);
     }, team);
   };
-  const tapPitch = (p) => {
-    if (subPick && subPick.role === "on") return completeSub(subPick, p, "us");
-    setSubPick(subPick && subPick.role === "off" && subPick.num === p.num ? null : { role: "off", ...p });
+  const tapPitch = (p, team = "home") => {
+    if (subPick && subPick.role === "on" && subPick.side === team) return completeSub(subPick, p, team);
+    setSubPick(subPick && subPick.role === "off" && subPick.side === team && subPick.num === p.num ? null : { role: "off", side: team, ...p });
   };
-  const tapBench = (p) => {
-    if (subPick && subPick.role === "off") return completeSub(p, subPick, "us");
-    setSubPick(subPick && subPick.role === "on" && subPick.num === p.num ? null : { role: "on", ...p });
+  const tapBench = (p, team = "home") => {
+    if (subPick && subPick.role === "off" && subPick.side === team) return completeSub(p, subPick, team);
+    setSubPick(subPick && subPick.role === "on" && subPick.side === team && subPick.num === p.num ? null : { role: "on", side: team, ...p });
   };
   // lineup tools route every tap through here; default falls through to the sub flow
   const resetLineupModes = () => { setLineupMode(null); setSwapFirst(null); setRenumTarget(null); setNewNum(""); setNewName(""); setSubPick(null); };
-  const tapPlayer = (p, where) => {
+  const rosterSetter = (side) => (side === "away" ? setAwayRoster : setHomeRoster);
+  const tapPlayer = (p, where, side = "home") => {
     if (lineupMode === "swap") {
       if (!swapFirst) return setSwapFirst(p);
       if (swapFirst.num === p.num) return setSwapFirst(null);
-      setUsRoster((r) => r ? swapPositions(r, swapFirst.num, p.num) : r);
+      rosterSetter(side)((r) => r ? swapPositions(r, swapFirst.num, p.num) : r);
       setSavedMsg(`Swapped ${swapFirst.name || swapFirst.num} & ${p.name || p.num}`); setTimeout(() => setSavedMsg(""), 2500);
       return resetLineupModes();
     }
-    if (lineupMode === "renum") { setRenumTarget(p); setNewNum(String(p.num)); setNewName(p.name || ""); return; }
-    return where === "pitch" ? tapPitch(p) : tapBench(p);
+    if (lineupMode === "renum") { setRenumTarget({ ...p, side }); setNewNum(String(p.num)); setNewName(p.name || ""); return; }
+    return where === "pitch" ? tapPitch(p, side) : tapBench(p, side);
   };
   const renumValid = (() => {
     const n = parseInt(newNum, 10);
-    return renumTarget && n >= 1 && n <= 99 && !roster.some((p) => p.num === n && p.num !== renumTarget.num);
+    const tgtRoster = renumTarget && renumTarget.side === "away" ? awayRoster : homeRoster;
+    const players = (tgtRoster && tgtRoster.players) || roster;
+    return renumTarget && n >= 1 && n <= 99 && !players.some((p) => p.num === n && p.num !== renumTarget.num);
   })();
   const applyRenum = () => {
     if (!renumValid) return;
     const nn = parseInt(newNum, 10), name = newName.trim();
-    setUsRoster((r) => {
+    rosterSetter(renumTarget.side || "home")((r) => {
       if (!r) return r;
       let next = renumberPlayer(r, renumTarget.num, nn);
       next = renamePlayer(next, nn, name); // rename targets the new number (renumber ran first)
@@ -485,10 +482,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   // (wrong by a beat? fix it in the notation after — same as everything else)
   // build a notation line for an event; live entry passes the wall clock,
   // the insert forms pass their stepper minute and their own team toggle
-  const whoCtx = () => ({ usName: myTeam, themName, usRoster, oppRoster });
+  const whoCtx = () => ({ homeName, awayName, homeRoster, awayRoster });
   const buildEventLine = (ev, team, player, min) => {
-    const themTok = themName || "Opposition";
-    const usTok = (myTeam || "").trim() || "My Team";
+    const awayTok = awayName || "Away";
+    const homeTok = (homeName || "").trim() || "Home";
     const who = whoToken(player, team, whoCtx());
     switch (ev) {
       case "goal": return `${min} ${who} goal`;
@@ -500,7 +497,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       case "og": return `${min} ${who} own goal`;
       case "yellow": return `${min} ${who} yellow card`;
       case "red": return `${min} ${who} red card`;
-      case "corner": return team === "them" ? `${min} ${themTok} corner` : `${min} ${usTok} corner`;
+      case "corner": return team === "away" ? `${min} ${awayTok} corner` : `${min} ${homeTok} corner`;
       case "ht": return `${min} HT`;
       case "ft": return `${min} FT`;
       case "half": return `${new Date().getHours()}:${pad2(parseInt(min, 10) % 60)}`;
@@ -508,12 +505,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     }
   };
   const liveLine = (ev, player, team = lvTeam) => buildEventLine(ev, team, player, String(new Date().getMinutes()));
-  const whoGrid = (onPick, team = "us") => {
-    // them: build rows/bench from the opponent roster (when populated); us: our roster
-    const rows = team === "them"
-      ? ((oppRoster && oppRoster.formation && oppRoster.formation.length ? oppRoster.formation : chunk((oppRoster?.players || []).filter((p) => p.role !== "sub").map((p) => p.num), 3)).map((row) => row.map((n) => (oppRoster?.players || []).find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length))
+  const whoGrid = (onPick, team = "home") => {
+    // away: build rows/bench from the away roster (when populated); home: our roster
+    const rows = team === "away"
+      ? ((awayRoster && awayRoster.formation && awayRoster.formation.length ? awayRoster.formation : chunk((awayRoster?.players || []).filter((p) => p.role !== "sub").map((p) => p.num), 3)).map((row) => row.map((n) => (awayRoster?.players || []).find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length))
       : liveRows;
-    const bench = team === "them" ? (oppRoster?.players || []).filter((p) => p.role === "sub") : subs;
+    const bench = team === "away" ? (awayRoster?.players || []).filter((p) => p.role === "sub") : subs;
     return (
       <>
         {rows.map((row, ri) => (
@@ -568,8 +565,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     setModal(null); setColorPick(null); setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNw(null); setReTeam(null);
     setShare(true);
   };
-  // Wizard now picks a Home team then an Away team (sport is chosen on stage 1).
-  // Internally Home → us, Away → them (homeAway:"home") so the engine is unchanged.
+  // Wizard picks a Home team then an Away team (sport is chosen on stage 1).
   const nwPickHome = (t) => setNw({ ...nw, home: t, stage: "away" });
   const nwCreateHome = async (name, squad) => {
     if (!userUid || !nw.sport) return;
@@ -594,19 +590,16 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     const t = await teamStore.findOrCreate(userUid, { name, sport: reTeam.sport, squad, color1: "#c0392b", color2: "#2c5fa8" });
     if (t) { setNwTeams((xs) => [t, ...xs.filter((x) => x.id !== t.id)]); setReTeam({ ...reTeam, away: t }); }
   };
-  // ④a: teamLinkPatch is home/away now; the wizard picks home (.home) & away (.away)
-  // teams directly. The editor still holds us/them state where us = the home pick
-  // (homeAway "home"), so we map the patch's home→us / away→them onto the local
-  // setters. store.set's shim re-derives the canonical home/away on save.
+  // teamLinkPatch is home/away; the wizard picks home (.home) & away (.away) teams directly.
   const reTeamApply = () => {
     if (!reTeam.home || !reTeam.away || pairingError(reTeam.home.sport, reTeam.away.sport)) return;
     const patch = teamLinkPatch(recordPayload(), { homeTeam: reTeam.home, awayTeam: reTeam.away });
     setSport(reTeam.sport);
-    setMyTeam(patch.homeTeam); setOpponent(patch.awayTeam); setHomeAway("home");
+    setHomeTeam(patch.homeTeam); setAwayTeam(patch.awayTeam);
     setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
-    setUsRoster(patch.homeRoster); setOppRoster(patch.awayRoster);
-    setUsSquad(patch.homeSquad || ""); setOppSquad(patch.awaySquad || "");
-    setColorUs(patch.colorHome); setColorUs2(patch.colorHome2); setColorThem(patch.colorAway); setColorThem2(patch.colorAway2);
+    setHomeRoster(patch.homeRoster); setAwayRoster(patch.awayRoster);
+    setHomeSquad(patch.homeSquad || ""); setAwaySquad(patch.awaySquad || "");
+    setColorHome(patch.colorHome); setColorHome2(patch.colorHome2); setColorAway(patch.colorAway); setColorAway2(patch.colorAway2);
     setReTeam(null);
   };
   const finishNew = async () => {
@@ -622,11 +615,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         sport: sportKey, notationV: 3, nameDisplay: "full", savedAt: Date.now(),
         ...patch, label,
       };
-      setRaw(""); setMyTeam(patch.homeTeam); setOpponent(patch.awayTeam); setLabel(label);
-      setHomeAway("home"); setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
-      setUsRoster(patch.homeRoster); setOppRoster(patch.awayRoster); setLegacyRaw(undefined);
-      setUsSquad(patch.homeSquad || ""); setOppSquad(patch.awaySquad || "");
-      setColorUs(patch.colorHome); setColorUs2(patch.colorHome2); setColorThem(patch.colorAway); setColorThem2(patch.colorAway2);
+      setRaw(""); setHomeTeam(patch.homeTeam); setAwayTeam(patch.awayTeam); setLabel(label);
+      setHomeTeamId(patch.homeTeamId); setAwayTeamId(patch.awayTeamId);
+      setHomeRoster(patch.homeRoster); setAwayRoster(patch.awayRoster); setLegacyRaw(undefined);
+      setHomeSquad(patch.homeSquad || ""); setAwaySquad(patch.awaySquad || "");
+      setColorHome(patch.colorHome); setColorHome2(patch.colorHome2); setColorAway(patch.colorAway); setColorAway2(patch.colorAway2);
       setSport(sportKey);
       setMatchDate(nw.date); setNw(null); setReTeam(null); setTab("game");
       const id = mkId();
@@ -648,24 +641,14 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     return items.sort((a, b) => (a.half - b.half) || (a.seq - b.seq));
   }, [parsed]);
 
-  const usScorers = scorers.filter((s) => s.side === "us").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
-  const themScorers = scorers.filter((s) => s.side === "them").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
-  const usIsHome = homeAway === "home";
-  const homeSeries = venueSeries(series, usIsHome);
-  const timelineHA = venueItems(timeline, usIsHome);
-  const homeColor = usIsHome ? colorUs : colorThem;
-  const awayColor = usIsHome ? colorThem : colorUs;
-  // home/away display vars (③.2b) — each is exactly the inline us/them expression it
-  // replaces in the read-only render. The us/them EDIT state stays (→ ③.3/③.4).
-  const homeName = usIsHome ? usName : themName;
-  const awayName = usIsHome ? themName : usName;
-  const homeColor2 = usIsHome ? colorUs2 : colorThem2;
-  const awayColor2 = usIsHome ? colorThem2 : colorUs2;
-  const homeScorers = usIsHome ? usScorers : themScorers;
-  const awayScorers = usIsHome ? themScorers : usScorers;
-  const homeSquadV = usIsHome ? usSquad : oppSquad;
-  const awaySquadV = usIsHome ? oppSquad : usSquad;
-  const maxLeadVenue = sideToVenue(parsed.maxLeadSide, homeAway);
+  const homeScorers = scorers.filter((s) => s.side === "home").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const awayScorers = scorers.filter((s) => s.side === "away").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const homeSeries = series;            // parser already home/away
+  const timelineHA = timeline;          // timeline built from parsed scoring/notes — already home/away
+  const homeColor = colorHome, awayColor = colorAway;
+  const homeColor2 = colorHome2, awayColor2 = colorAway2;
+  const homeSquadV = homeSquad, awaySquadV = awaySquad;
+  const maxLeadVenue = parsed.maxLeadSide;   // already "home"|"away"|null
   const starters = roster.filter((p) => p.role === "starting");
   const subs = roster.filter((p) => p.role === "sub");
   const missing = roster.filter((p) => p.role === "missing");
@@ -687,8 +670,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   }, [raw, parsed]);
   const blkPill = (b) => {
     if (b.kind === "score") {
-      const us = b.e.side === "us";
-      return <span className="mt-bpill" style={{ background: us ? colorUs : colorThem, color: contrastOn(us ? colorUs : colorThem) }}>{us ? b.e.usScore : b.e.themScore}</span>;
+      const home = b.e.side === "home";
+      return <span className="mt-bpill" style={{ background: home ? colorHome : colorAway, color: contrastOn(home ? colorHome : colorAway) }}>{home ? b.e.homeScore : b.e.awayScore}</span>;
     }
     if (b.kind === "half") return <span className="mt-bpill half">H{b.e.half}</span>;
     if (b.kind === "marker") return <span className="mt-bpill half">{b.e.marker}</span>;
@@ -752,7 +735,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const insPickTeam = (team) => {
     const ev = blkIns.ev;
     if (ev === "sub") return setBlkIns({ ...blkIns, stage: "subOff", team, off: null, on: null });
-    if (LIVE_PLAYER_EVENTS.includes(ev) && (team === "us" || (oppRoster && oppRoster.players && oppRoster.players.length))) return setBlkIns({ ...blkIns, stage: "who", team });
+    if (LIVE_PLAYER_EVENTS.includes(ev) && (team === "home" || (awayRoster && awayRoster.players && awayRoster.players.length))) return setBlkIns({ ...blkIns, stage: "who", team });
     insCommit(buildEventLine(ev, team, null, blkIns.minute));
   };
   const subWho = (p) => (p && p !== "unknown" ? (p.name || String(p.num)) : "");
@@ -762,7 +745,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     && !/\b(miss(ed|es)?|wide|saved|blocked|short|water|corner|yellow|red|for)\b/i.test(blkIns.noteText);
 
   // side-aware lineup badge helpers (sub arrows, card/og marks, score tally)
-  const mdl = { timeline, usScorers, themScorers };
+  const mdl = { timelineHA, homeScorers, awayScorers };
   const subArrows = (num, side) => {
     const b = lineupBadges(mdl, side, num);
     return (b.subOn || b.subOff) ? (
@@ -809,7 +792,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     if (shareModel) { setShareModel(null); return; }
     const model = buildModel(recordPayload());
     const safe = (s) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-    setShareModel({ model, filename: `${safe(header.label || usName)}-${safe(themName)}.png`, title: `${usName} ${totals.us.str} – ${totals.them.str} ${themName}` });
+    setShareModel({ model, filename: `${safe(header.label || homeName)}-${safe(awayName)}.png`, title: `${homeName} ${totals.home.str} – ${totals.away.str} ${awayName}` });
   };
   const openBackup = async () => {
     if (modal && modal.kind === "backup") { setModal(null); return; }
@@ -907,8 +890,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
       {/* score header (shared with the public page) — the editor adds an Edit-details toggle on the panel */}
       {!nw && (() => {
-        const homeT = usIsHome ? totals.us : totals.them;
-        const awayT = usIsHome ? totals.them : totals.us;
+        const homeT = totals.home;
+        const awayT = totals.away;
         return (
           <ScoreHeader
             homeName={homeName}
@@ -935,25 +918,17 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       <div className="mt-settings">
         <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
           <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
-        <label>{header.homeAway === "home" ? "Home team" : "Away team"} <input type="text" value={myTeam} onChange={(e) => onMyTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorUs }} onClick={() => setColorPick(colorPick === "us" ? null : "us")} /><button className="mt-swatch" title="Secondary" style={{ background: colorUs2 }} onClick={() => setColorPick(colorPick === "us2" ? null : "us2")} /></label>
-        <label>
-          <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
-            value={header.homeAway === "home" ? "home" : "away"} onChange={(e) => {
-              const v = e.target.value;
-              const flipped = (header.homeAway === "home" ? "home" : "away") !== v;
-              setHeaderField("homeAway", v);
-              if (flipped && (homeTeamId || awayTeamId)) { setHomeTeamId(awayTeamId); setAwayTeamId(homeTeamId); }
-            }}>
-            <option value="away">Away @</option>
-            <option value="home">Home v</option>
-          </select>
-        </label>
+        <label>Home team <input type="text" value={homeTeam} onChange={(e) => onHomeTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorHome }} onClick={() => setColorPick(colorPick === "home" ? null : "home")} /><button className="mt-swatch" title="Secondary" style={{ background: colorHome2 }} onClick={() => setColorPick(colorPick === "home2" ? null : "home2")} /></label>
         <button className="mt-btn" title="Swap home/away" onClick={() => {
           const p = swapHomeAway(recordPayload());
-          setHomeAway(p.homeAway); setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId);
+          setHomeTeam(p.homeTeam); setAwayTeam(p.awayTeam);
+          setColorHome(p.colorHome); setColorHome2(p.colorHome2); setColorAway(p.colorAway); setColorAway2(p.colorAway2);
+          setHomeRoster(p.homeRoster); setAwayRoster(p.awayRoster);
+          setHomeSquad(p.homeSquad); setAwaySquad(p.awaySquad);
+          setHomeTeamId(p.homeTeamId); setAwayTeamId(p.awayTeamId);
         }}>⇄ Swap</button>
-        <label>{header.homeAway === "home" ? "Away team" : "Home team"} <input type="text" value={header.opposition || ""} placeholder={header.homeAway === "home" ? "Away team" : "Home team"}
-          onChange={(e) => setHeaderField("opposition", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorThem }} onClick={() => setColorPick(colorPick === "them" ? null : "them")} /><button className="mt-swatch" title="Secondary" style={{ background: colorThem2 }} onClick={() => setColorPick(colorPick === "them2" ? null : "them2")} /></label>
+        <label>Away team <input type="text" value={awayTeam} placeholder="Away team"
+          onChange={(e) => setHeaderField("away", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorAway }} onClick={() => setColorPick(colorPick === "away" ? null : "away")} /><button className="mt-swatch" title="Secondary" style={{ background: colorAway2 }} onClick={() => setColorPick(colorPick === "away2" ? null : "away2")} /></label>
         <label>Sport
           <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
             value={sport}
@@ -995,8 +970,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
       {!nw && showDetails && colorPick && (() => {
         const map = {
-          us: [colorUs, setColorUs, `${usName} — primary`], us2: [colorUs2, setColorUs2, `${usName} — secondary`],
-          them: [colorThem, setColorThem, `${themName} — primary`], them2: [colorThem2, setColorThem2, `${themName} — secondary`],
+          home: [colorHome, setColorHome, `${homeName} — primary`], home2: [colorHome2, setColorHome2, `${homeName} — secondary`],
+          away: [colorAway, setColorAway, `${awayName} — primary`], away2: [colorAway2, setColorAway2, `${awayName} — secondary`],
         };
         const [val, setVal, label] = map[colorPick];
         const sw = (c) => (
@@ -1151,8 +1126,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               <>
                 <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} — which team?</p>
                 <div className="mt-grid">
-                  <button className="mt-big gm-team" style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => pickGmTeam("us")}>{usName}</button>
-                  <button className="mt-big gm-team" style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => pickGmTeam("them")}>{themName}</button>
+                  <button className="mt-big gm-team" style={{ background: colorHome, color: contrastOn(colorHome) }} onClick={() => pickGmTeam("home")}>{homeName}</button>
+                  <button className="mt-big gm-team" style={{ background: colorAway, color: contrastOn(colorAway) }} onClick={() => pickGmTeam("away")}>{awayName}</button>
                 </div>
                 <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "event" })}>← Back</button>
               </>
@@ -1161,7 +1136,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {/* stage 3 — which player? (scores / cards) */}
             {phase !== "over" && gmStage.stage === "who" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} · {gmStage.team === "them" ? themName : usName} — who?</p>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} · {gmStage.team === "away" ? awayName : homeName} — who?</p>
                 {gmPicker(gmStage.team, (p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "event" }); }, { allowUnknown: true })}
                 <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team", ev: gmStage.ev })}>← Back</button>
               </>
@@ -1170,7 +1145,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             {/* sub flow — off then on, on the team's jersey pitch */}
             {phase !== "over" && gmStage.stage === "subOff" && (
               <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.team === "them" ? themName : usName} sub — who goes off?</p>
+                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.team === "away" ? awayName : homeName} sub — who goes off?</p>
                 {gmPicker(gmStage.team, (p) => setGmStage({ ...gmStage, stage: "subOn", off: p }), { eligible: onPitchSet(gmStage.team) })}
                 <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team", ev: "sub" })}>← Back</button>
               </>
@@ -1224,110 +1199,108 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         )}
 
         {view === "lineup" && (editLineup ? (() => {
-          const us = editLineup === "us";
-          const roster = (us ? usRoster : oppRoster) || EMPTY_ROSTER;
-          const setRoster = us ? setUsRoster : setOppRoster;
+          const side = editLineup === "away" ? "away" : "home";
+          const roster = (side === "away" ? awayRoster : homeRoster) || EMPTY_ROSTER;
+          const setRoster = side === "away" ? setAwayRoster : setHomeRoster;
+          const c1 = side === "away" ? colorAway : colorHome, c2 = side === "away" ? colorAway2 : colorHome2;
+          const nm = side === "away" ? awayName : homeName;
           return (
             <>
               <div className="mt-row" style={{ marginBottom: 8 }}>
-                <span className="mt-h" style={{ margin: 0, flex: 1 }}>Edit {us ? usName : themName} — tap to rename/renumber; ⇄ Swap or ↕ Move</span>
+                <span className="mt-h" style={{ margin: 0, flex: 1 }}>Edit {nm} — tap to rename/renumber; ⇄ Swap or ↕ Move</span>
                 <button className="mt-add" onClick={() => setEditLineup(false)}>✓ Done</button>
               </div>
-              <RosterPitch roster={roster} color1={us ? colorUs : colorThem} color2={us ? colorUs2 : colorThem2} editable onChange={setRoster} />
+              <RosterPitch roster={roster} color1={c1} color2={c2} editable onChange={setRoster} />
               <div className="mt-row" style={{ marginTop: 8 }}>
                 <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "starting"))}>+ Player</button>
                 <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "sub"))}>+ Sub</button>
               </div>
             </>
           );
-        })() : (
-          <>
-            <div className="mt-row" style={{ marginBottom: 6 }}>
-              <span className="mt-h" style={{ margin: 0, flex: 1 }}>{usName}</span>
-              <button className="mt-add alt" onClick={() => setEditLineup("us")}>✎ Edit lineup</button>
-            </div>
-            <div className="mt-pitch" style={{ background: `linear-gradient(${colorUs2}22, #0c3b2a 60%)` }}>
-              {formationRows.map((row, ri) => (
-                <div className="mt-line" key={ri}>
-                  {row.map((n) => {
-                    const p = starters.find((x) => x.num === n);
-                    const picked = subPick && subPick.role === "off" && subPick.num === n;
-                    return (
-                      <div className="mt-jersey" key={n} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch")}>
-                        <Jersey c1={colorUs} c2={colorUs2} num={n} size={44} />
-                        <div className="nm">{p ? p.name : ""} {subArrows(n, "us")}{playerMarks(n, "us")}</div>
-                        {scoreFor(n, "us")}
-                      </div>
-                    );
-                  })}
+        })() : (() => {
+          // one editable pitch per side, keyed by venue; home then away
+          const renderEditPitch = (side) => {
+            const isHome = side === "home";
+            const rosterObj = isHome ? homeRoster : awayRoster;
+            const c1 = isHome ? colorHome : colorAway, c2 = isHome ? colorHome2 : colorAway2;
+            const nm = isHome ? homeName : awayName;
+            const players = (rosterObj && rosterObj.players) || [];
+            const rows = isHome
+              ? formationRows
+              : ((rosterObj && rosterObj.formation && rosterObj.formation.length)
+                  ? rosterObj.formation
+                  : chunk(players.filter((p) => p.role !== "sub").map((p) => p.num), 3));
+            const sideStarters = isHome ? starters : players.filter((p) => p.role !== "sub" && p.role !== "missing");
+            const sideSubs = isHome ? subs : players.filter((p) => p.role === "sub");
+            const sideMissing = isHome ? missing : players.filter((p) => p.role === "missing");
+            const hasLineup = isHome ? formationRows.length > 0 : (rosterObj && rosterObj.formation && rosterObj.formation.length > 0);
+            return (
+              <React.Fragment key={side}>
+                <div className="mt-row" style={{ marginTop: isHome ? 0 : 18, marginBottom: 6 }}>
+                  <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nm}</span>
+                  <button className="mt-add alt" onClick={() => setEditLineup(side)}>✎ Edit lineup</button>
                 </div>
-              ))}
-              {subs.length > 0 && (
-                <>
-                  <div className="rp-subhead">Subs</div>
-                  <div className="mt-line">
-                    {subs.map((p) => {
-                      const picked = subPick && subPick.role === "on" && subPick.num === p.num;
-                      return (
-                        <div className="mt-jersey" key={p.num} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench")}>
-                          <Jersey c1={colorUs} c2={colorUs2} num={p.num} size={36} />
-                          <div className="nm">{p.name} {subArrows(p.num, "us")}{playerMarks(p.num, "us")}</div>
-                          {scoreFor(p.num, "us")}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-            {subPick ? (
-              <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
-                <div className="mt-row">
-                  <span className="mt-h" style={{ margin: 0 }}>
-                    {subPick.role === "off" ? <>{subPick.num}. {subPick.name} off — now tap who comes on</> : <>{subPick.num}. {subPick.name} on — now tap who comes off</>}
-                  </span>
-                  <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setSubPick(null)}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-note" style={{ marginTop: 8 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
-            )}
-            {missing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{missing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
-            {oppRoster && (
-              <>
-                <div className="mt-row" style={{ marginTop: 18, marginBottom: 6 }}>
-                  <span className="mt-h" style={{ margin: 0, flex: 1 }}>{themName}</span>
-                  <button className="mt-add alt" onClick={() => setEditLineup("them")}>✎ Edit lineup</button>
-                </div>
-                {oppRoster.formation && oppRoster.formation.length > 0 ? (
-                  <div className="mt-pitch" style={{ background: `linear-gradient(${colorThem2}22, #0c3b2a 60%)` }}>
-                    {oppRoster.formation.map((row, ri) => (
+                {hasLineup ? (
+                  <div className="mt-pitch" style={{ background: `linear-gradient(${c2}22, #0c3b2a 60%)` }}>
+                    {rows.map((row, ri) => (
                       <div className="mt-line" key={ri}>
-                        {row.map((n) => { const op = oppRoster.players.find((x) => x.num === n); return (
-                          <div className="mt-jersey" key={n}>
-                            <Jersey c1={colorThem} c2={colorThem2} num={n} size={40} />
-                            <div className="nm">{op ? op.name : ""} {subArrows(n, "them")}{playerMarks(n, "them")}</div>
-                            {scoreFor(n, "them")}
-                          </div>
-                        ); })}
+                        {row.map((n) => {
+                          const p = sideStarters.find((x) => x.num === n);
+                          const picked = subPick && subPick.side === side && subPick.role === "off" && subPick.num === n;
+                          return (
+                            <div className="mt-jersey" key={n} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch", side)}>
+                              <Jersey c1={c1} c2={c2} num={n} size={isHome ? 44 : 40} />
+                              <div className="nm">{p ? p.name : ""} {subArrows(n, side)}{playerMarks(n, side)}</div>
+                              {scoreFor(n, side)}
+                            </div>
+                          );
+                        })}
                       </div>
                     ))}
-                    {(() => { const os = oppRoster.players.filter((p) => p.role === "sub"); return os.length > 0 ? (
+                    {sideSubs.length > 0 && (
                       <>
                         <div className="rp-subhead">Subs</div>
-                        <div className="mt-line">{os.map((p) => (
-                          <div className="mt-jersey" key={p.num}><Jersey c1={colorThem} c2={colorThem2} num={p.num} size={36} /><div className="nm">{p.name} {subArrows(p.num, "them")}{playerMarks(p.num, "them")}</div>{scoreFor(p.num, "them")}</div>
-                        ))}</div>
+                        <div className="mt-line">
+                          {sideSubs.map((p) => {
+                            const picked = subPick && subPick.side === side && subPick.role === "on" && subPick.num === p.num;
+                            return (
+                              <div className="mt-jersey" key={p.num} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench", side)}>
+                                <Jersey c1={c1} c2={c2} num={p.num} size={36} />
+                                <div className="nm">{p.name} {subArrows(p.num, side)}{playerMarks(p.num, side)}</div>
+                                {scoreFor(p.num, side)}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </>
-                    ) : null; })()}
+                    )}
                   </div>
                 ) : (
-                  <p className="mt-note">No away lineup yet — tap Edit lineup to add players.</p>
+                  <p className="mt-note">No {nm} lineup yet — tap Edit lineup to add players.</p>
                 )}
-              </>
-            )}
-          </>
-        ))}
+                {sideMissing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{sideMissing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
+              </React.Fragment>
+            );
+          };
+          return (
+            <>
+              {renderEditPitch("home")}
+              {subPick ? (
+                <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
+                  <div className="mt-row">
+                    <span className="mt-h" style={{ margin: 0 }}>
+                      {subPick.role === "off" ? <>{subPick.num}. {subPick.name} off — now tap who comes on</> : <>{subPick.num}. {subPick.name} on — now tap who comes off</>}
+                    </span>
+                    <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setSubPick(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-note" style={{ marginTop: 8 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
+              )}
+              {renderEditPitch("away")}
+            </>
+          );
+        })())}
 
         {view === "advanced" && (
           <>
@@ -1401,8 +1374,8 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                           <>
                             <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} — which team?</p>
                             <div className="mt-grid">
-                              <button className="mt-big sm" style={{ background: colorUs, color: contrastOn(colorUs) }} onClick={() => insPickTeam("us")}>{usName}</button>
-                              <button className="mt-big sm" style={{ background: colorThem, color: contrastOn(colorThem) }} onClick={() => insPickTeam("them")}>{themName}</button>
+                              <button className="mt-big sm" style={{ background: colorHome, color: contrastOn(colorHome) }} onClick={() => insPickTeam("home")}>{homeName}</button>
+                              <button className="mt-big sm" style={{ background: colorAway, color: contrastOn(colorAway) }} onClick={() => insPickTeam("away")}>{awayName}</button>
                             </div>
                             <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event", ev: null })}>← Back</button></div>
                           </>
@@ -1411,7 +1384,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                         {/* stage 3 — which player? */}
                         {blkIns.stage === "who" && (
                           <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} · {blkIns.team === "them" ? themName : usName} — who?</p>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} · {blkIns.team === "away" ? awayName : homeName} — who?</p>
                             {gmPicker(blkIns.team, (p) => insCommit(buildEventLine(blkIns.ev, blkIns.team, p, blkIns.minute)), { allowUnknown: true })}
                             <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button></div>
                           </>
@@ -1420,7 +1393,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
                         {/* sub flow — off then on, on the team's jersey pitch (eligibility tracked) */}
                         {blkIns.stage === "subOff" && (
                           <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{blkIns.team === "them" ? themName : usName} sub — who goes off?</p>
+                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{blkIns.team === "away" ? awayName : homeName} sub — who goes off?</p>
                             {gmPicker(blkIns.team, (p) => setBlkIns({ ...blkIns, stage: "subOn", off: p }), { eligible: onPitchSet(blkIns.team) })}
                             <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button></div>
                           </>

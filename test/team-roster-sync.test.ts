@@ -36,25 +36,16 @@ describe("latestMatchForTeam", () => {
 
 describe("teamRosterPushes", () => {
   const base = {
-    raw: "", sport: "hurling", homeAway: "home", homeTeamId: "H", awayTeamId: "A",
-    usRoster: roster(7), oppRoster: roster(9),
+    raw: "", sport: "hurling", homeTeamId: "H", awayTeamId: "A",
+    homeRoster: roster(7), awayRoster: roster(9),
   } as unknown as MatchRecord & { id: string };
 
   it("pushes both sides when this match is each team's latest", () => {
     const rec = { ...base, id: "m1" };
     const matches = [m("m1", { homeTeamId: "H", awayTeamId: "A", matchDate: "2026-02-01" })];
     expect(teamRosterPushes(rec, matches)).toEqual([
-      { teamId: "H", side: "us", roster: roster(7) },
-      { teamId: "A", side: "opp", roster: roster(9) },
-    ]);
-  });
-
-  it("maps us→awayTeamId when homeAway is away", () => {
-    const rec = { ...base, id: "m1", homeAway: "away" as const };
-    const matches = [m("m1", { homeTeamId: "H", awayTeamId: "A", matchDate: "2026-02-01" })];
-    expect(teamRosterPushes(rec, matches)).toEqual([
-      { teamId: "A", side: "us", roster: roster(7) },
-      { teamId: "H", side: "opp", roster: roster(9) },
+      { teamId: "H", side: "home", roster: roster(7) },
+      { teamId: "A", side: "away", roster: roster(9) },
     ]);
   });
 
@@ -64,12 +55,12 @@ describe("teamRosterPushes", () => {
       m("m1", { homeTeamId: "H", awayTeamId: "A", matchDate: "2026-02-01" }),
       m("m2", { homeTeamId: "H", matchDate: "2026-08-01" }),
     ];
-    expect(teamRosterPushes(rec, matches)).toEqual([{ teamId: "A", side: "opp", roster: roster(9) }]);
+    expect(teamRosterPushes(rec, matches)).toEqual([{ teamId: "A", side: "away", roster: roster(9) }]);
   });
 
   it("excludes unlinked sides and empty rosters", () => {
-    const rec = { ...base, id: "m1", awayTeamId: null, oppRoster: empty };
+    const rec = { ...base, id: "m1", awayTeamId: null, awayRoster: empty };
     const matches = [m("m1", { homeTeamId: "H", matchDate: "2026-02-01" })];
-    expect(teamRosterPushes(rec, matches)).toEqual([{ teamId: "H", side: "us", roster: roster(7) }]);
+    expect(teamRosterPushes(rec, matches)).toEqual([{ teamId: "H", side: "home", roster: roster(7) }]);
   });
 });

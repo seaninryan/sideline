@@ -104,9 +104,15 @@ export function teamsToPublish(record: MatchRecord): string[] {
   return Array.from(new Set(ids));
 }
 
-// ④a SHIM (rewritten to a home/away field-swap in ④b): the editor still holds us/them
-// state, so swap toggles homeAway + swaps the team ids on the editor's us/them payload.
+// Swap the two sides of a match: home ↔ away across names, colours, rosters, squads, and
+// team ids. Returns a partial to spread onto the editor's home/away state/payload.
 export function swapHomeAway(record: any) {
-  const flipped: "home" | "away" = (record.homeAway === "home") ? "away" : "home";
-  return { homeAway: flipped, homeTeamId: record.awayTeamId ?? null, awayTeamId: record.homeTeamId ?? null };
+  return {
+    homeTeam: record.awayTeam, awayTeam: record.homeTeam,
+    colorHome: record.colorAway, colorHome2: record.colorAway2,
+    colorAway: record.colorHome, colorAway2: record.colorHome2,
+    homeRoster: record.awayRoster ?? null, awayRoster: record.homeRoster ?? null,
+    homeSquad: record.awaySquad ?? "", awaySquad: record.homeSquad ?? "",
+    homeTeamId: record.awayTeamId ?? null, awayTeamId: record.homeTeamId ?? null,
+  };
 }

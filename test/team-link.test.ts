@@ -59,23 +59,37 @@ describe("teamLinkPatch", () => {
   });
 });
 
-describe("swapHomeAway (④a us/them shim)", () => {
-  it("toggles homeAway and swaps the team ids on the editor's us/them payload", () => {
-    const p = swapHomeAway({ homeAway: "home", homeTeamId: "u1", awayTeamId: "o1" });
-    expect(p.homeAway).toBe("away");
+describe("swapHomeAway (home/away field swap)", () => {
+  it("swaps names, colours, rosters, squads, and team ids", () => {
+    const p = swapHomeAway({
+      homeTeam: "Racoons", awayTeam: "Wildebeests",
+      colorHome: "#aaa", colorHome2: "#bbb", colorAway: "#ccc", colorAway2: "#ddd",
+      homeRoster: { formation: [], players: [{ num: 1 }] }, awayRoster: { formation: [], players: [{ num: 2 }] },
+      homeSquad: "U13", awaySquad: "Senior",
+      homeTeamId: "u1", awayTeamId: "o1",
+    });
+    expect(p.homeTeam).toBe("Wildebeests");
+    expect(p.awayTeam).toBe("Racoons");
+    expect(p.colorHome).toBe("#ccc");
+    expect(p.colorHome2).toBe("#ddd");
+    expect(p.colorAway).toBe("#aaa");
+    expect(p.colorAway2).toBe("#bbb");
+    expect(p.homeRoster).toEqual({ formation: [], players: [{ num: 2 }] });
+    expect(p.awayRoster).toEqual({ formation: [], players: [{ num: 1 }] });
+    expect(p.homeSquad).toBe("Senior");
+    expect(p.awaySquad).toBe("U13");
     expect(p.homeTeamId).toBe("o1");
     expect(p.awayTeamId).toBe("u1");
   });
 
-  it("toggles away → home", () => {
-    const p = swapHomeAway({ homeAway: "away", homeTeamId: "u1", awayTeamId: "o1" });
-    expect(p.homeAway).toBe("home");
-  });
-
-  it("defaults missing ids to null", () => {
-    const p = swapHomeAway({ homeAway: "home" });
+  it("defaults missing ids/rosters/squads", () => {
+    const p = swapHomeAway({ homeTeam: "A", awayTeam: "B" });
     expect(p.homeTeamId).toBeNull();
     expect(p.awayTeamId).toBeNull();
+    expect(p.homeRoster).toBeNull();
+    expect(p.awayRoster).toBeNull();
+    expect(p.homeSquad).toBe("");
+    expect(p.awaySquad).toBe("");
   });
 });
 
