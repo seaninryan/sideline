@@ -99,8 +99,9 @@ export const store = {
   async list(): Promise<string[]> { return Object.keys(cache).map((id) => "match:" + id); },
   async get(id: string): Promise<MatchRecord | null> { return cache[id] || null; },
   async set(id: string, data: any): Promise<boolean> {
-    // ④a: editor still passes us/them; convert via recordHomeAway. Records from the
-    // migration/Landing are already home/away (no myTeam) and pass through unchanged.
+    // Defensive: the editor + migration + Landing all pass home/away now and fall to
+    // the else branch unchanged. Any stray legacy us/them payload (has myTeam) is still
+    // converted via recordHomeAway → clean v3, so the column derivation can't break.
     const rec: MatchRecord = data && data.myTeam !== undefined
       ? { ...stripUsThem({ ...data, ...recordHomeAway(data) }), notationV: 3 }
       : data;

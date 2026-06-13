@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { migrateRecordToV3 } from "@/lib/team-link";
-import { editorStateFromRecord } from "@/lib/home-away";
 import { matchRowView } from "@/lib/match-list";
 import type { TeamRecord } from "@/lib/types";
 
@@ -52,34 +51,5 @@ describe("migrateRecordToV3", () => {
     expect(v3.homeTeam).toBe("Dunkellen Gaels"); // from team, not the stale "Dunkellen"
     expect(v3.homeSquad).toBe("U13 Boys");
     expect(v3.homeRoster?.players.length).toBe(3); // still derived
-  });
-});
-
-describe("editorStateFromRecord", () => {
-  it("maps a v3 home/away record to us/them editor state (home = us)", () => {
-    const v3: any = {
-      raw: "", sport: "gaelic", notationV: 3,
-      homeTeam: "Dunkellen Gaels", awayTeam: "Northern Gaels",
-      colorHome: "#111", colorHome2: "#222", colorAway: "#333", colorAway2: "#444",
-      homeRoster: DK, awayRoster: NG, homeSquad: "U13 Boys", awaySquad: "U13 Boys",
-    };
-    const s = editorStateFromRecord(v3);
-    expect(s.myTeam).toBe("Dunkellen Gaels");
-    expect(s.opponent).toBe("Northern Gaels");
-    expect(s.colorUs).toBe("#111");
-    expect(s.colorThem).toBe("#333");
-    expect(s.usRoster).toBe(DK);
-    expect(s.oppRoster).toBe(NG);
-    expect(s.usSquad).toBe("U13 Boys");
-    expect(s.homeAway).toBe("home");
-  });
-  it("falls back to legacy us/them fields for an unmigrated record", () => {
-    const legacy: any = { raw: "", myTeam: "Racoons", opponent: "Wildebeests", homeAway: "away", colorUs: "#aaa", usRoster: DK };
-    const s = editorStateFromRecord(legacy);
-    expect(s.myTeam).toBe("Racoons");
-    expect(s.opponent).toBe("Wildebeests");
-    expect(s.colorUs).toBe("#aaa");
-    expect(s.usRoster).toBe(DK);
-    expect(s.homeAway).toBe("away");
   });
 });
