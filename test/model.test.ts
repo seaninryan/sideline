@@ -57,6 +57,13 @@ describe("canonical SAMPLE_RECORD", () => {
     expect(m.awayColors).toEqual([m.colorUs, m.colorUs2]);
     expect(m.outcome).toEqual({ winner: "home", margin: 1 });
   });
+  it("exposes homeRoster/awayRoster/maxLeadVenue by venue", () => {
+    const m = buildModel(SAMPLE_RECORD);
+    // homeAway "away" → us is away → awayRoster is the Racoons (us) roster
+    expect(m.awayRoster).toBe(SAMPLE_RECORD.usRoster);
+    expect(m.homeRoster).toBe(SAMPLE_RECORD.oppRoster);
+    expect(m.maxLeadVenue).toBe("away");
+  });
   it("exposes homeSeries + timelineHA display mappings", () => {
     // ② display mapping (additive)
     expect(Array.isArray(m.homeSeries)).toBe(true);
