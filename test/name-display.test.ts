@@ -76,3 +76,24 @@ describe("applyNameDisplay", () => {
     expect(applyNameDisplay(model, "initials").formationRows).toEqual([[1, 2, 3], [4, 5]]);
   });
 });
+
+describe("applyNameDisplay redacts home/away keys", () => {
+  const base: any = {
+    homeScorers: [{ num: 10, name: "Rick Sanchez", scorer: "Rick Sanchez", g: 1, p: 0 }],
+    awayScorers: [{ num: 7, name: "Morty Smith", scorer: "Morty Smith", g: 0, p: 1 }],
+    homeRoster: { formation: [[10]], players: [{ num: 10, name: "Rick Sanchez", role: "starting" }] },
+    awayRoster: { formation: [[7]], players: [{ num: 7, name: "Morty Smith", role: "starting" }] },
+    timelineHA: [{ kind: "score", side: "home", num: 10, scorer: "Rick Sanchez" }],
+  };
+  it("initials redacts home/away scorers, rosters, and timelineHA scorer", () => {
+    const r = applyNameDisplay(base, "initials");
+    expect(r.homeScorers[0].name).toBe("R.S.");
+    expect(r.awayScorers[0].name).toBe("M.S.");
+    expect(r.homeRoster.players[0].name).toBe("R.S.");
+    expect(r.awayRoster.players[0].name).toBe("M.S.");
+    expect(r.timelineHA[0].scorer).toBe("R.S.");
+  });
+  it("full is a no-op", () => {
+    expect(applyNameDisplay(base, "full")).toBe(base);
+  });
+});

@@ -35,5 +35,16 @@ export function applyNameDisplay(model: Model, mode: NameDisplay): Model {
     ...(model.oppRoster
       ? { oppRoster: { ...model.oppRoster, players: model.oppRoster.players.map(fixPlayer) } }
       : {}),
+    homeScorers: (model.homeScorers || []).map(fixScorer),
+    awayScorers: (model.awayScorers || []).map(fixScorer),
+    timelineHA: (model.timelineHA || []).map((t: any) =>
+      t && t.scorer ? { ...t, scorer: redactName(t.scorer, t.num, mode) } : t,
+    ),
+    ...(model.homeRoster
+      ? { homeRoster: { ...model.homeRoster, players: model.homeRoster.players.map(fixPlayer) } }
+      : {}),
+    ...(model.awayRoster
+      ? { awayRoster: { ...model.awayRoster, players: model.awayRoster.players.map(fixPlayer) } }
+      : {}),
   };
 }
