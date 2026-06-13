@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { matchRowView, relativeDate, matchBucket } from "@/lib/match-list";
 import { SPORTS } from "@/lib/constants";
 import { teamStore } from "@/lib/team-store";
-import { store } from "@/lib/store";
+import { store, migrateRecordToV3 } from "@/lib/store";
 import { reconcileHomeAwayFromTeams } from "@/lib/team-link";
 import type { MatchRecord, TeamRecord } from "@/lib/types";
 
@@ -53,6 +53,17 @@ export default function Landing({ userId, email, isAdmin = false }: { userId: st
           let changed = false;
           const healed = rows.map((r) => {
             try {
+              // A notationV:2 record may never have had its home/away rosters derived
+              // (③.1 only ran in the editor) — fully migrate it (derives rosters from
+              // us/them + reconciles identity from teams) so the home screen parses
+              // scorers correctly without opening the editor. Other records just get
+              // their identity reconciled.
+              if ((r.data as any).notationV === 2) {
+                const v3 = migrateRecordToV3(r.data, byId);
+                changed = true;
+                store.set(r.id, v3).catch(() => {});
+                return { ...r, data: v3 };
+              }
               const patch = reconcileHomeAwayFromTeams(r.data, byId);
               if (Object.keys(patch).some((k) => (patch as any)[k] !== (r.data as any)[k])) {
                 changed = true;

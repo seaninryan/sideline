@@ -41,7 +41,7 @@ import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
-import { venueSeries, venueItems, sideToVenue } from "@/lib/home-away";
+import { venueSeries, venueItems, sideToVenue, editorStateFromRecord } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -235,13 +235,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
       const id = k.replace(/^match:/, "");
       const d = await store.get(id);
       if (!d) continue;
-      let opp = (d.opponent || "").trim() || "Opponent";
-      let ha = d.homeAway || "away";
+      let opp = ((d.awayTeam ?? d.opponent) || "").trim() || "Opponent";
       let grade = (d.label || "").trim();
       let emoji = "";
       try { emoji = sportEmoji(d.sport, "", scoringModeForSport(d.sport)); } catch (e) {}
-      if (isPlaceholderLabel(grade) || !grade) grade = (d.myTeam || "").trim(); // pre-fix saves still show the team, not "New Match"
-      const label = `${emoji ? emoji + " " : ""}${grade ? grade + " · " : ""}${opp} (${ha === "home" ? "H" : "A"})${d.date ? " — " + fmtDate(d.date) : ""}`;
+      if (isPlaceholderLabel(grade) || !grade) grade = ((d.homeTeam ?? d.myTeam) || "").trim(); // pre-fix saves still show the team, not "New Match"
+      const label = `${emoji ? emoji + " " : ""}${grade ? grade + " · " : ""}${opp}${d.date ? " — " + fmtDate(d.date) : ""}`;
       items.push({ id, label, date: d.date || null, savedAt: d.savedAt || 0 });
     }
     items.sort((a, b) => dateKey(b.date, b.savedAt) - dateKey(a.date, a.savedAt));
@@ -309,15 +308,19 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     // eslint-disable-next-line
   }, [curId, dirty, raw, matchDate, myTeam, sport, colorUs, colorUs2, colorThem, colorThem2, nameDisplay, label, homeAway, opponent, usRoster, homeTeamId, awayTeamId, oppRoster, usSquad, oppSquad]);
   const applyRecord = (d) => {
-    setRaw(d.raw); setMyTeam(d.myTeam || "My Team");
+    // Records are home/away (v3); the editor state is still us/them, so map via the
+    // editorStateFromRecord shim (home → us), with a us/them fallback for any record
+    // not yet migrated. (④b removes this when the editor state becomes home/away.)
+    const s = editorStateFromRecord(d);
+    setRaw(d.raw); setMyTeam(s.myTeam);
     setSport(d.sport || "");
-    setColorUs(d.colorUs || "#f5c518"); setColorUs2(d.colorUs2 || "#1f7a4d");
-    setColorThem(d.colorThem || "#c0392b"); setColorThem2(d.colorThem2 || "#2c5fa8");
+    setColorUs(s.colorUs); setColorUs2(s.colorUs2);
+    setColorThem(s.colorThem); setColorThem2(s.colorThem2);
     setNameDisplay(d.nameDisplay || "full");
-    setLabel(d.label || ""); setHomeAway(d.homeAway || "away"); setOpponent(d.opponent || "");
-    setUsRoster(d.usRoster || null); setLegacyRaw(d.legacyRaw);
-    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(d.oppRoster || null);
-    setUsSquad(d.usSquad || ""); setOppSquad(d.oppSquad || "");
+    setLabel(d.label || ""); setHomeAway(s.homeAway); setOpponent(s.opponent);
+    setUsRoster(s.usRoster); setLegacyRaw(d.legacyRaw);
+    setHomeTeamId(d.homeTeamId || null); setAwayTeamId(d.awayTeamId || null); setOppRoster(s.oppRoster);
+    setUsSquad(s.usSquad); setOppSquad(s.oppSquad);
     setMatchDate(d.date || d.matchDate || toLocalInput(new Date()));
   };
   const doLoad = async (key) => {
