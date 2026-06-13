@@ -17,7 +17,7 @@ import StatGrid from "@/components/StatGrid";
 import Scorers from "@/components/Scorers";
 import Timeline from "@/components/Timeline";
 import { addPlayer } from "@/lib/team-roster";
-import { gpTotal, fmtScore, contrastOn, fmtDateDow } from "@/lib/util";
+import { gpTotal, contrastOn, fmtDateDow } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
 import { whoToken } from "@/lib/event-line";
 import { htScore } from "@/lib/half-time";

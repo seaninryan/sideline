@@ -6,27 +6,26 @@
 // Typing is a later slice; @ts-nocheck retained for the move.
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import RosterPitch from "@/components/RosterPitch";
-import { store, cache, loadAll } from "@/lib/store";
+import { store, cache } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { parseMatch, isPlaceholderLabel } from "@/lib/parser";
 import {
   deleteEventLine, insertEventLine, replaceEventLine, placeEventLineByMinute,
   eventLineMinute, rosterEnd,
 } from "@/lib/raw-edit";
-import { swapPositions, renumberPlayer, renamePlayer, addPlayer } from "@/lib/team-roster";
+import { swapPositions, renumberPlayer, renamePlayer } from "@/lib/team-roster";
 import { SAMPLE_RECORD } from "@/lib/sample";
 import {
   gpTotal, fmtScore, squash, titleCase, contrastOn, mkId, remapImport,
   fmtDate, fmtDateShort, fmtDateDow, toLocalInput, dateKey, MONTHS, pad2,
 } from "@/lib/util";
-import { PALETTE, LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS, scoringModeForSport } from "@/lib/constants";
+import { LIVE_EVENTS, LIVE_PLAYER_EVENTS, SPORTS, scoringModeForSport } from "@/lib/constants";
 import { swapHomeAway, teamLinkPatch } from "@/lib/team-link";
 import { teamStore } from "@/lib/team-store";
 import { pairingError } from "@/lib/match-sport";
 import { whoToken, onPitchNums } from "@/lib/event-line";
 import { lineupBadges } from "@/lib/lineup-badges";
 import { buildModel } from "@/lib/model";
-import { htScore } from "@/lib/half-time";
 import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
