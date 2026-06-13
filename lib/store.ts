@@ -1,11 +1,11 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { parseMatch } from "@/lib/parser";
 import { backfillNotation } from "@/lib/migrate-notation";
 import type { MatchRecord } from "@/lib/types";
 import { teamStore } from "@/lib/team-store";
 import { linkExistingMatchPatch } from "@/lib/team-link";
+import { recordHomeAway } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -30,6 +30,19 @@ export async function loadAll() {
       const migrated = backfillNotation(cache[id]);
       if (migrated !== cache[id]) { cache[id] = migrated; await store.set(id, migrated); }
     } catch (e) { console.warn("backfill failed for", id, e); }
+  }));
+  // ③.1 one-time home/away backfill: derive the fields for any cached record that
+  // lacks them (presence check on `homeTeam`). Idempotent + resilient. `store.set`
+  // also derives them, so this is belt-and-braces for records not otherwise re-saved.
+  // MUST run after the notation backfill above: that pass calls store.set, which
+  // already enriches cache, so migrated records fall out of this filter (no double write).
+  const haIds = Object.keys(cache).filter((id) => cache[id] && cache[id].homeTeam === undefined);
+  await Promise.allSettled(haIds.map(async (id) => {
+    try {
+      const enriched = { ...cache[id], ...recordHomeAway(cache[id]) };
+      cache[id] = enriched;
+      await store.set(id, enriched);
+    } catch (e) { console.warn("home/away backfill failed for", id, e); }
   }));
 }
 
@@ -59,16 +72,11 @@ export async function linkUnlinkedMatches(userId: string | null) {
 }
 
 // Derive the promoted columns from a record. `data` (jsonb) stays the source of truth.
-// `opponent` lives on the record now; fall back to a legacy header parse only if absent.
+// The vestigial my_team/opponent columns were dropped in ③.1 (nothing SELECTed them);
+// team identity lives in the home_team_id/away_team_id links + data jsonb.
 function matchCols(data: MatchRecord) {
-  let opp: string | null = data.opponent || null;
-  if (!opp) {
-    try { opp = (parseMatch(data.raw, { myTeam: data.myTeam, usRoster: data.usRoster, oppRoster: data.oppRoster }).opp) || null; } catch {}
-  }
   return {
     match_date: data.matchDate || data.date || null,
-    my_team: data.myTeam || null,
-    opponent: opp,
     sport: data.sport || "soccer",
     name_display: data.nameDisplay || "full",
     home_team_id: data.homeTeamId || null,
@@ -81,9 +89,10 @@ export const store = {
   async list(): Promise<string[]> { return Object.keys(cache).map((id) => "match:" + id); },
   async get(id: string): Promise<MatchRecord | null> { return cache[id] || null; },
   async set(id: string, data: MatchRecord): Promise<boolean> { // single-row upsert; owner defaults to auth.uid() on insert (RLS-checked)
-    cache[id] = data;
+    const rec = { ...data, ...recordHomeAway(data) }; // ③.1 — derive home/away fields on every save
+    cache[id] = rec;
     const { error } = await sb.from("matches").upsert(Object.assign(
-      { id, data, updated_at: new Date().toISOString() }, matchCols(data),
+      { id, data: rec, updated_at: new Date().toISOString() }, matchCols(rec),
     ));
     if (error) console.warn("save failed", error.message);
     return !error;
