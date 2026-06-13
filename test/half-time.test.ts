@@ -18,12 +18,12 @@ const SOCCER = `19:02
 
 describe("htScore", () => {
   it("goals mode: bare first-half scores count (was 0-0)", () => {
-    const p = parseMatch(SOCCER, { myTeam: "DKB", opponent: "Barna", scoringMode: "goals" });
+    const p = parseMatch(SOCCER, { homeTeam: "DKB", awayTeam: "Barna", scoringMode: "goals" });
     expect(htScore(p.series, "goals")).toBe("1 – 1");
   });
 
   it("gaa mode: half-time points show as g-p", () => {
-    const p = parseMatch("18:00\n10 DKB\n20 Barna free\n30 HT\n38\n40 DKB goal", { myTeam: "DKB", opponent: "Barna", scoringMode: "gaa" });
+    const p = parseMatch("18:00\n10 DKB\n20 Barna free\n30 HT\n38\n40 DKB goal", { homeTeam: "DKB", awayTeam: "Barna", scoringMode: "gaa" });
     expect(htScore(p.series, "gaa")).toBe("0-1 – 0-1");
   });
 

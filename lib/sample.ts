@@ -38,14 +38,16 @@ const RACOONS: TeamRoster = {
 };
 
 // The canonical match record the editor seeds with and tests build on.
+// Home/away (v3): Wildebeests are home, Racoons away — the same match as before,
+// re-expressed. The raw notation is unchanged, so Rick/Morty resolve in awayRoster.
 export const SAMPLE_RECORD: MatchRecord = {
   raw: SAMPLE,
-  myTeam: "Racoons", opponent: "Wildebeests", label: "U13A Hurling", homeAway: "away",
+  homeTeam: "Wildebeests", awayTeam: "Racoons", label: "U13A Hurling",
   sport: "hurling",
-  colorUs: "#f5c518", colorUs2: "#1f7a4d", colorThem: "#c0392b", colorThem2: "#2c5fa8",
+  colorHome: "#c0392b", colorHome2: "#2c5fa8", colorAway: "#f5c518", colorAway2: "#1f7a4d",
   nameDisplay: "full",
-  usRoster: RACOONS,
-  oppRoster: { formation: [], players: [] },
+  awayRoster: RACOONS,
+  homeRoster: { formation: [], players: [] },
   matchDate: "2026-06-02T18:21",
-  notationV: 2,
+  notationV: 3,
 };
