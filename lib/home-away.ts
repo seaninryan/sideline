@@ -14,8 +14,9 @@ export function matchOutcome(
 
 // The 10 home/away record fields derived from a record's us/them values + homeAway.
 // "us" is home iff homeAway === "home" (missing/anything-else → us is away). Returns a
-// partial to spread onto the record. ④a shim — operates on the editor's still-us/them
-// payload (deleted in ④b). Typed `any` since the MatchRecord type is now home/away.
+// partial to spread onto the record. KEPT (not a shim): this is the legacy→v3 converter
+// used by migrateRecordToV3 to migrate old us/them records still in the DB. Typed `any`
+// since the canonical MatchRecord type is now home/away.
 export function recordHomeAway(r: any): {
   homeTeam: string; awayTeam: string;
   colorHome?: string; colorHome2?: string; colorAway?: string; colorAway2?: string;

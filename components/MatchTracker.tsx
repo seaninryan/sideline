@@ -208,7 +208,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const sportLabel = SPORTS[sport] ? SPORTS[sport].label : header.sport; // chosen sport beats one named in the notation
 
   const homeName = homeTeam || "Home";
-  const awayName = awayTeam || parsed.away || "Away";
+  const awayName = awayTeam || "Away";
 
   // colours used across saved matches, most common first (suggestions in the picker)
   const usedColors = useMemo(() => {
