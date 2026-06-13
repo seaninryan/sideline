@@ -83,7 +83,7 @@ export interface ParsedMatch {
   leadChanges: number;
   timesLevel: number;
   maxLead: number;
-  maxLeadSide: string | null;
+  maxLeadSide: "us" | "them" | null;
   warnings: any[];
   scoring: any[];
   notes: any[];

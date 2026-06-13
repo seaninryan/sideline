@@ -85,7 +85,7 @@ export function buildModel(record: MatchRecord): Model {
     homeSeries, timelineHA,
     homeRoster: ha.homeRoster || null,
     awayRoster: ha.awayRoster || null,
-    maxLeadVenue: sideToVenue(parsed.maxLeadSide as "us" | "them" | null, r.homeAway),
+    maxLeadVenue: sideToVenue(parsed.maxLeadSide, r.homeAway),
     outcome,
     parsed,
   };
