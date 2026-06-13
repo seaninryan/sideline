@@ -37,6 +37,32 @@ export function recordHomeAway(r: any): {
   };
 }
 
+// ④a→④b SHIM (deleted in ④b): load the editor's us/them state from a record. The
+// canonical record is now home/away (v3), but the editor's state is still us/them, so
+// map home→us (us = the home team), falling back to legacy us/them fields for any
+// record not yet migrated. Removed in ④b when the editor state becomes home/away.
+export function editorStateFromRecord(d: any): {
+  myTeam: string; opponent: string;
+  colorUs: string; colorUs2: string; colorThem: string; colorThem2: string;
+  usRoster: TeamRoster | null; oppRoster: TeamRoster | null;
+  usSquad: string; oppSquad: string; homeAway: "home" | "away";
+} {
+  const v3 = d && d.homeTeam !== undefined; // a home/away record → home is "us"
+  return {
+    myTeam: (v3 ? d.homeTeam : d.myTeam) ?? "My Team",
+    opponent: (v3 ? d.awayTeam : d.opponent) ?? "",
+    colorUs: (v3 ? d.colorHome : d.colorUs) ?? "#f5c518",
+    colorUs2: (v3 ? d.colorHome2 : d.colorUs2) ?? "#1f7a4d",
+    colorThem: (v3 ? d.colorAway : d.colorThem) ?? "#c0392b",
+    colorThem2: (v3 ? d.colorAway2 : d.colorThem2) ?? "#2c5fa8",
+    usRoster: (v3 ? d.homeRoster : d.usRoster) ?? null,
+    oppRoster: (v3 ? d.awayRoster : d.oppRoster) ?? null,
+    usSquad: (v3 ? d.homeSquad : d.usSquad) ?? "",
+    oppSquad: (v3 ? d.awaySquad : d.oppSquad) ?? "",
+    homeAway: v3 ? "home" : (d.homeAway || "away"),
+  };
+}
+
 // ④a SHIMS (deleted in ④b with recordHomeAway): the editor still consumes us/them-shaped
 // parser output (via parseMatchLegacy) and maps it to home/away for its read-only display.
 

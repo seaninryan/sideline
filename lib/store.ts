@@ -4,19 +4,15 @@ import { createClient } from "@/lib/supabase/client";
 import { backfillNotation } from "@/lib/migrate-notation";
 import type { MatchRecord, TeamRecord } from "@/lib/types";
 import { teamStore } from "@/lib/team-store";
-import { linkExistingMatchPatch, reconcileHomeAwayFromTeams } from "@/lib/team-link";
+import { linkExistingMatchPatch, reconcileHomeAwayFromTeams, stripUsThem, migrateRecordToV3 } from "@/lib/team-link";
 import { recordHomeAway } from "@/lib/home-away";
+
+export { migrateRecordToV3 } from "@/lib/team-link"; // re-export for existing importers
 
 const sb = createClient();
 
 // { id: record } — in-memory mirror; same shape MatchTracker has always read.
 export let cache: Record<string, MatchRecord> = {};
-
-// drop the dead us/them keys so the persisted record is clean home/away (④a)
-function stripUsThem(r: any): MatchRecord {
-  const { myTeam, opponent, colorUs, colorUs2, colorThem, colorThem2, usRoster, oppRoster, usSquad, oppSquad, homeAway, ...rest } = r;
-  return rest as MatchRecord;
-}
 
 // Pull every match the signed-in user owns into `cache`. RLS scopes the query to auth.uid().
 export async function loadAll() {
@@ -68,8 +64,9 @@ export async function linkUnlinkedMatches(userId: string | null) {
   }
 }
 
-// ④a one-time: bring every record to v3 home/away, reconciling name/squad/colours
-// from the linked teams. Idempotent (skips notationV === 3); resilient per-record.
+// ④a one-time: bring every notationV:2 record to v3 home/away (rosters derived,
+// identity reconciled from teams). Idempotent (only touches notationV === 2);
+// resilient per-record.
 export async function migrateHomeAway(userId: string | null) {
   const teams: TeamRecord[] = userId ? await teamStore.list(userId) : [];
   const byId: Record<string, TeamRecord> = {};
@@ -77,12 +74,7 @@ export async function migrateHomeAway(userId: string | null) {
   const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV === 2);
   for (const id of ids) {
     try {
-      const cur: any = cache[id];
-      // ③.1 already populated home/away fields; recordHomeAway re-derives them if a
-      // legacy us/them record somehow lacks them.
-      const base = cur.homeTeam !== undefined ? cur : { ...cur, ...recordHomeAway(cur) };
-      const reconciled = { ...base, ...reconcileHomeAwayFromTeams(base, byId), notationV: 3 };
-      const clean = stripUsThem(reconciled);
+      const clean = migrateRecordToV3(cache[id], byId);
       cache[id] = clean;
       await store.set(id, clean);
     } catch (e) { console.warn("home/away migration failed for", id, e); }

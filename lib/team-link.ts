@@ -1,4 +1,23 @@
 import type { MatchRecord, TeamRecord, TeamRoster } from "@/lib/types";
+import { recordHomeAway } from "@/lib/home-away";
+
+// Drop the dead us/them keys so a persisted record is clean home/away.
+export function stripUsThem(r: any): MatchRecord {
+  const { myTeam, opponent, colorUs, colorUs2, colorThem, colorThem2, usRoster, oppRoster, usSquad, oppSquad, homeAway, ...rest } = r;
+  return rest as MatchRecord;
+}
+
+// Bring ONE record to a clean v3 home/away shape. CRUCIAL: derive home/away via
+// recordHomeAway whenever the record still carries us/them (`myTeam` present) — that
+// is what populates homeRoster/awayRoster/colours from usRoster/oppRoster. A record can
+// have homeTeam set by a prior team-reconcile but NO homeRoster, so keying off homeTeam
+// would skip roster derivation and the scorers would not resolve. Then overlay
+// name/squad/colours from the linked teams (the durable source) and strip us/them.
+export function migrateRecordToV3(record: any, teamsById: Record<string, TeamRecord>): MatchRecord {
+  const base = record && record.myTeam !== undefined ? { ...record, ...recordHomeAway(record) } : record;
+  const reconciled = { ...base, ...reconcileHomeAwayFromTeams(base, teamsById) };
+  return { ...stripUsThem(reconciled), notationV: 3 };
+}
 
 // A team roster → the app's roster-notation block (formation rows pipe-joined, then a Subs section).
 // Retained for callers that still render a roster as text; rosters now live structured on the record.
