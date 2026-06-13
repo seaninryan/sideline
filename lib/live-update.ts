@@ -5,8 +5,8 @@ import type { Model } from "./types";
 // that doesn't move the score (lineup tweak, corner, name-privacy) returns false.
 export function scoreChanged(prev: Model, next: Model): boolean {
   return (
-    prev.totals.us.str !== next.totals.us.str ||
-    prev.totals.them.str !== next.totals.them.str
+    prev.homeTotals?.str !== next.homeTotals?.str ||
+    prev.awayTotals?.str !== next.awayTotals?.str
   );
 }
 
