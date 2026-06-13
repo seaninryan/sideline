@@ -2,7 +2,6 @@ import { contrastOn, fmtScore, gpTotal } from "@/lib/util";
 import type { Model } from "@/lib/types";
 import { BRAND_SITE, BRAND_WORDMARK, BRAND_CHANT } from "@/lib/constants";
 import { lineupBadges } from "./lineup-badges";
-import { sideToVenue } from "@/lib/home-away";
 
 /* Shared HWG brand pill (same geometry as the app icon / top-bar logo).
    Drawn as an SVG string so the poster and OG card share one source of truth.
@@ -37,10 +36,10 @@ export function buildScoreCardSVG(m: Model): { svg: string; width: number; heigh
   const outcome = m.outcome ?? { winner: null, margin: 0 };
   const result = outcome.winner === null ? "Tie" : `Won by ${outcome.margin}`;
   const ht = m.ht || "";
-  const homeC1 = m.homeColors?.[0] ?? m.colorUs ?? "#f5c518";
-  const homeC2 = m.homeColors?.[1] ?? m.colorUs2 ?? "#1f7a4d";
-  const awayC1 = m.awayColors?.[0] ?? m.colorThem ?? "#c0392b";
-  const awayC2 = m.awayColors?.[1] ?? m.colorThem2 ?? "#2c5fa8";
+  const homeC1 = m.homeColors?.[0] ?? "#f5c518";
+  const homeC2 = m.homeColors?.[1] ?? "#1f7a4d";
+  const awayC1 = m.awayColors?.[0] ?? "#c0392b";
+  const awayC2 = m.awayColors?.[1] ?? "#2c5fa8";
   const flag = (x: number, y: number, w: number, h: number, c1: string, c2: string) =>
     `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c1}"/>` +
     `<rect x="${x}" y="${y + h / 2}" width="${w}" height="${h / 2}" fill="${c2}"/></g>`;
@@ -108,10 +107,10 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   banner.push(T(P + 64, 33, BRAND_WORDMARK, 17, PAPER, { w: 800, ls: 1.5 }));
   banner.push(T(W - P, 33, BRAND_CHANT.toUpperCase(), 8, "#8fb0a3", { a: "end", ls: 2 }));
 
-  const hC1 = m.homeColors?.[0] ?? m.colorUs ?? "#f5c518";
-  const hC2 = m.homeColors?.[1] ?? m.colorUs2 ?? "#1f7a4d";
-  const aC1 = m.awayColors?.[0] ?? m.colorThem ?? "#c0392b";
-  const aC2 = m.awayColors?.[1] ?? m.colorThem2 ?? "#2c5fa8";
+  const hC1 = m.homeColors?.[0] ?? "#f5c518";
+  const hC2 = m.homeColors?.[1] ?? "#1f7a4d";
+  const aC1 = m.awayColors?.[0] ?? "#c0392b";
+  const aC2 = m.awayColors?.[1] ?? "#2c5fa8";
 
   // ---- header band (sits below the banner) — mirrors the on-screen ScoreHeader ----
   head.push(R(0, 0, W / 2, 6, hC1), R(W / 2, 0, W / 2, 6, aC1));
@@ -142,11 +141,11 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   let y = HH + BAND + 20;
 
   // ---- stats 2×2 (boxed, like the on-screen StatGrid) ----
-  const maxLeadVenue = sideToVenue(m.maxLeadSide, m.homeAway);
-  const maxLeadTeam = maxLeadVenue === "home" ? m.homeName.split(" ")[0] : maxLeadVenue === "away" ? m.awayName.split(" ")[0] : "";
+  const maxLeadV = m.maxLeadVenue;
+  const maxLeadTeam = maxLeadV === "home" ? (m.homeName || "").split(" ")[0] : maxLeadV === "away" ? (m.awayName || "").split(" ")[0] : "";
   const stats: [string, string][] = [["HALF-TIME", m.ht || "—"], ["LEAD CHANGES", String(m.leadChanges)],
     ["TIMES LEVEL", String(m.timesLevel)],
-    ["BIGGEST LEAD", `${m.maxLead}${m.maxLeadSide ? " " + maxLeadTeam : ""}`]];
+    ["BIGGEST LEAD", `${m.maxLead}${maxLeadV ? " " + maxLeadTeam : ""}`]];
   const sgap = 8, scellW = (CW - sgap) / 2, scellH = 50;
   stats.forEach((st, i) => {
     const c = i % 2, r = i < 2 ? 0 : 1;
@@ -238,7 +237,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   y += 18;
 
   // shared pitch renderer — jersey shirts on a green pitch, names + score/card/sub/og badges below
-  const drawPitch = (rows: number[][], c1: string, c2: string, nameFor: (n: number) => string, side: "us" | "them") => {
+  const drawPitch = (rows: number[][], c1: string, c2: string, nameFor: (n: number) => string, side: "home" | "away") => {
     const pitchH = rows.length ? rows.length * 56 + 18 : 28;
     body.push(R(P, y, CW, pitchH, PITCH, 12));
     body.push(R(P, y + pitchH / 2 - 0.5, CW, 1, "#1c5a40"));
@@ -263,7 +262,7 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   };
 
   // reusable bench-chip renderer — used for both teams' substitutes
-  const drawBench = (players: any[], side: "us" | "them", c1: string, c2: string) => {
+  const drawBench = (players: any[], side: "home" | "away", c1: string, c2: string) => {
     let bx = P + 38, by = y + 4;
     const chipH = 17;
     players.forEach((p: any) => {
@@ -286,22 +285,22 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
     y = by + chipH + 6;
   };
 
-  // ---- lineup pitches: home first, then away ----
-  const usIsHome = m.homeAway === "home";
-  // us-team helpers (always the tracked side, regardless of venue)
-  const usFindName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-  const usFormation = m.formationRows && m.formationRows.length ? m.formationRows : [];
-  // opp-team helpers
-  const oppFindName = (n: number) => { const p = ((m.oppRoster || {}).players || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-  const oppFormation = m.oppRoster && m.oppRoster.formation && m.oppRoster.formation.length ? m.oppRoster.formation : [];
-  const oppSubsList = ((m.oppRoster || {}).players || []).filter((p: any) => p.role === "sub");
+  // ---- lineup pitches: home first, then away (symmetric, from the venue rosters) ----
+  const pitchFor = (roster: any) => {
+    const players = (roster?.players) || [];
+    const formation: number[][] = (roster?.formation && roster.formation.length) ? roster.formation : [];
+    const nameFor = (n: number) => { const p = players.find((x: any) => x.num === n); return p ? p.name : ""; };
+    const subsList = players.filter((p: any) => p.role === "sub");
+    const missingList = players.filter((p: any) => p.role === "missing");
+    return { formation, nameFor, subsList, missingList };
+  };
 
   const renderTeamPitch = (
     teamName: string, formation: number[][], c1: string, c2: string,
-    findNameFn: (n: number) => string, badgeSide: "us" | "them",
+    findNameFn: (n: number) => string, badgeSide: "home" | "away",
     subsList: any[], missingList: any[],
   ) => {
-    body.push(T(P, y, `TEAM · ${teamName.toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
+    body.push(T(P, y, `TEAM · ${(teamName || "").toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
     y += 12;
     drawPitch(formation, c1, c2, findNameFn, badgeSide);
     if (subsList.length) {
@@ -312,18 +311,10 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
     y += 16;
   };
 
-  // home team
-  if (usIsHome) {
-    renderTeamPitch(m.homeName, usFormation, hC1, hC2, usFindName, "us", m.subs || [], m.missing || []);
-  } else if (oppFormation.length) {
-    renderTeamPitch(m.homeName, oppFormation, hC1, hC2, oppFindName, "them", oppSubsList, []);
-  }
-  // away team
-  if (!usIsHome) {
-    renderTeamPitch(m.awayName, usFormation, aC1, aC2, usFindName, "us", m.subs || [], m.missing || []);
-  } else if (oppFormation.length) {
-    renderTeamPitch(m.awayName, oppFormation, aC1, aC2, oppFindName, "them", oppSubsList, []);
-  }
+  const home = pitchFor(m.homeRoster);
+  const away = pitchFor(m.awayRoster);
+  if (home.formation.length) renderTeamPitch(m.homeName, home.formation, hC1, hC2, home.nameFor, "home", home.subsList, home.missingList);
+  if (away.formation.length) renderTeamPitch(m.awayName, away.formation, aC1, aC2, away.nameFor, "away", away.subsList, away.missingList);
 
   // ---- timeline (centre rail: home left, away right — scores, subs, cards, corners) ----
   body.push(T(P, y, "TIMELINE", 11, MUTE, { w: 700, ls: 1 }));

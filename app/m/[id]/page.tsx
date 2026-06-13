@@ -26,8 +26,11 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const row = await fetchRow(params.id);
   if (!row || !row.is_public) return { title: "Here We Go" };
   const m = buildModel(row.data);
-  const title = `${m.usName} ${m.totals.us.str} – ${m.totals.them.str} ${m.themName}`;
-  const description = [m.grade, m.dateStr, m.result].filter(Boolean).join(" · ") || "Match report on Here We Go";
+  const title = `${m.homeName} ${m.homeTotals?.str ?? ""} – ${m.awayTotals?.str ?? ""} ${m.awayName}`;
+  const result = m.outcome?.winner
+    ? `${m.outcome.winner === "home" ? m.homeName : m.awayName} by ${m.outcome.margin}`
+    : "";
+  const description = [m.grade, m.dateStr, result].filter(Boolean).join(" · ") || "Match report on Here We Go";
   const url = `/m/${params.id}`;
   return {
     title: `${title} · Here We Go`,

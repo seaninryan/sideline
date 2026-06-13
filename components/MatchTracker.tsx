@@ -41,7 +41,7 @@ import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
-import { venueSeries, venueItems } from "@/lib/home-away";
+import { venueSeries, venueItems, sideToVenue } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -648,6 +648,17 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   const timelineHA = venueItems(timeline, usIsHome);
   const homeColor = usIsHome ? colorUs : colorThem;
   const awayColor = usIsHome ? colorThem : colorUs;
+  // home/away display vars (③.2b) — each is exactly the inline us/them expression it
+  // replaces in the read-only render. The us/them EDIT state stays (→ ③.3/③.4).
+  const homeName = usIsHome ? usName : themName;
+  const awayName = usIsHome ? themName : usName;
+  const homeColor2 = usIsHome ? colorUs2 : colorThem2;
+  const awayColor2 = usIsHome ? colorThem2 : colorUs2;
+  const homeScorers = usIsHome ? usScorers : themScorers;
+  const awayScorers = usIsHome ? themScorers : usScorers;
+  const homeSquadV = usIsHome ? usSquad : oppSquad;
+  const awaySquadV = usIsHome ? oppSquad : usSquad;
+  const maxLeadVenue = sideToVenue(parsed.maxLeadSide, homeAway);
   const starters = roster.filter((p) => p.role === "starting");
   const subs = roster.filter((p) => p.role === "sub");
   const missing = roster.filter((p) => p.role === "missing");
@@ -889,25 +900,24 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
       {/* score header (shared with the public page) — the editor adds an Edit-details toggle on the panel */}
       {!nw && (() => {
-        const usIsHome = header.homeAway === "home";
-        const usTotal = gpTotal(totals.us.g, totals.us.p, effMode);
-        const themTotal = gpTotal(totals.them.g, totals.them.p, effMode);
+        const homeT = usIsHome ? totals.us : totals.them;
+        const awayT = usIsHome ? totals.them : totals.us;
         return (
           <ScoreHeader
-            homeName={usIsHome ? usName : themName}
-            awayName={usIsHome ? themName : usName}
-            homeStr={usIsHome ? totals.us.str : totals.them.str}
-            awayStr={usIsHome ? totals.them.str : totals.us.str}
-            homeColors={usIsHome ? [colorUs, colorUs2] : [colorThem, colorThem2]}
-            awayColors={usIsHome ? [colorThem, colorThem2] : [colorUs, colorUs2]}
+            homeName={homeName}
+            awayName={awayName}
+            homeStr={homeT.str}
+            awayStr={awayT.str}
+            homeColors={[homeColor, homeColor2]}
+            awayColors={[awayColor, awayColor2]}
             grade={header.label || sportLabel || ""}
             dateStr={matchDate ? fmtDateDow(matchDate) : ""}
-            homeTotal={usIsHome ? usTotal : themTotal}
-            awayTotal={usIsHome ? themTotal : usTotal}
+            homeTotal={gpTotal(homeT.g, homeT.p, effMode)}
+            awayTotal={gpTotal(awayT.g, awayT.p, effMode)}
             phase={phase}
             live={phase === "play" || phase === "ht"}
-            homeSquad={usIsHome ? usSquad : oppSquad}
-            awaySquad={usIsHome ? oppSquad : usSquad}
+            homeSquad={homeSquadV}
+            awaySquad={awaySquadV}
             action={<button className="sh-edit" onClick={() => { setShowDetails((o) => !o); if (showDetails) setColorPick(null); }}>{showDetails ? "▾ Hide" : "✎ Edit"}</button>}
           />
         );
@@ -1174,7 +1184,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
             {/* running timeline beneath the controls */}
             <p className="mt-h" style={{ marginTop: 16 }}>Timeline</p>
-            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} nameHome={usIsHome ? usName : themName} nameAway={usIsHome ? themName : usName} />
+            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={homeColor} colorHome2={homeColor2} colorAway={awayColor} colorAway2={awayColor2} nameHome={homeName} nameAway={awayName} />
           </div>
         )}
 
@@ -1190,7 +1200,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
               { k: "Half-time", v: htScore(parsed.series, effMode) },
               { k: "Lead changes", v: parsed.leadChanges },
               { k: "Times level", v: parsed.timesLevel },
-              { k: `Biggest lead${parsed.maxLeadSide ? " · " + (parsed.maxLeadSide === "us" ? usName : themName) : ""}`, v: parsed.maxLead },
+              { k: `Biggest lead${maxLeadVenue ? " · " + (maxLeadVenue === "home" ? homeName : awayName) : ""}`, v: parsed.maxLead },
             ]} />
 
             <p className="mt-h">Score progression</p>
@@ -1199,10 +1209,10 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
             </div>
 
             <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>
-            <Scorers home={usIsHome ? usScorers : themScorers} away={usIsHome ? themScorers : usScorers} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} mode={effMode} />
+            <Scorers home={homeScorers} away={awayScorers} colorHome={homeColor} colorHome2={homeColor2} colorAway={awayColor} colorAway2={awayColor2} mode={effMode} />
 
             <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
-            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} nameHome={usIsHome ? usName : themName} nameAway={usIsHome ? themName : usName} />
+            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={homeColor} colorHome2={homeColor2} colorAway={awayColor} colorAway2={awayColor2} nameHome={homeName} nameAway={awayName} />
           </>
         )}
 

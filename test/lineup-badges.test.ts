@@ -37,3 +37,43 @@ describe("lineupBadges", () => {
     expect(lineupBadges(model, "them", 3).og).toBe(false);
   });
 });
+
+// ③.2a: dual-keyed fixture for home/away branch
+const modelHA: any = {
+  usScorers: [{ num: 10, g: 1, p: 2 }],
+  themScorers: [{ num: 7, g: 0, p: 1 }],
+  homeScorers: [{ num: 10, g: 1, p: 2 }],
+  awayScorers: [{ num: 7, g: 0, p: 1 }],
+  timeline: [
+    { kind: "sub", side: "us", onNum: 12, offNum: 10 },
+    { kind: "card", side: "them", num: 7, card: "yellow" },
+    { kind: "score", side: "them", og: true, ogNum: 4 },
+  ],
+  timelineHA: [
+    { kind: "sub", side: "home", onNum: 12, offNum: 10 },
+    { kind: "card", side: "away", num: 7, card: "yellow" },
+    { kind: "score", side: "away", og: true, ogNum: 4 },
+  ],
+};
+
+describe("lineupBadges us/them keying", () => {
+  it("reads timeline + usScorers for an us player", () => {
+    expect(lineupBadges(modelHA, "us", 10)).toMatchObject({ subOff: true, score: { g: 1, p: 2 } });
+    expect(lineupBadges(modelHA, "us", 12)).toMatchObject({ subOn: true });
+    expect(lineupBadges(modelHA, "us", 4)).toMatchObject({ og: true });
+  });
+  it("reads themScorers + cards for a them player", () => {
+    expect(lineupBadges(modelHA, "them", 7)).toMatchObject({ cards: ["yellow"], score: { g: 0, p: 1 } });
+  });
+});
+
+describe("lineupBadges home/away keying", () => {
+  it("reads timelineHA + homeScorers for a home player", () => {
+    expect(lineupBadges(modelHA, "home", 10)).toMatchObject({ subOff: true, score: { g: 1, p: 2 } });
+    expect(lineupBadges(modelHA, "home", 12)).toMatchObject({ subOn: true });
+    expect(lineupBadges(modelHA, "home", 4)).toMatchObject({ og: true });
+  });
+  it("reads awayScorers + cards for an away player", () => {
+    expect(lineupBadges(modelHA, "away", 7)).toMatchObject({ cards: ["yellow"], score: { g: 0, p: 1 } });
+  });
+});

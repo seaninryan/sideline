@@ -2,7 +2,7 @@ import { parseMatch } from "@/lib/parser";
 import { fmtDateDow, gpTotal } from "@/lib/util";
 import { htScore } from "@/lib/half-time";
 import { SPORTS, scoringModeForSport } from "@/lib/constants";
-import { matchOutcome, venueSeries, venueItems } from "@/lib/home-away";
+import { matchOutcome, venueSeries, venueItems, sideToVenue, recordHomeAway } from "@/lib/home-away";
 import type { MatchRecord, Model } from "@/lib/types";
 
 export function buildModel(record: MatchRecord): Model {
@@ -47,6 +47,7 @@ export function buildModel(record: MatchRecord): Model {
   const ht = htScore(series, effMode);
 
   const usIsHome = header.homeAway === "home";
+  const ha = recordHomeAway(r);
   const homeSeries = venueSeries(series as any, usIsHome);
   const timelineHA = venueItems(timeline as any, usIsHome);
   const cUs = r.colorUs || "#f5c518", cUs2 = r.colorUs2 || "#1f7a4d";
@@ -61,17 +62,14 @@ export function buildModel(record: MatchRecord): Model {
 
   return {
     grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
-    usName, themName, dateStr: r.matchDate ? fmtDateDow(r.matchDate) : "",
-    totals, result, effMode, ht,
+    dateStr: r.matchDate ? fmtDateDow(r.matchDate) : "",
+    effMode, ht,
     leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
-    maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
+    maxLead: parsed.maxLead,
     series, goalDots, chartMarkers, htLine, halfMarks,
-    usScorers, themScorers, formationRows, starters, subs, missing, timeline,
-    colorUs: cUs, colorUs2: cUs2, colorThem: cThem, colorThem2: cThem2,
+    timeline,
     nameDisplay: r.nameDisplay || "full",
-    oppRoster: r.oppRoster || null,
-    usSquad: sqUs, oppSquad: sqOpp,
-    // neutral home/away view (additive — sub-project ①)
+    // neutral home/away view
     homeName: usIsHome ? usName : themName,
     awayName: usIsHome ? themName : usName,
     homeColors: usIsHome ? [cUs, cUs2] : [cThem, cThem2],
@@ -82,6 +80,9 @@ export function buildModel(record: MatchRecord): Model {
     homeSquad: usIsHome ? sqUs : sqOpp,
     awaySquad: usIsHome ? sqOpp : sqUs,
     homeSeries, timelineHA,
+    homeRoster: ha.homeRoster || null,
+    awayRoster: ha.awayRoster || null,
+    maxLeadVenue: sideToVenue(parsed.maxLeadSide, r.homeAway),
     outcome,
     parsed,
   };
