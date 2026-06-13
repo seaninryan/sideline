@@ -27,24 +27,19 @@ export function latestMatchForTeam(matches: MatchLite[], teamId: string): string
   return best.id;
 }
 
-// For the just-saved match, the team-roster pushes to make: the us side
-// (teamId = homeAway==="home" ? homeTeamId : awayTeamId, roster = usRoster) and the
-// opp side (the other id, oppRoster) — each only when this match is that team's
-// latest and the roster is non-empty.
-// ④a: `record` is typed `any` — the editor still passes a us/them payload here
-// (it flips to home/away in ④b); reads record.homeAway/usRoster/oppRoster.
+// For the just-saved match, the team-roster pushes to make: the home side
+// (teamId = homeTeamId, roster = homeRoster) and the away side (awayTeamId, awayRoster) —
+// each only when this match is that team's latest and the roster is non-empty.
 export function teamRosterPushes(
   record: any,
   matches: MatchLite[],
-): { teamId: string; side: "us" | "opp"; roster: TeamRoster }[] {
-  const usTeamId = record.homeAway === "home" ? record.homeTeamId : record.awayTeamId;
-  const oppTeamId = record.homeAway === "home" ? record.awayTeamId : record.homeTeamId;
-  const out: { teamId: string; side: "us" | "opp"; roster: TeamRoster }[] = [];
-  const consider = (teamId: string | null | undefined, side: "us" | "opp", roster?: TeamRoster) => {
+): { teamId: string; side: "home" | "away"; roster: TeamRoster }[] {
+  const out: { teamId: string; side: "home" | "away"; roster: TeamRoster }[] = [];
+  const consider = (teamId: string | null | undefined, side: "home" | "away", roster?: TeamRoster) => {
     if (!teamId || !roster || !roster.formation || !roster.formation.length) return;
     if (latestMatchForTeam(matches, teamId) === record.id) out.push({ teamId, side, roster });
   };
-  consider(usTeamId, "us", record.usRoster);
-  consider(oppTeamId, "opp", record.oppRoster);
+  consider(record.homeTeamId, "home", record.homeRoster);
+  consider(record.awayTeamId, "away", record.awayRoster);
   return out;
 }

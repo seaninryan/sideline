@@ -10,26 +10,18 @@ export interface LineupBadges {
 
 // Side-aware lineup badges for ONE player (by shirt number) on ONE side.
 // Single source of truth shared by the editor lineup, the public page, and the
-// poster image. Dual-keyed during ③.2: "us"|"them" reads timeline + usScorers/
-// themScorers; "home"|"away" reads timelineHA + homeScorers/awayScorers. The
-// us/them branch is removed in ③.2b once the editor migrates.
+// poster image. Reads timelineHA + homeScorers/awayScorers (home/away only).
 export function lineupBadges(
-  m: Partial<Pick<Model, "timeline" | "usScorers" | "themScorers" | "timelineHA" | "homeScorers" | "awayScorers">>,
-  side: "us" | "them" | "home" | "away",
+  m: Partial<Pick<Model, "timelineHA" | "homeScorers" | "awayScorers">>,
+  side: "home" | "away",
   num: number,
 ): LineupBadges {
-  const venue = side === "home" || side === "away";
-  const scorers = venue
-    ? (side === "home" ? m.homeScorers : m.awayScorers)
-    : (side === "them" ? m.themScorers : m.usScorers);
-  const tl = (venue ? m.timelineHA : m.timeline) || [];
+  const scorers = side === "home" ? m.homeScorers : m.awayScorers;
   const sc = (scorers || []).find((s: any) => s.num === num && (s.g || s.p));
   let subOn = false, subOff = false, og = false;
   const cards: string[] = [];
-  tl.forEach((t: any) => {
-    const tSide = venue
-      ? (t.side === "away" ? "away" : "home")
-      : (t.side === "them" ? "them" : "us");
+  (m.timelineHA || []).forEach((t: any) => {
+    const tSide = t.side === "away" ? "away" : "home";
     if (t.kind === "sub" && tSide === side) {
       if (t.onNum === num) subOn = true;
       if (t.offNum === num) subOff = true;
