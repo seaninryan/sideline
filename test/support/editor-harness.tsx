@@ -28,6 +28,15 @@ export function makeSupabaseStub() {
 // vi.mock is hoisted; the factory must be self-contained.
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => makeSupabaseStub() }));
 
+// MatchTracker calls useRouter() from next/navigation, which throws outside the
+// App Router context ("invariant expected app router to be mounted"). Provide an
+// inert router (push/replace are no-ops) so the editor can mount under jsdom.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push() {}, replace() {}, refresh() {}, back() {}, forward() {}, prefetch() {} }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // Seed the in-memory store cache with a record under `id`, then render the editor
 // pointed at it. Returns the Testing Library render result.
 export async function mountEditor(id: string, record: any) {
