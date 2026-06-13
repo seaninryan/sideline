@@ -8,7 +8,10 @@ import SportIcon, { ICON_SPORTS } from "@/components/SportIcon";
 import { createClient } from "@/lib/supabase/client";
 import { matchRowView, relativeDate, matchBucket } from "@/lib/match-list";
 import { SPORTS } from "@/lib/constants";
-import type { MatchRecord } from "@/lib/types";
+import { teamStore } from "@/lib/team-store";
+import { store } from "@/lib/store";
+import { reconcileHomeAwayFromTeams } from "@/lib/team-link";
+import type { MatchRecord, TeamRecord } from "@/lib/types";
 
 interface Row { id: string; short_code: string | null; is_public?: boolean; data: MatchRecord; updated_at?: string; }
 type Filter = "both" | "personal" | "public";
@@ -36,7 +39,33 @@ export default function Landing({ userId, email, isAdmin = false }: { userId: st
     if (!userId) { setOwn([]); return; }
     sb.from("matches").select("id,short_code,is_public,data,updated_at").eq("owner", userId)
       .order("match_date", { ascending: false, nullsFirst: false })
-      .then(({ data, error }) => { if (error) console.warn(error.message); setOwn(((data as Row[]) || [])); });
+      .then(async ({ data, error }) => {
+        if (error) console.warn(error.message);
+        const rows = (data as Row[]) || [];
+        setOwn(rows); // first paint with stored values
+        // ④a self-heal: reconcile each row's home/away identity from the linked teams
+        // (the durable source) so the home screen shows correct squads/names/colours
+        // even without opening the editor. Resilient per-record; only the user's rows.
+        try {
+          const teams: TeamRecord[] = await teamStore.list(userId);
+          const byId: Record<string, TeamRecord> = {};
+          teams.forEach((t) => { if (t.id) byId[t.id] = t; });
+          let changed = false;
+          const healed = rows.map((r) => {
+            try {
+              const patch = reconcileHomeAwayFromTeams(r.data, byId);
+              if (Object.keys(patch).some((k) => (patch as any)[k] !== (r.data as any)[k])) {
+                changed = true;
+                const next = { ...r.data, ...patch };
+                store.set(r.id, next).catch(() => {});
+                return { ...r, data: next };
+              }
+            } catch {}
+            return r;
+          });
+          if (changed) setOwn(healed);
+        } catch {}
+      });
   }, [userId]);
 
   // Recent public matches — the global feed. Includes our OWN public matches too

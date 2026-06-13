@@ -13,31 +13,30 @@ export function rosterToNotationLines(roster: TeamRoster): string {
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 
-// Build the patch to apply when linking a match to two teams. us = our side; homeAway places us
-// as home or away. The header (label/homeAway/opponent) and both rosters are RECORD fields now —
-// the notation (raw) is event-only and is never touched here. Seeds usRoster from the us team
-// ONLY when the match has no roster yet (never clobbers a hand-entered lineup).
+// Build the patch to apply when linking a match to two teams (home/away picked directly).
+// Both rosters are RECORD fields now — the notation (raw) is event-only and is never
+// touched here. Seeds homeRoster from the home team ONLY when the match has no roster yet
+// (never clobbers a hand-entered lineup).
 export function teamLinkPatch(
   record: MatchRecord,
-  { usTeam, oppTeam, homeAway }: { usTeam: TeamRecord; oppTeam: TeamRecord; homeAway: "home" | "away" },
+  { homeTeam, awayTeam }: { homeTeam: TeamRecord; awayTeam: TeamRecord },
 ) {
-  const hasRoster = !!(record.usRoster && record.usRoster.formation.length);
-  const usRoster = hasRoster ? clone(record.usRoster!) : clone(usTeam.roster);
+  const hasHome = !!(record.homeRoster && record.homeRoster.formation.length);
+  const homeRoster = hasHome ? clone(record.homeRoster!) : clone(homeTeam.roster);
   return {
-    myTeam: usTeam.name,
     label: record.label,
-    homeAway,
-    opponent: oppTeam.name,
-    colorUs: usTeam.color1 || record.colorUs,
-    colorUs2: usTeam.color2 || record.colorUs2,
-    colorThem: oppTeam.color1 || record.colorThem,
-    colorThem2: oppTeam.color2 || record.colorThem2,
-    homeTeamId: homeAway === "home" ? usTeam.id : oppTeam.id,
-    awayTeamId: homeAway === "home" ? oppTeam.id : usTeam.id,
-    usRoster,
-    oppRoster: clone(oppTeam.roster),
-    usSquad: usTeam.squad || "",
-    oppSquad: oppTeam.squad || "",
+    homeTeam: homeTeam.name,
+    awayTeam: awayTeam.name,
+    colorHome: homeTeam.color1 || record.colorHome,
+    colorHome2: homeTeam.color2 || record.colorHome2,
+    colorAway: awayTeam.color1 || record.colorAway,
+    colorAway2: awayTeam.color2 || record.colorAway2,
+    homeTeamId: homeTeam.id,
+    awayTeamId: awayTeam.id,
+    homeRoster,
+    awayRoster: clone(awayTeam.roster),
+    homeSquad: homeTeam.squad || "",
+    awaySquad: awayTeam.squad || "",
   };
 }
 
@@ -48,16 +47,34 @@ export function teamLinkPatch(
 // so absent fields stay untouched on store.set merge.
 export function linkExistingMatchPatch(
   record: MatchRecord,
-  { usTeam, oppTeam, homeAway }: { usTeam: TeamRecord; oppTeam: TeamRecord; homeAway: "home" | "away" },
+  { homeTeam, awayTeam }: { homeTeam: TeamRecord; awayTeam: TeamRecord },
 ): Partial<MatchRecord> {
-  const patch: Partial<MatchRecord> = {
-    homeTeamId: homeAway === "home" ? usTeam.id : oppTeam.id,
-    awayTeamId: homeAway === "home" ? oppTeam.id : usTeam.id,
-  };
-  if (!(record.usRoster && record.usRoster.formation.length)) patch.usRoster = clone(usTeam.roster);
-  if (!(record.oppRoster && record.oppRoster.formation.length)) patch.oppRoster = clone(oppTeam.roster);
-  if (!record.usSquad && usTeam.squad) patch.usSquad = usTeam.squad;
-  if (!record.oppSquad && oppTeam.squad) patch.oppSquad = oppTeam.squad;
+  const patch: Partial<MatchRecord> = { homeTeamId: homeTeam.id, awayTeamId: awayTeam.id };
+  if (!(record.homeRoster && record.homeRoster.formation.length)) patch.homeRoster = clone(homeTeam.roster);
+  if (!(record.awayRoster && record.awayRoster.formation.length)) patch.awayRoster = clone(awayTeam.roster);
+  if (!record.homeSquad && homeTeam.squad) patch.homeSquad = homeTeam.squad;
+  if (!record.awaySquad && awayTeam.squad) patch.awaySquad = awayTeam.squad;
+  return patch;
+}
+
+// ④a: derive a record's home/away identity, preferring the linked teams (the durable
+// source). teamsById = a map of teamId → TeamRecord. Falls back to whatever the record
+// already carries (post-③.1 home/away fields). Returns a Partial to merge.
+export function reconcileHomeAwayFromTeams(
+  record: MatchRecord,
+  teamsById: Record<string, TeamRecord>,
+): Partial<MatchRecord> {
+  const home = record.homeTeamId ? teamsById[record.homeTeamId] : undefined;
+  const away = record.awayTeamId ? teamsById[record.awayTeamId] : undefined;
+  const patch: Partial<MatchRecord> = {};
+  if (home) {
+    patch.homeTeam = home.name; patch.homeSquad = home.squad || "";
+    patch.colorHome = home.color1 || record.colorHome; patch.colorHome2 = home.color2 || record.colorHome2;
+  }
+  if (away) {
+    patch.awayTeam = away.name; patch.awaySquad = away.squad || "";
+    patch.colorAway = away.color1 || record.colorAway; patch.colorAway2 = away.color2 || record.colorAway2;
+  }
   return patch;
 }
 
@@ -68,8 +85,14 @@ export function teamsToPublish(record: MatchRecord): string[] {
   return Array.from(new Set(ids));
 }
 
-// Swap which side is home: flip the record's homeAway field and swap the team ids. No raw rewrite.
+// Swap which side is home: a literal field swap of the home/away identity. No raw rewrite.
 export function swapHomeAway(record: MatchRecord) {
-  const flipped: "home" | "away" = (record.homeAway === "home") ? "away" : "home";
-  return { homeAway: flipped, homeTeamId: record.awayTeamId ?? null, awayTeamId: record.homeTeamId ?? null };
+  return {
+    homeTeam: record.awayTeam, awayTeam: record.homeTeam,
+    colorHome: record.colorAway, colorHome2: record.colorAway2,
+    colorAway: record.colorHome, colorAway2: record.colorHome2,
+    homeRoster: record.awayRoster ?? null, awayRoster: record.homeRoster ?? null,
+    homeSquad: record.awaySquad ?? "", awaySquad: record.homeSquad ?? "",
+    homeTeamId: record.awayTeamId ?? null, awayTeamId: record.homeTeamId ?? null,
+  };
 }

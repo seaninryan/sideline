@@ -2,15 +2,21 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { backfillNotation } from "@/lib/migrate-notation";
-import type { MatchRecord } from "@/lib/types";
+import type { MatchRecord, TeamRecord } from "@/lib/types";
 import { teamStore } from "@/lib/team-store";
-import { linkExistingMatchPatch } from "@/lib/team-link";
+import { linkExistingMatchPatch, reconcileHomeAwayFromTeams } from "@/lib/team-link";
 import { recordHomeAway } from "@/lib/home-away";
 
 const sb = createClient();
 
 // { id: record } — in-memory mirror; same shape MatchTracker has always read.
 export let cache: Record<string, MatchRecord> = {};
+
+// drop the dead us/them keys so the persisted record is clean home/away (④a)
+function stripUsThem(r: any): MatchRecord {
+  const { myTeam, opponent, colorUs, colorUs2, colorThem, colorThem2, usRoster, oppRoster, usSquad, oppSquad, homeAway, ...rest } = r;
+  return rest as MatchRecord;
+}
 
 // Pull every match the signed-in user owns into `cache`. RLS scopes the query to auth.uid().
 export async function loadAll() {
@@ -24,25 +30,12 @@ export async function loadAll() {
   // event-only and persisted. Event-only-origin records carry notationV:2 and
   // are skipped (so their seeded usRoster is never clobbered). Resilient: one
   // bad record must not abort the load.
-  const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV !== 2);
+  const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV !== 2 && cache[id].notationV !== 3);
   await Promise.allSettled(ids.map(async (id) => {
     try {
       const migrated = backfillNotation(cache[id]);
       if (migrated !== cache[id]) { cache[id] = migrated; await store.set(id, migrated); }
     } catch (e) { console.warn("backfill failed for", id, e); }
-  }));
-  // ③.1 one-time home/away backfill: derive the fields for any cached record that
-  // lacks them (presence check on `homeTeam`). Idempotent + resilient. `store.set`
-  // also derives them, so this is belt-and-braces for records not otherwise re-saved.
-  // MUST run after the notation backfill above: that pass calls store.set, which
-  // already enriches cache, so migrated records fall out of this filter (no double write).
-  const haIds = Object.keys(cache).filter((id) => cache[id] && cache[id].homeTeam === undefined);
-  await Promise.allSettled(haIds.map(async (id) => {
-    try {
-      const enriched = { ...cache[id], ...recordHomeAway(cache[id]) };
-      cache[id] = enriched;
-      await store.set(id, enriched);
-    } catch (e) { console.warn("home/away backfill failed for", id, e); }
   }));
 }
 
@@ -53,21 +46,46 @@ export async function loadAll() {
 export async function linkUnlinkedMatches(userId: string | null) {
   if (!userId) return;
   const ids = Object.keys(cache).filter((id) => {
-    const d = cache[id];
-    return d && !d.homeTeamId && !d.awayTeamId && (d.opponent || "").trim() && (d.myTeam || "").trim();
+    const d: any = cache[id];
+    if (!d || d.homeTeamId || d.awayTeamId) return false;
+    // home/away record (v3) — derive directly; legacy us/them — derive via recordHomeAway.
+    const ha = d.homeTeam !== undefined ? d : recordHomeAway(d);
+    return (ha.homeTeam || "").trim() && (ha.awayTeam || "").trim();
   });
   for (const id of ids) {
     try {
-      const d = cache[id];
+      const d: any = cache[id];
       const sport = d.sport || "";
-      const usTeam = await teamStore.findOrCreate(userId, { name: d.myTeam!, sport });
-      const oppTeam = await teamStore.findOrCreate(userId, { name: d.opponent!, sport });
-      if (!usTeam || !oppTeam) continue;
-      const patch = linkExistingMatchPatch(d, { usTeam, oppTeam, homeAway: d.homeAway || "away" });
-      await store.set(id, { ...d, ...patch });
+      const ha = d.homeTeam !== undefined ? d : { ...d, ...recordHomeAway(d) };
+      const homeTeam = await teamStore.findOrCreate(userId, { name: ha.homeTeam, sport });
+      const awayTeam = await teamStore.findOrCreate(userId, { name: ha.awayTeam, sport });
+      if (!homeTeam || !awayTeam) continue;
+      const patch = linkExistingMatchPatch(ha, { homeTeam, awayTeam });
+      await store.set(id, { ...ha, ...patch });
     } catch (e) {
       console.warn("link migration failed for", id, e);
     }
+  }
+}
+
+// ④a one-time: bring every record to v3 home/away, reconciling name/squad/colours
+// from the linked teams. Idempotent (skips notationV === 3); resilient per-record.
+export async function migrateHomeAway(userId: string | null) {
+  const teams: TeamRecord[] = userId ? await teamStore.list(userId) : [];
+  const byId: Record<string, TeamRecord> = {};
+  teams.forEach((t) => { if (t.id) byId[t.id] = t; });
+  const ids = Object.keys(cache).filter((id) => cache[id] && cache[id].notationV !== 3);
+  for (const id of ids) {
+    try {
+      const cur: any = cache[id];
+      // ③.1 already populated home/away fields; recordHomeAway re-derives them if a
+      // legacy us/them record somehow lacks them.
+      const base = cur.homeTeam !== undefined ? cur : { ...cur, ...recordHomeAway(cur) };
+      const reconciled = { ...base, ...reconcileHomeAwayFromTeams(base, byId), notationV: 3 };
+      const clean = stripUsThem(reconciled);
+      cache[id] = clean;
+      await store.set(id, clean);
+    } catch (e) { console.warn("home/away migration failed for", id, e); }
   }
 }
 
@@ -88,8 +106,10 @@ export const store = {
   ok: true,
   async list(): Promise<string[]> { return Object.keys(cache).map((id) => "match:" + id); },
   async get(id: string): Promise<MatchRecord | null> { return cache[id] || null; },
-  async set(id: string, data: MatchRecord): Promise<boolean> { // single-row upsert; owner defaults to auth.uid() on insert (RLS-checked)
-    const rec = { ...data, ...recordHomeAway(data) }; // ③.1 — derive home/away fields on every save
+  async set(id: string, data: any): Promise<boolean> {
+    // ④a: editor still passes us/them; convert via recordHomeAway. Records from the
+    // migration/Landing are already home/away (no myTeam) and pass through unchanged.
+    const rec: MatchRecord = data && data.myTeam !== undefined ? stripUsThem({ ...data, ...recordHomeAway(data) }) : data;
     cache[id] = rec;
     const { error } = await sb.from("matches").upsert(Object.assign(
       { id, data: rec, updated_at: new Date().toISOString() }, matchCols(rec),

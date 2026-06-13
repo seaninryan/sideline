@@ -31,8 +31,10 @@ export function latestMatchForTeam(matches: MatchLite[], teamId: string): string
 // (teamId = homeAway==="home" ? homeTeamId : awayTeamId, roster = usRoster) and the
 // opp side (the other id, oppRoster) — each only when this match is that team's
 // latest and the roster is non-empty.
+// ④a: `record` is typed `any` — the editor still passes a us/them payload here
+// (it flips to home/away in ④b); reads record.homeAway/usRoster/oppRoster.
 export function teamRosterPushes(
-  record: MatchRecord & { id: string },
+  record: any,
   matches: MatchLite[],
 ): { teamId: string; side: "us" | "opp"; roster: TeamRoster }[] {
   const usTeamId = record.homeAway === "home" ? record.homeTeamId : record.awayTeamId;
