@@ -63,8 +63,6 @@ export interface MatchRow {
   short_code?: string | null;
   name_display: NameDisplay;
   match_date: string | null;
-  my_team: string | null;
-  opponent: string | null;
   sport: string | null;
   data: MatchRecord;
   updated_at?: string;

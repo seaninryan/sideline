@@ -1,7 +1,6 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { parseMatch } from "@/lib/parser";
 import { backfillNotation } from "@/lib/migrate-notation";
 import type { MatchRecord } from "@/lib/types";
 import { teamStore } from "@/lib/team-store";
@@ -73,16 +72,11 @@ export async function linkUnlinkedMatches(userId: string | null) {
 }
 
 // Derive the promoted columns from a record. `data` (jsonb) stays the source of truth.
-// `opponent` lives on the record now; fall back to a legacy header parse only if absent.
+// The vestigial my_team/opponent columns were dropped in ③.1 (nothing SELECTed them);
+// team identity lives in the home_team_id/away_team_id links + data jsonb.
 function matchCols(data: MatchRecord) {
-  let opp: string | null = data.opponent || null;
-  if (!opp) {
-    try { opp = (parseMatch(data.raw, { myTeam: data.myTeam, usRoster: data.usRoster, oppRoster: data.oppRoster }).opp) || null; } catch {}
-  }
   return {
     match_date: data.matchDate || data.date || null,
-    my_team: data.myTeam || null,
-    opponent: opp,
     sport: data.sport || "soccer",
     name_display: data.nameDisplay || "full",
     home_team_id: data.homeTeamId || null,
