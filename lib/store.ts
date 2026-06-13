@@ -35,6 +35,8 @@ export async function loadAll() {
   // ③.1 one-time home/away backfill: derive the fields for any cached record that
   // lacks them (presence check on `homeTeam`). Idempotent + resilient. `store.set`
   // also derives them, so this is belt-and-braces for records not otherwise re-saved.
+  // MUST run after the notation backfill above: that pass calls store.set, which
+  // already enriches cache, so migrated records fall out of this filter (no double write).
   const haIds = Object.keys(cache).filter((id) => cache[id] && cache[id].homeTeam === undefined);
   await Promise.allSettled(haIds.map(async (id) => {
     try {
