@@ -31,6 +31,17 @@ export interface MatchRecord {
   opponent?: string;
   usSquad?: string;     // squad sub-line, snapshotted from the linked teams at link time
   oppSquad?: string;
+  // ③.1 — home/away scaffold, derived on save from us/them + homeAway (torn out in ③.4).
+  homeTeam?: string;
+  awayTeam?: string;
+  colorHome?: string;
+  colorHome2?: string;
+  colorAway?: string;
+  colorAway2?: string;
+  homeRoster?: TeamRoster;
+  awayRoster?: TeamRoster;
+  homeSquad?: string;
+  awaySquad?: string;
   legacyRaw?: string;
   notationV?: number;
   savedAt?: number;

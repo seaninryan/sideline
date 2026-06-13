@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildModel } from "@/lib/model";
 import { SAMPLE_RECORD } from "@/lib/sample";
+import { recordHomeAway } from "@/lib/home-away";
 import type { MatchRecord, TeamRoster } from "@/lib/types";
 
 describe("buildModel", () => {
@@ -64,6 +65,18 @@ describe("canonical SAMPLE_RECORD", () => {
     const usEvent = m.timeline.find((t: any) => t.side === "us");
     const mapped = m.timelineHA.find((t: any) => t.seq === usEvent.seq && t.half === usEvent.half);
     expect(mapped.side).toBe("away");
+  });
+});
+
+describe("recordHomeAway(SAMPLE_RECORD)", () => {
+  const r = recordHomeAway(SAMPLE_RECORD);
+  it("homeAway 'away' → home = opponent (Wildebeests)", () => {
+    expect(r.homeTeam).toBe("Wildebeests");
+    expect(r.awayTeam).toBe("Racoons");
+  });
+  it("colours follow venue", () => {
+    expect(r.colorHome).toBe(SAMPLE_RECORD.colorThem);
+    expect(r.colorAway).toBe(SAMPLE_RECORD.colorUs);
   });
 });
 

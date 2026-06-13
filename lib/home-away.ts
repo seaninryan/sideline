@@ -1,3 +1,5 @@
+import type { MatchRecord, TeamRoster } from "@/lib/types";
+
 // "us" is the home side iff the match's homeAway is "home".
 export function sideToVenue(
   side: "us" | "them" | null | undefined,
@@ -45,4 +47,28 @@ export function venueItems<T extends { side?: "us" | "them" | null; usScore?: st
     homeScore: usIsHome ? it.usScore : it.themScore,
     awayScore: usIsHome ? it.themScore : it.usScore,
   }));
+}
+
+// The 10 home/away record fields derived from a record's us/them values + homeAway.
+// "us" is home iff homeAway === "home" (missing/anything-else → us is away). Returns a
+// partial to spread onto the record. ③.1 scaffold — removed in ③.4 with us/them.
+export function recordHomeAway(r: MatchRecord): {
+  homeTeam: string; awayTeam: string;
+  colorHome?: string; colorHome2?: string; colorAway?: string; colorAway2?: string;
+  homeRoster?: TeamRoster; awayRoster?: TeamRoster;
+  homeSquad: string; awaySquad: string;
+} {
+  const usIsHome = r.homeAway === "home";
+  return {
+    homeTeam: (usIsHome ? r.myTeam : r.opponent) || "",
+    awayTeam: (usIsHome ? r.opponent : r.myTeam) || "",
+    colorHome: usIsHome ? r.colorUs : r.colorThem,
+    colorHome2: usIsHome ? r.colorUs2 : r.colorThem2,
+    colorAway: usIsHome ? r.colorThem : r.colorUs,
+    colorAway2: usIsHome ? r.colorThem2 : r.colorUs2,
+    homeRoster: usIsHome ? r.usRoster : r.oppRoster,
+    awayRoster: usIsHome ? r.oppRoster : r.usRoster,
+    homeSquad: (usIsHome ? r.usSquad : r.oppSquad) || "",
+    awaySquad: (usIsHome ? r.oppSquad : r.usSquad) || "",
+  };
 }
