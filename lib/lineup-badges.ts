@@ -14,8 +14,7 @@ export interface LineupBadges {
 // themScorers; "home"|"away" reads timelineHA + homeScorers/awayScorers. The
 // us/them branch is removed in ③.2b once the editor migrates.
 export function lineupBadges(
-  m: Pick<Model, "timeline" | "usScorers" | "themScorers"> &
-     Partial<Pick<Model, "timelineHA" | "homeScorers" | "awayScorers">>,
+  m: Partial<Pick<Model, "timeline" | "usScorers" | "themScorers" | "timelineHA" | "homeScorers" | "awayScorers">>,
   side: "us" | "them" | "home" | "away",
   num: number,
 ): LineupBadges {
