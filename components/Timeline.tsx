@@ -1,14 +1,14 @@
 import React from "react";
 
-// Shared centre-rail timeline (editor Details tab + public page). Your events
+// Shared centre-rail timeline (editor Details tab + public page). Home events
 // sit on the left half (minute + name on the outer edge, running score by the
-// rail), the opponent's mirror to the right; a kit-coloured dot rides the rail.
+// rail), the away team mirrors to the right; a kit-coloured dot rides the rail.
 // Renders every event type: scores (scorer + goal/free pill + running score),
 // cards (coloured), corners (ordinal), subs (▲ on / ▼ off), notes, added-time.
-export default function Timeline({ timeline = [], halfMarks = [], colorUs, colorUs2, colorThem, colorThem2, usName = "Us", themName = "Them" }: {
+export default function Timeline({ timeline = [], halfMarks = [], colorHome, colorHome2, colorAway, colorAway2, nameHome = "Home", nameAway = "Away" }: {
   timeline?: any[]; halfMarks?: any[];
-  colorUs: string; colorUs2: string; colorThem: string; colorThem2: string;
-  usName?: string; themName?: string;
+  colorHome: string; colorHome2: string; colorAway: string; colorAway2: string;
+  nameHome?: string; nameAway?: string;
 }) {
   if (!timeline.length) return <p style={{ color: "#6f7d72" }}>No events recorded.</p>;
   return (
@@ -25,22 +25,22 @@ export default function Timeline({ timeline = [], halfMarks = [], colorUs, color
               const mm = it.minute != null ? `${it.mmin || it.minute}'` : "✎";
               if (it.kind === "score") {
                 const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
-                const evName = it.scorer === "Opposition" ? themName : it.scorer;
+                const evName = it.scorer === "Opposition" ? nameAway : it.scorer;
                 return (
-                  <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "us" ? colorUs : colorThem, "--ring": it.side === "us" ? colorUs2 : colorThem2 } as React.CSSProperties}>
+                  <div key={i} className={`mt-ev ${it.side} ${it.type}`} style={{ "--dot": it.side === "home" ? colorHome : colorAway, "--ring": it.side === "home" ? colorHome2 : colorAway2 } as React.CSSProperties}>
                     <span className="m">{it.mmin || it.minute}'</span>
                     <span>
                       {descriptive
                         ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
                         : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">&apos;{it.setPiece}</span> : ""}</>}
                     </span>
-                    <span className="sc"><span className={it.side === "us" ? "chg" : ""}>{it.usScore}</span> – <span className={it.side === "them" ? "chg" : ""}>{it.themScore}</span></span>
+                    <span className="sc"><span className={it.side === "home" ? "chg" : ""}>{it.homeScore}</span> – <span className={it.side === "away" ? "chg" : ""}>{it.awayScore}</span></span>
                   </div>
                 );
               }
               if (it.kind === "card") {
-                const who = it.side === "them" && (!it.who || /^t\d*$/i.test(it.who)) ? themName : (it.who || usName);
-                return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
+                const who = it.side === "away" && (!it.who || /^t\d*$/i.test(it.who)) ? nameAway : (it.who || nameHome);
+                return <div key={i} className={"mt-ev note" + (it.side === "away" ? " away" : "")}>
                   <span className="m">{mm}</span>
                   <span><span style={{ display: "inline-block", width: 9, height: 12, borderRadius: 2, background: it.card === "red" ? "#e74c3c" : "#f1c40f", border: "1px solid rgba(0,0,0,.25)", verticalAlign: "-2px", marginRight: 6 }} />{who}</span>
                 </div>;
@@ -48,9 +48,9 @@ export default function Timeline({ timeline = [], halfMarks = [], colorUs, color
               if (it.kind === "corner") {
                 const nth = timeline.filter((x) => x.kind === "corner" && x.side === it.side && x.seq <= it.seq).length;
                 const ord = nth === 1 ? "1st" : nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
-                return <div key={i} className={"mt-ev note" + (it.side === "them" ? " them" : "")}>
+                return <div key={i} className={"mt-ev note" + (it.side === "away" ? " away" : "")}>
                   <span className="m">{mm}</span>
-                  <span style={{ color: "#6f7d72" }}>⚑ {ord} corner — {it.side === "them" ? themName : usName}</span>
+                  <span style={{ color: "#6f7d72" }}>⚑ {ord} corner — {it.side === "away" ? nameAway : nameHome}</span>
                 </div>;
               }
               if (it.kind === "sub") return <div key={i} className="mt-ev subev"><span className="m">{mm}</span><span><span style={{ color: "#1f7a4d", fontWeight: 600 }}>▲ {it.on}</span>&ensp;<span style={{ color: "#c0392b", fontWeight: 600 }}>▼ {it.off}</span></span></div>;

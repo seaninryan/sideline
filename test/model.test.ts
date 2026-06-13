@@ -56,6 +56,15 @@ describe("canonical SAMPLE_RECORD", () => {
     expect(m.awayColors).toEqual([m.colorUs, m.colorUs2]);
     expect(m.outcome).toEqual({ winner: "home", margin: 1 });
   });
+  it("exposes homeSeries + timelineHA display mappings", () => {
+    // ② display mapping (additive)
+    expect(Array.isArray(m.homeSeries)).toBe(true);
+    expect(m.homeSeries.length).toBe(m.series.length);
+    // a score event tagged "us" maps to side "away" (SAMPLE is homeAway:"away")
+    const usEvent = m.timeline.find((t: any) => t.side === "us");
+    const mapped = m.timelineHA.find((t: any) => t.seq === usEvent.seq && t.half === usEvent.half);
+    expect(mapped.side).toBe("away");
+  });
 });
 
 describe("buildModel themScorers — named opponent scorer", () => {

@@ -2,6 +2,7 @@ import { contrastOn, fmtScore, gpTotal } from "@/lib/util";
 import type { Model } from "@/lib/types";
 import { BRAND_SITE, BRAND_WORDMARK, BRAND_CHANT } from "@/lib/constants";
 import { lineupBadges } from "./lineup-badges";
+import { sideToVenue } from "@/lib/home-away";
 
 /* Shared HWG brand pill (same geometry as the app icon / top-bar logo).
    Drawn as an SVG string so the poster and OG card share one source of truth.
@@ -30,11 +31,16 @@ function chartColor(c: string): string {
 export function buildScoreCardSVG(m: Model): { svg: string; width: number; height: number } {
   const W = 1200, H = 630;
   const esc = (s: any) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] as string));
-  const usS = m.totals?.us?.str ?? "0";
-  const themS = m.totals?.them?.str ?? "0";
+  const homeS = m.homeTotals?.str ?? "0";
+  const awayS = m.awayTotals?.str ?? "0";
   const grade = (m.grade || m.sport || "Match").toUpperCase();
-  const result = m.result || "";
+  const outcome = m.outcome ?? { winner: null, margin: 0 };
+  const result = outcome.winner === null ? "Tie" : `Won by ${outcome.margin}`;
   const ht = m.ht || "";
+  const homeC1 = m.homeColors?.[0] ?? m.colorUs ?? "#f5c518";
+  const homeC2 = m.homeColors?.[1] ?? m.colorUs2 ?? "#1f7a4d";
+  const awayC1 = m.awayColors?.[0] ?? m.colorThem ?? "#c0392b";
+  const awayC2 = m.awayColors?.[1] ?? m.colorThem2 ?? "#2c5fa8";
   const flag = (x: number, y: number, w: number, h: number, c1: string, c2: string) =>
     `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c1}"/>` +
     `<rect x="${x}" y="${y + h / 2}" width="${w}" height="${h / 2}" fill="${c2}"/></g>`;
@@ -50,18 +56,18 @@ export function buildScoreCardSVG(m: Model): { svg: string; width: number; heigh
   parts.push(brandPillSVG(48, 24, 0.72));                                              // 128*0.72 ≈ 92 wide, 70*0.72 ≈ 50 tall
   parts.push(t(166, 64, BRAND_WORDMARK, 40, PAPER, { w: 700 }));                       // anchor start
   parts.push(t(W - 48, 60, BRAND_CHANT.toUpperCase(), 16, "#8fb0a3", { a: "end" }));
-  // two-colour team stripe just under the banner
-  parts.push(`<rect x="0" y="96" width="${W / 2}" height="10" fill="${m.colorUs}"/>`);
-  parts.push(`<rect x="${W / 2}" y="96" width="${W / 2}" height="10" fill="${m.colorThem}"/>`);
+  // two-colour team stripe just under the banner (home left, away right)
+  parts.push(`<rect x="0" y="96" width="${W / 2}" height="10" fill="${homeC1}"/>`);
+  parts.push(`<rect x="${W / 2}" y="96" width="${W / 2}" height="10" fill="${awayC1}"/>`);
   // ---- match ----
   parts.push(t(W / 2, 175, grade, 32, MUTE, { w: 700, a: "middle" }));
-  parts.push(flag(W * 0.25 - 40, 205, 80, 50, m.colorUs, m.colorUs2));
-  parts.push(flag(W * 0.75 - 40, 205, 80, 50, m.colorThem, m.colorThem2));
-  parts.push(t(W * 0.25, 305, m.usName || "Us", 42, INK, { w: 700, a: "middle" }));
-  parts.push(t(W * 0.75, 305, m.themName || "Them", 42, INK, { w: 700, a: "middle" }));
-  parts.push(t(W * 0.25, 455, usS, 108, INK, { w: 700, a: "middle" }));
+  parts.push(flag(W * 0.25 - 40, 205, 80, 50, homeC1, homeC2));
+  parts.push(flag(W * 0.75 - 40, 205, 80, 50, awayC1, awayC2));
+  parts.push(t(W * 0.25, 305, m.homeName || "Home", 42, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.75, 305, m.awayName || "Away", 42, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.25, 455, homeS, 108, INK, { w: 700, a: "middle" }));
   parts.push(t(W / 2, 446, "–", 80, MUTE, { w: 400, a: "middle" }));
-  parts.push(t(W * 0.75, 455, themS, 108, INK, { w: 700, a: "middle" }));
+  parts.push(t(W * 0.75, 455, awayS, 108, INK, { w: 700, a: "middle" }));
   if (result) parts.push(t(W / 2, 532, result, 36, INK, { w: 700, a: "middle" }));
   if (ht) parts.push(t(W / 2, 570, `HT ${ht}`, 24, MUTE, { a: "middle" }));
   // just the link at the bottom (the banner carries the brand)
@@ -102,38 +108,45 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   banner.push(T(P + 64, 33, BRAND_WORDMARK, 17, PAPER, { w: 800, ls: 1.5 }));
   banner.push(T(W - P, 33, BRAND_CHANT.toUpperCase(), 8, "#8fb0a3", { a: "end", ls: 2 }));
 
+  const hC1 = m.homeColors?.[0] ?? m.colorUs ?? "#f5c518";
+  const hC2 = m.homeColors?.[1] ?? m.colorUs2 ?? "#1f7a4d";
+  const aC1 = m.awayColors?.[0] ?? m.colorThem ?? "#c0392b";
+  const aC2 = m.awayColors?.[1] ?? m.colorThem2 ?? "#2c5fa8";
+
   // ---- header band (sits below the banner) — mirrors the on-screen ScoreHeader ----
-  head.push(R(0, 0, W / 2, 6, m.colorUs), R(W / 2, 0, W / 2, 6, m.colorThem));
+  head.push(R(0, 0, W / 2, 6, hC1), R(W / 2, 0, W / 2, 6, aC1));
   head.push(T(P, 30, (m.grade || m.sport || "Match").toUpperCase(), 12, PAPER, { w: 700, ls: 1 }));
   head.push(T(W - P, 30, m.dateStr, 11, "#cfe3d8", { a: "end" }));
-  head.push(jerseyC(W * 0.27, 40, 46, m.colorUs, m.colorUs2));
-  head.push(jerseyC(W * 0.73, 40, 46, m.colorThem, m.colorThem2));
-  head.push(T(W * 0.27, 99, m.usName, 15, PAPER, { w: 700, a: "middle" }));
-  head.push(T(W * 0.73, 99, m.themName, 15, PAPER, { w: 700, a: "middle" }));
-  if (m.usSquad) head.push(T(W * 0.27, 113, m.usSquad, 10, "#9fc2b3", { a: "middle" }));
-  if (m.oppSquad) head.push(T(W * 0.73, 113, m.oppSquad, 10, "#9fc2b3", { a: "middle" }));
-  head.push(T(W * 0.27, 146, m.totals.us.str, 42, PAPER, { w: 800, a: "middle" }));
-  head.push(T(W * 0.73, 146, m.totals.them.str, 42, PAPER, { w: 800, a: "middle" }));
+  head.push(jerseyC(W * 0.27, 40, 46, hC1, hC2));
+  head.push(jerseyC(W * 0.73, 40, 46, aC1, aC2));
+  head.push(T(W * 0.27, 99, m.homeName, 15, PAPER, { w: 700, a: "middle" }));
+  head.push(T(W * 0.73, 99, m.awayName, 15, PAPER, { w: 700, a: "middle" }));
+  if (m.homeSquad) head.push(T(W * 0.27, 113, m.homeSquad, 10, "#9fc2b3", { a: "middle" }));
+  if (m.awaySquad) head.push(T(W * 0.73, 113, m.awaySquad, 10, "#9fc2b3", { a: "middle" }));
+  head.push(T(W * 0.27, 146, m.homeTotals.str, 42, PAPER, { w: 800, a: "middle" }));
+  head.push(T(W * 0.73, 146, m.awayTotals.str, 42, PAPER, { w: 800, a: "middle" }));
   head.push(T(W * 0.5, 138, "–", 24, "#7fa395", { a: "middle" }));
   // neutral result indicator: "Leading by N" / "Won by N" under the leader, or "Tie" centred (like ScoreHeader)
-  const usT = m.totals.us.total, themT = m.totals.them.total;
+  const homeT = m.homeTotals.total, awayT = m.awayTotals.total;
   const overFT = (m.halfMarks || []).some((x: any) => x.marker === "FT");
-  const tie = usT === themT;
-  const leaderUs = usT > themT;
-  const resTxt = tie ? "TIE" : `${overFT ? "WON BY" : "LEADING BY"} ${Math.abs(usT - themT)}`;
-  const resCx = tie ? W / 2 : (leaderUs ? W * 0.27 : W * 0.73);
-  const resBg = tie ? "#e7dec6" : (leaderUs ? m.colorUs : m.colorThem);
+  const tie = homeT === awayT;
+  const leaderHome = homeT > awayT;
+  const resTxt = tie ? "TIE" : `${overFT ? "WON BY" : "LEADING BY"} ${Math.abs(homeT - awayT)}`;
+  const resCx = tie ? W / 2 : (leaderHome ? W * 0.27 : W * 0.73);
+  const resBg = tie ? "#e7dec6" : (leaderHome ? hC1 : aC1);
   const resFg = tie ? INK : contrastOn(resBg);
   const cw = estW(resTxt, 11) + 24;
-  head.push(R(resCx - cw / 2, 158, cw, 22, resBg, 11, tie ? {} : { stroke: leaderUs ? m.colorUs2 : m.colorThem2, sw: 1 }));
+  head.push(R(resCx - cw / 2, 158, cw, 22, resBg, 11, tie ? {} : { stroke: leaderHome ? hC2 : aC2, sw: 1 }));
   head.push(T(resCx, 173, resTxt, 11, resFg, { w: 700, a: "middle", ls: 0.8 }));
 
   let y = HH + BAND + 20;
 
   // ---- stats 2×2 (boxed, like the on-screen StatGrid) ----
+  const maxLeadVenue = sideToVenue(m.maxLeadSide, m.homeAway);
+  const maxLeadTeam = maxLeadVenue === "home" ? m.homeName.split(" ")[0] : maxLeadVenue === "away" ? m.awayName.split(" ")[0] : "";
   const stats: [string, string][] = [["HALF-TIME", m.ht || "—"], ["LEAD CHANGES", String(m.leadChanges)],
     ["TIMES LEVEL", String(m.timesLevel)],
-    ["BIGGEST LEAD", `${m.maxLead}${m.maxLeadSide ? " " + (m.maxLeadSide === "us" ? m.usName.split(" ")[0] : m.themName.split(" ")[0]) : ""}`]];
+    ["BIGGEST LEAD", `${m.maxLead}${m.maxLeadSide ? " " + maxLeadTeam : ""}`]];
   const sgap = 8, scellW = (CW - sgap) / 2, scellH = 50;
   stats.forEach((st, i) => {
     const c = i % 2, r = i < 2 ? 0 : 1;
@@ -150,18 +163,19 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   y += 10;
   const chH = 172;
   body.push(R(P, y, CW, chH, "#ffffff", 10, { stroke: LINE, sw: 1 }));
-  const cUs = chartColor(m.colorUs), cThem = chartColor(m.colorThem);
+  const cHome = chartColor(hC1), cAway = chartColor(aC1);
   const plotL = P + 30, plotR = P + CW - 28, plotT = y + 14, plotB = y + chH - 38;
   const railY = plotB + 13;
-  const xMax = Math.max(1, ...m.series.map((p: any) => p.x));
-  const yMax = Math.max(1, ...m.series.map((p: any) => Math.max(p.us, p.them)));
+  const chartSeries = m.homeSeries as any[];
+  const xMax = Math.max(1, ...chartSeries.map((p: any) => p.x));
+  const yMax = Math.max(1, ...chartSeries.map((p: any) => Math.max(p.home, p.away)));
   const pX = (x: number) => plotL + (plotR - plotL) * (x / xMax);
   const pY = (v: number) => plotB - (plotB - plotT) * (v / yMax);
   for (let g = 0; g <= 2; g++) { const v = Math.round((yMax * g) / 2); const yy = pY(v); body.push(L(plotL, yy, plotR, yy, "#eee5cf", 1)); body.push(T(plotL - 6, yy + 4, String(v), 9, MUTE, { a: "end" })); }
   if (m.htLine != null) { const hx = pX(m.htLine); body.push(L(hx, plotT, hx, plotB, PITCH, 1, "4 3")); body.push(T(hx, plotT - 3, "HT", 8, PITCH, { a: "middle", w: 700 })); }
-  const step = (key: string) => { let d = ""; m.series.forEach((p: any, i: number) => { const px = pX(p.x), py = pY(p[key]); if (!i) d += `M ${px} ${py}`; else { d += ` L ${px} ${pY(m.series[i - 1][key])} L ${px} ${py}`; } }); return d; };
-  body.push(`<path d="${step("them")}" fill="none" stroke="${cThem}" stroke-width="2.5"/>`);
-  body.push(`<path d="${step("us")}" fill="none" stroke="${cUs}" stroke-width="3"/>`);
+  const step = (key: string) => { let d = ""; chartSeries.forEach((p: any, i: number) => { const px = pX(p.x), py = pY(p[key]); if (!i) d += `M ${px} ${py}`; else { d += ` L ${px} ${pY(chartSeries[i - 1][key])} L ${px} ${py}`; } }); return d; };
+  body.push(`<path d="${step("away")}" fill="none" stroke="${cAway}" stroke-width="2.5"/>`);
+  body.push(`<path d="${step("home")}" fill="none" stroke="${cHome}" stroke-width="3"/>`);
   // goals: a ⚽ (soccer) or a tilted green umpire flag (GAA), matching the on-screen chart
   m.goalDots.forEach((d: any) => {
     const gx = pX(d.x), gy = pY(d.y);
@@ -169,15 +183,15 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
     else body.push(`<g transform="translate(-6 4) rotate(30 ${gx} ${gy})"><line x1="${gx}" y1="${gy}" x2="${gx}" y2="${gy - 16}" stroke="#0c3b2a" stroke-width="1.5"/><rect x="${gx}" y="${gy - 16}" width="8" height="8" fill="#1f9d3f" stroke="#0c3b2a" stroke-width="0.6"/></g>`);
   });
   // end-point cumulative score labels
-  const lastPt = m.series[m.series.length - 1];
+  const lastPt = chartSeries[chartSeries.length - 1];
   if (lastPt) {
-    body.push(T(plotR + 4, pY(lastPt.us) + 4, lastPt.usScore, 11, cUs, { w: 700 }));
-    body.push(T(plotR + 4, pY(lastPt.them) + 4, lastPt.themScore, 11, cThem, { w: 700 }));
+    body.push(T(plotR + 4, pY(lastPt.home) + 4, lastPt.homeScore, 11, cHome, { w: 700 }));
+    body.push(T(plotR + 4, pY(lastPt.away) + 4, lastPt.awayScore, 11, cAway, { w: 700 }));
   }
   // x-axis minute labels (throw-in → final, evenly spread)
-  const sn = m.series.length;
-  const sidx = sn <= 5 ? m.series.map((_: any, i: number) => i) : [0, Math.floor(sn * 0.25), Math.floor(sn * 0.5), Math.floor(sn * 0.75), sn - 1];
-  [...new Set(sidx)].forEach((i: any) => body.push(T(pX(m.series[i].x), plotB + 26, `${m.series[i].mmin ?? 0}'`, 8, MUTE, { a: "middle" })));
+  const sn = chartSeries.length;
+  const sidx = sn <= 5 ? chartSeries.map((_: any, i: number) => i) : [0, Math.floor(sn * 0.25), Math.floor(sn * 0.5), Math.floor(sn * 0.75), sn - 1];
+  [...new Set(sidx)].forEach((i: any) => body.push(T(pX(chartSeries[i].x), plotB + 26, `${chartSeries[i].mmin ?? 0}'`, 8, MUTE, { a: "middle" })));
   // sub / card rail markers under the plot
   (m.chartMarkers || []).forEach((mk: any) => {
     const mx = pX(mk.x);
@@ -193,8 +207,8 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
   // ---- scorers: one combined leaderboard (jersey + name + columns), like the on-screen <Scorers> ----
   const gaa = m.effMode !== "goals";
   const scRows = [
-    ...(m.usScorers || []).map((s: any) => ({ ...s, c1: m.colorUs, c2: m.colorUs2 })),
-    ...(m.themScorers || []).map((s: any) => ({ ...s, c1: m.colorThem, c2: m.colorThem2 })),
+    ...(m.homeScorers || []).map((s: any) => ({ ...s, c1: hC1, c2: hC2 })),
+    ...(m.awayScorers || []).map((s: any) => ({ ...s, c1: aC1, c2: aC2 })),
   ].sort((a: any, b: any) => gpTotal(b.g, b.p, m.effMode) - gpTotal(a.g, a.p, m.effMode));
   body.push(T(P, y, "SCORERS", 11, MUTE, { w: 700, ls: 1 }));
   y += 16;
@@ -272,54 +286,67 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
     y = by + chipH + 6;
   };
 
-  // ---- our team ----
-  body.push(T(P, y, `TEAM · ${(m.usName || "").toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
-  y += 12;
-  const findName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-  drawPitch(m.formationRows && m.formationRows.length ? m.formationRows : [], m.colorUs, m.colorUs2, findName, "us");
-  if (m.subs && m.subs.length) {
-    body.push(T(P, y + 15, "SUBS", 9, MUTE, { w: 700, ls: 1 }));
-    drawBench(m.subs, "us", m.colorUs, m.colorUs2);
-  }
-  if (m.missing && m.missing.length) { body.push(T(P, y + 8, "Missing: " + m.missing.map((p: any) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
-  y += 16;
+  // ---- lineup pitches: home first, then away ----
+  const usIsHome = m.homeAway === "home";
+  // us-team helpers (always the tracked side, regardless of venue)
+  const usFindName = (n: number) => { const p = (m.starters || []).find((x: any) => x.num === n); return p ? p.name : ""; };
+  const usFormation = m.formationRows && m.formationRows.length ? m.formationRows : [];
+  // opp-team helpers
+  const oppFindName = (n: number) => { const p = ((m.oppRoster || {}).players || []).find((x: any) => x.num === n); return p ? p.name : ""; };
+  const oppFormation = m.oppRoster && m.oppRoster.formation && m.oppRoster.formation.length ? m.oppRoster.formation : [];
+  const oppSubsList = ((m.oppRoster || {}).players || []).filter((p: any) => p.role === "sub");
 
-  // ---- opponent team (when we have their formation, like the public page) ----
-  if (m.oppRoster && m.oppRoster.formation && m.oppRoster.formation.length) {
-    body.push(T(P, y, `TEAM · ${(m.themName || "").toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
+  const renderTeamPitch = (
+    teamName: string, formation: number[][], c1: string, c2: string,
+    findNameFn: (n: number) => string, badgeSide: "us" | "them",
+    subsList: any[], missingList: any[],
+  ) => {
+    body.push(T(P, y, `TEAM · ${teamName.toUpperCase()}`, 11, MUTE, { w: 700, ls: 1 }));
     y += 12;
-    const oppName = (n: number) => { const p = (m.oppRoster.players || []).find((x: any) => x.num === n); return p ? p.name : ""; };
-    drawPitch(m.oppRoster.formation, m.colorThem, m.colorThem2, oppName, "them");
-    const oppSubs = (m.oppRoster.players || []).filter((p: any) => p.role === "sub");
-    if (oppSubs.length) {
+    drawPitch(formation, c1, c2, findNameFn, badgeSide);
+    if (subsList.length) {
       body.push(T(P, y + 15, "SUBS", 9, MUTE, { w: 700, ls: 1 }));
-      drawBench(oppSubs, "them", m.colorThem, m.colorThem2);
+      drawBench(subsList, badgeSide, c1, c2);
     }
+    if (missingList.length) { body.push(T(P, y + 8, "Missing: " + missingList.map((p: any) => `${p.num} ${p.name}`).join("   "), 10, MUTE)); y += 18; }
     y += 16;
+  };
+
+  // home team
+  if (usIsHome) {
+    renderTeamPitch(m.homeName, usFormation, hC1, hC2, usFindName, "us", m.subs || [], m.missing || []);
+  } else if (oppFormation.length) {
+    renderTeamPitch(m.homeName, oppFormation, hC1, hC2, oppFindName, "them", oppSubsList, []);
+  }
+  // away team
+  if (!usIsHome) {
+    renderTeamPitch(m.awayName, usFormation, aC1, aC2, usFindName, "us", m.subs || [], m.missing || []);
+  } else if (oppFormation.length) {
+    renderTeamPitch(m.awayName, oppFormation, aC1, aC2, oppFindName, "them", oppSubsList, []);
   }
 
-  // ---- timeline (centre rail: us left, them right, like the app — scores, subs, cards, corners) ----
+  // ---- timeline (centre rail: home left, away right — scores, subs, cards, corners) ----
   body.push(T(P, y, "TIMELINE", 11, MUTE, { w: 700, ls: 1 }));
   y += 14;
   const railX = P + CW / 2;
   const tlTop = y;
   const tlBody: string[] = []; // items paint over the rail, so collect them and draw the rail first
-  const halves = [...new Set(m.timeline.map((t: any) => t.half))].sort((a: any, b: any) => a - b);
+  const halves = [...new Set(m.timelineHA.map((t: any) => t.half))].sort((a: any, b: any) => a - b);
   halves.forEach((h: any) => {
     const hTxt = h === 1 ? "FIRST HALF" : h === 2 ? "SECOND HALF" : `PERIOD ${h}`;
     const pw = estW(hTxt, 9) + 22;
     tlBody.push(R(railX - pw / 2, y, pw, 15, PAPER, 7.5, { stroke: LINE, sw: 1 }));
     tlBody.push(T(railX, y + 10.5, hTxt, 9, PITCH, { w: 700, ls: 1, a: "middle" }));
     y += 22;
-    m.timeline.filter((t: any) => t.half === h).forEach((it: any) => {
+    m.timelineHA.filter((t: any) => t.half === h).forEach((it: any) => {
       const cy = y + 6;
       const mm = it.minute != null ? `${it.mmin || it.minute}'` : "";
       if (it.kind === "score") {
-        const us = it.side === "us";
-        const col = us ? m.colorUs : m.colorThem;
-        const ring = us ? m.colorUs2 : m.colorThem2;
+        const isHome = it.side === "home";
+        const col = isHome ? hC1 : aC1;
+        const ring = isHome ? hC2 : aC2;
         const descriptive = !it.sure && it.scorer && it.scorer !== "Opposition" && it.scorer !== "Unknown";
-        const evName = it.scorer === "Opposition" ? m.themName : it.scorer;
+        const evName = it.scorer === "Opposition" ? m.awayName : it.scorer;
         const name = descriptive ? (it.desc || it.scorer) : evName;
         // a small pill conveys goal / free / set-piece, like the on-screen timeline
         const chip = it.type === "goal" ? { t: "GOAL", bg: "#c0392b", fg: "#fff" }
@@ -328,18 +355,18 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
         const chipW = chip ? estW(chip.t, 8) + 12 : 0;
         const nameCol = descriptive ? MUTE : INK;
         tlBody.push(C(railX, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));
-        if (us) {
+        if (isHome) {
           let tx = railX - 12;
           if (chip) { tlBody.push(R(tx - chipW, cy - 7, chipW, 13, chip.bg, 6.5)); tlBody.push(T(tx - chipW / 2, cy + 2.5, chip.t, 8, chip.fg, { w: 700, a: "middle", ls: 0.5 })); tx -= chipW + 6; }
           tlBody.push(T(tx, cy + 4, name, 11.5, nameCol, { w: it.type === "goal" ? 700 : 400, a: "end" })); tx -= estW(name, 11.5) + 6;
           if (mm) tlBody.push(T(tx, cy + 4, mm, 11, MUTE, { a: "end" }));
-          tlBody.push(T(P, cy + 4, `${it.usScore} – ${it.themScore}`, 10.5, PITCH, { w: 700 }));
+          tlBody.push(T(P, cy + 4, `${it.homeScore} – ${it.awayScore}`, 10.5, PITCH, { w: 700 }));
         } else {
           let tx = railX + 12;
           if (mm) { tlBody.push(T(tx, cy + 4, mm, 11, MUTE)); tx += estW(mm, 11) + 6; }
           tlBody.push(T(tx, cy + 4, name, 11.5, nameCol, { w: it.type === "goal" ? 700 : 400 })); tx += estW(name, 11.5) + 6;
           if (chip) { tlBody.push(R(tx, cy - 7, chipW, 13, chip.bg, 6.5)); tlBody.push(T(tx + chipW / 2, cy + 2.5, chip.t, 8, chip.fg, { w: 700, a: "middle", ls: 0.5 })); }
-          tlBody.push(T(P + CW, cy + 4, `${it.usScore} – ${it.themScore}`, 10.5, PITCH, { w: 700, a: "end" }));
+          tlBody.push(T(P + CW, cy + 4, `${it.homeScore} – ${it.awayScore}`, 10.5, PITCH, { w: 700, a: "end" }));
         }
       } else if (it.kind === "sub") {
         tlBody.push(C(railX, cy, 6, PAPER, { stroke: MUTE, sw: 1 }));
@@ -350,11 +377,11 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
         tlBody.push(T(tx, cy + 4, onTxt, 11, "#1f7a4d", { w: 700, a: "end" })); tx -= estW(onTxt, 11) + 7;
         if (mm) tlBody.push(T(tx, cy + 4, mm, 11, MUTE, { w: 700, a: "end" }));
       } else if (it.kind === "card") {
-        const us = it.side === "us";
+        const isHome = it.side === "home";
         const cardCol = it.card === "red" ? "#e74c3c" : "#f1c40f";
-        const who = (it.side === "them" && (!it.who || /^t\d*$/i.test(it.who))) ? m.themName : (it.who || m.usName);
+        const who = (it.side === "away" && (!it.who || /^t\d*$/i.test(it.who))) ? m.awayName : (it.who || m.homeName);
         tlBody.push(C(railX, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        if (us) {
+        if (isHome) {
           let tx = railX - 13;
           tlBody.push(T(tx, cy + 4, who, 11, INK, { a: "end" })); tx -= estW(who, 11) + 6;
           tlBody.push(R(tx - 8, cy - 7, 8, 11, cardCol, 1.5, { stroke: "rgba(0,0,0,.3)" })); tx -= 8 + 6;
@@ -366,12 +393,12 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
           tlBody.push(T(tx, cy + 4, who, 11, INK));
         }
       } else if (it.kind === "corner") {
-        const us = it.side === "us";
-        const nth = m.timeline.filter((x: any) => x.kind === "corner" && x.side === it.side && (x.seq || 0) <= (it.seq || 0)).length;
+        const isHome = it.side === "home";
+        const nth = m.timelineHA.filter((x: any) => x.kind === "corner" && x.side === it.side && (x.seq || 0) <= (it.seq || 0)).length;
         const ord = nth === 1 ? "1st" : nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
-        const label = `⚑ ${ord} corner — ${us ? m.usName : m.themName}`;
+        const label = `⚑ ${ord} corner — ${isHome ? m.homeName : m.awayName}`;
         tlBody.push(C(railX, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));
-        if (us) tlBody.push(T(railX - 13, cy + 4, `${mm ? mm + "  " : ""}${label}`, 11, MUTE, { a: "end" }));
+        if (isHome) tlBody.push(T(railX - 13, cy + 4, `${mm ? mm + "  " : ""}${label}`, 11, MUTE, { a: "end" }));
         else tlBody.push(T(railX + 13, cy + 4, `${mm ? mm + "  " : ""}${label}`, 11, MUTE));
       } else {
         tlBody.push(C(railX, cy, 4.5, PAPER, { stroke: MUTE, sw: 1.5 }));

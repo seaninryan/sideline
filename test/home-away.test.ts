@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sideToVenue, matchOutcome } from "@/lib/home-away";
+import { sideToVenue, matchOutcome, venueSeries, venueItems } from "@/lib/home-away";
 
 describe("sideToVenue", () => {
   it("us is home when homeAway is home", () => {
@@ -26,5 +26,38 @@ describe("matchOutcome", () => {
   });
   it("level → no winner, zero margin", () => {
     expect(matchOutcome(11, 11)).toEqual({ winner: null, margin: 0 });
+  });
+});
+
+describe("venueSeries", () => {
+  const series = [{ x: 0, us: 1, them: 2, usScore: "0-1", themScore: "0-2", mmin: 5 }];
+  it("usIsHome=true keeps us as home", () => {
+    expect(venueSeries(series, true)[0]).toMatchObject({ x: 0, home: 1, away: 2, homeScore: "0-1", awayScore: "0-2" });
+  });
+  it("usIsHome=false swaps us→away", () => {
+    expect(venueSeries(series, false)[0]).toMatchObject({ x: 0, home: 2, away: 1, homeScore: "0-2", awayScore: "0-1" });
+  });
+  it("preserves other point fields (mmin)", () => {
+    expect(venueSeries(series, true)[0].mmin).toBe(5);
+  });
+});
+
+describe("venueItems", () => {
+  const items = [
+    { side: "us", usScore: "1-0", themScore: "0-0", kind: "score" },
+    { side: "them", usScore: "1-0", themScore: "0-1", kind: "score" },
+    { side: null, kind: "note" },
+  ];
+  it("usIsHome=true: us→home, them→away; adds home/awayScore", () => {
+    const r = venueItems(items as any, true);
+    expect(r[0]).toMatchObject({ side: "home", homeScore: "1-0", awayScore: "0-0", kind: "score" });
+    expect(r[1]).toMatchObject({ side: "away", homeScore: "1-0", awayScore: "0-1" });
+    expect(r[2]).toMatchObject({ side: null, kind: "note" });
+  });
+  it("usIsHome=false: us→away, them→home", () => {
+    const r = venueItems(items as any, false);
+    expect(r[0].side).toBe("away");
+    expect(r[1].side).toBe("home");
+    expect(r[0]).toMatchObject({ homeScore: "0-0", awayScore: "1-0" });
   });
 });

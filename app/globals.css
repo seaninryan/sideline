@@ -93,9 +93,9 @@ table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .mt-ev:before{content:""; position:absolute; right:-6px; top:12px; width:11px; height:11px; border-radius:50%;
   background:var(--dot,#fff); border:2px solid var(--ring,var(--muted)); box-sizing:border-box;}
 .mt-ev.goal:before{width:16px; height:16px; right:-8px; top:11px; border-width:3px;}
-.mt-ev.them{width:50%; margin-left:auto; margin-right:0; padding:7px 0 7px 16px;}
-.mt-ev.them:before{right:auto; left:-6px;}
-.mt-ev.them.goal:before{right:auto; left:-8px;}
+.mt-ev.away{width:50%; margin-left:auto; margin-right:0; padding:7px 0 7px 16px;}
+.mt-ev.away:before{right:auto; left:-6px;}
+.mt-ev.away.goal:before{right:auto; left:-8px;}
 .mt-ev.note:before{background:var(--paper); border-style:dashed; border-color:var(--muted);}
 .mt-ev.note{font-family:var(--font-oswald); font-size:13px;}
 .mt-ev.subev{font-family:var(--font-oswald); font-size:13px;}
@@ -108,9 +108,9 @@ table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
 .mt-ev .m{font-family:var(--font-oswald); font-weight:600; color:var(--muted); font-size:12px; min-width:30px;}
 .mt-ev .sc{font-family:var(--font-oswald); font-weight:600; color:var(--pitch); margin-left:auto; font-size:13px;}
 .mt-ev .sc .chg{background:rgba(245,197,24,.45); border-radius:4px; padding:0 4px; font-weight:800;}
-.mt-ev.them{flex-direction:row-reverse;} /* opposition events mirror to the right */
-.mt-ev.them .sc{margin-left:0; margin-right:auto;}
-.mt-ev.them .m{text-align:right;}
+.mt-ev.away{flex-direction:row-reverse;} /* away events mirror to the right */
+.mt-ev.away .sc{margin-left:0; margin-right:auto;}
+.mt-ev.away .m{text-align:right;}
 .mt-half{font-family:var(--font-oswald); text-transform:uppercase; letter-spacing:2px; font-size:11px; color:var(--pitch);
   background:var(--paper); display:table; padding:3px 10px; border-radius:20px; border:1px solid var(--line);
   margin:14px auto 4px; position:relative;}

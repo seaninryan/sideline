@@ -28,6 +28,7 @@ import { pairingError } from "@/lib/match-sport";
 import { whoToken, onPitchNums } from "@/lib/event-line";
 import TeamPicker from "@/components/TeamPicker";
 import { lineupBadges } from "@/lib/lineup-badges";
+import { buildModel } from "@/lib/model";
 import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
@@ -40,6 +41,7 @@ import { reconcileIncoming } from "@/lib/live-update";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import { teamRosterPushes } from "@/lib/team-roster-sync";
 import { useRouter } from "next/navigation";
+import { venueSeries, venueItems } from "@/lib/home-away";
 
 const sb = createClient();
 
@@ -641,6 +643,11 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
   const usScorers = scorers.filter((s) => s.side === "us").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
   const themScorers = scorers.filter((s) => s.side === "them").sort((a, b) => gpTotal(b.g, b.p, effMode) - gpTotal(a.g, a.p, effMode));
+  const usIsHome = homeAway === "home";
+  const homeSeries = venueSeries(series, usIsHome);
+  const timelineHA = venueItems(timeline, usIsHome);
+  const homeColor = usIsHome ? colorUs : colorThem;
+  const awayColor = usIsHome ? colorThem : colorUs;
   const starters = roster.filter((p) => p.role === "starting");
   const subs = roster.filter((p) => p.role === "sub");
   const missing = roster.filter((p) => p.role === "missing");
@@ -782,17 +789,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
   const doExport = () => {
     if (shareModel) { setShareModel(null); return; }
-    const ht = htScore(parsed.series, effMode);
-    const model = {
-      grade: header.label || "", sport: sportLabel || "", homeAway: header.homeAway,
-      usName, themName, dateStr: matchDate ? fmtDate(matchDate) : "",
-      totals, result, effMode, ht,
-      leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel, maxLead: parsed.maxLead, maxLeadSide: parsed.maxLeadSide,
-      series: parsed.series, goalDots: parsed.goalDots, chartMarkers, htLine: parsed.htLine, halfMarks,
-      usSquad, oppSquad,
-      usScorers, themScorers, formationRows, starters, subs, missing, timeline, oppRoster,
-      colorUs, colorUs2, colorThem, colorThem2,
-    };
+    const model = buildModel(recordPayload());
     const safe = (s) => (s || "match").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
     setShareModel({ model, filename: `${safe(header.label || usName)}-${safe(themName)}.png`, title: `${usName} ${totals.us.str} – ${totals.them.str} ${themName}` });
   };
@@ -1177,7 +1174,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
             {/* running timeline beneath the controls */}
             <p className="mt-h" style={{ marginTop: 16 }}>Timeline</p>
-            <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />
+            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} nameHome={usIsHome ? usName : themName} nameAway={usIsHome ? themName : usName} />
           </div>
         )}
 
@@ -1198,14 +1195,14 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
 
             <p className="mt-h">Score progression</p>
             <div style={{ width: "100%" }}>
-              <ScoreChart series={series} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorUs={colorUs} colorThem={colorThem} nameUs={usName} nameThem={themName} mode={effMode} />
+              <ScoreChart series={homeSeries} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorHome={homeColor} colorAway={awayColor} mode={effMode} />
             </div>
 
             <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>
-            <Scorers us={usScorers} them={themScorers} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} mode={effMode} />
+            <Scorers home={usIsHome ? usScorers : themScorers} away={usIsHome ? themScorers : usScorers} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} mode={effMode} />
 
             <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
-            <Timeline timeline={timeline} halfMarks={halfMarks} colorUs={colorUs} colorUs2={colorUs2} colorThem={colorThem} colorThem2={colorThem2} usName={usName} themName={themName} />
+            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={usIsHome ? colorUs : colorThem} colorHome2={usIsHome ? colorUs2 : colorThem2} colorAway={usIsHome ? colorThem : colorUs} colorAway2={usIsHome ? colorThem2 : colorUs2} nameHome={usIsHome ? usName : themName} nameAway={usIsHome ? themName : usName} />
           </>
         )}
 

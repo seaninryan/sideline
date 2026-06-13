@@ -2,7 +2,7 @@ import { parseMatch } from "@/lib/parser";
 import { fmtDateDow, gpTotal } from "@/lib/util";
 import { htScore } from "@/lib/half-time";
 import { SPORTS, scoringModeForSport } from "@/lib/constants";
-import { matchOutcome } from "@/lib/home-away";
+import { matchOutcome, venueSeries, venueItems } from "@/lib/home-away";
 import type { MatchRecord, Model } from "@/lib/types";
 
 export function buildModel(record: MatchRecord): Model {
@@ -47,6 +47,8 @@ export function buildModel(record: MatchRecord): Model {
   const ht = htScore(series, effMode);
 
   const usIsHome = header.homeAway === "home";
+  const homeSeries = venueSeries(series as any, usIsHome);
+  const timelineHA = venueItems(timeline as any, usIsHome);
   const cUs = r.colorUs || "#f5c518", cUs2 = r.colorUs2 || "#1f7a4d";
   const cThem = r.colorThem || "#c0392b", cThem2 = r.colorThem2 || "#2c5fa8";
   const sqUs = r.usSquad || "", sqOpp = r.oppSquad || "";
@@ -79,6 +81,7 @@ export function buildModel(record: MatchRecord): Model {
     awayScorers: usIsHome ? themScorers : usScorers,
     homeSquad: usIsHome ? sqUs : sqOpp,
     awaySquad: usIsHome ? sqOpp : sqUs,
+    homeSeries, timelineHA,
     outcome,
     parsed,
   };

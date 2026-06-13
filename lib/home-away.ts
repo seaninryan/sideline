@@ -19,3 +19,30 @@ export function matchOutcome(
     ? { winner: "home", margin: homePts - awayPts }
     : { winner: "away", margin: awayPts - homePts };
 }
+
+export function venueSeries(
+  series: { x: number; us: number; them: number; usScore: string; themScore: string; [k: string]: any }[],
+  usIsHome: boolean,
+): { x: number; home: number; away: number; homeScore: string; awayScore: string; [k: string]: any }[] {
+  return series.map((p) => ({
+    ...p,
+    home: usIsHome ? p.us : p.them,
+    away: usIsHome ? p.them : p.us,
+    homeScore: usIsHome ? p.usScore : p.themScore,
+    awayScore: usIsHome ? p.themScore : p.usScore,
+  }));
+}
+
+// Re-key side-tagged items ("us"/"them" → "home"/"away") preserving other fields;
+// when an item carries usScore/themScore, also add home/awayScore.
+export function venueItems<T extends { side?: "us" | "them" | null; usScore?: string; themScore?: string }>(
+  items: T[],
+  usIsHome: boolean,
+): (T & { side: "home" | "away" | null; homeScore?: string; awayScore?: string })[] {
+  return items.map((it) => ({
+    ...it,
+    side: sideToVenue(it.side, usIsHome ? "home" : "away"),
+    homeScore: usIsHome ? it.usScore : it.themScore,
+    awayScore: usIsHome ? it.themScore : it.usScore,
+  }));
+}

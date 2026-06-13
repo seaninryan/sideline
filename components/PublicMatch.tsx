@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { buildModel } from "@/lib/model";
 import { applyNameDisplay } from "@/lib/name-display";
 import { scoreChanged } from "@/lib/live-update";
+import { sideToVenue } from "@/lib/home-away";
 import { fetchIsAdmin } from "@/lib/viewer.client";
 import ShareImageModal from "@/components/ShareImageModal";
 import type { Model } from "@/lib/types";
@@ -27,13 +28,8 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
   const [conn, setConn] = useState<null | "reconnecting" | "reconnected">(null);
   const wasConnected = useRef(false);
   const m = model;
-  const margin = Math.abs(m.totals.us.total - m.totals.them.total);
-  const resTxt = m.result === "Win" ? "WIN" : m.result === "Loss" ? "DEFEAT" : "DRAW";
-  const resFull = resTxt + (m.effMode === "gaa" && margin ? ` BY ${margin}` : "");
-  const resBg = m.result === "Win" ? "#f5c518" : m.result === "Loss" ? "#c0392b" : "#e7dec6";
-  const resFg = m.result === "Loss" ? "#fff" : "#11241b";
-  const usShort = (m.usName || "Us").split(" ")[0];
-  const themShort = (m.themName || "Them").split(" ")[0];
+  const homeShort = (m.homeName || "Home").split(" ")[0];
+  const awayShort = (m.awayName || "Away").split(" ")[0];
 
   const mForBadges = m as Pick<Model, "timeline" | "usScorers" | "themScorers">;
   const badges = (n: number, side: "us" | "them") => {
@@ -188,7 +184,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
           { k: "Half-time", v: m.ht || "—" },
           { k: "Lead changes", v: m.leadChanges },
           { k: "Times level", v: m.timesLevel },
-          { k: `Biggest lead${m.maxLeadSide ? ` · ${m.maxLeadSide === "us" ? usShort : themShort}` : ""}`, v: m.maxLead },
+          { k: `Biggest lead${m.maxLeadSide ? ` · ${sideToVenue(m.maxLeadSide, m.homeAway) === "home" ? homeShort : awayShort}` : ""}`, v: m.maxLead },
         ]} />
       </section>
 
@@ -196,97 +192,104 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
       <section className="pm-sec">
         <p className="pm-label">Score progression</p>
         <div className="pm-chart">
-          <ScoreChart series={m.series} goalDots={m.goalDots} chartMarkers={m.chartMarkers} htLine={m.htLine} colorUs={m.colorUs} colorThem={m.colorThem} nameUs={m.usName} nameThem={m.themName} mode={m.effMode} />
+          <ScoreChart series={m.homeSeries} goalDots={m.goalDots} chartMarkers={m.chartMarkers} htLine={m.htLine} colorHome={m.homeColors[0]} colorAway={m.awayColors[0]} mode={m.effMode} />
         </div>
       </section>
 
       {/* scorers — both teams, combined leaderboard */}
       <section className="pm-sec">
         <p className="pm-label">Scorers</p>
-        <Scorers us={m.usScorers} them={m.themScorers} colorUs={m.colorUs} colorUs2={m.colorUs2} colorThem={m.colorThem} colorThem2={m.colorThem2} mode={m.effMode} />
+        <Scorers home={m.homeScorers} away={m.awayScorers} colorHome={m.homeColors[0]} colorHome2={m.homeColors[1]} colorAway={m.awayColors[0]} colorAway2={m.awayColors[1]} mode={m.effMode} />
       </section>
 
       {/* lineup — pitch when we have formation rows, else a flat starters list */}
-      {((m.formationRows && m.formationRows.length > 0) || (m.starters && m.starters.length > 0)) && (
-        <section className="pm-sec">
-          <p className="pm-label">Team · {(m.usName || "").toUpperCase()}</p>
-          {(m.formationRows && m.formationRows.length > 0) ? (
-            <div className="pm-pitch">
-              {m.formationRows.map((row: number[], ri: number) => (
-                <div className="pm-pitch-row" key={ri}>
-                  {row.map((n, ci) => (
-                    <div className="pm-jersey" key={ci}>
-                      <Jersey c1={m.colorUs} c2={m.colorUs2} num={n} size={40} />
-                      <div className="nm">{findName(n)} {badges(n, "us")}</div>
-                      {scoreFor(n, "us")}
+      {(() => {
+        const usVenue = m.homeAway === "home" ? m.homeName : m.awayName;
+        const themVenue = m.homeAway === "home" ? m.awayName : m.homeName;
+        const usSection = ((m.formationRows && m.formationRows.length > 0) || (m.starters && m.starters.length > 0)) ? (
+          <section className="pm-sec">
+            <p className="pm-label">Team · {(usVenue || "").toUpperCase()}</p>
+            {(m.formationRows && m.formationRows.length > 0) ? (
+              <div className="pm-pitch">
+                {m.formationRows.map((row: number[], ri: number) => (
+                  <div className="pm-pitch-row" key={ri}>
+                    {row.map((n, ci) => (
+                      <div className="pm-jersey" key={ci}>
+                        <Jersey c1={m.colorUs} c2={m.colorUs2} num={n} size={40} />
+                        <div className="nm">{findName(n)} {badges(n, "us")}</div>
+                        {scoreFor(n, "us")}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {m.subs && m.subs.length > 0 && (
+                  <>
+                    <div className="pm-subhead">Subs</div>
+                    <div className="pm-pitch-row">
+                      {m.subs.map((p: any) => (
+                        <div className="pm-jersey" key={p.num}>
+                          <Jersey c1={m.colorUs} c2={m.colorUs2} num={p.num} size={34} />
+                          <div className="nm">{p.name} {badges(p.num, "us")}</div>
+                          {scoreFor(p.num, "us")}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="pm-lineup-list">
+                {m.starters.map((p: any, i: number) => (
+                  <span className="pm-lineup-item" key={i}>{p.num ? `${p.num}. ` : ""}{p.name}{lineupBadges(mForBadges, "us", p.num).subOff ? " ▼" : ""}</span>
+                ))}
+              </div>
+            )}
+            {!(m.formationRows && m.formationRows.length > 0) && m.subs && m.subs.length > 0 && <p className="pm-bench">Subs: {m.subs.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
+            {m.missing && m.missing.length > 0 && <p className="pm-bench">Missing: {m.missing.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
+          </section>
+        ) : null;
+        const themSection = (m.oppRoster && m.oppRoster.formation && m.oppRoster.formation.length > 0) ? (
+          <section className="pm-sec">
+            <p className="pm-label">Team · {(themVenue || "").toUpperCase()}</p>
+            <div className="pm-pitch">
+              {m.oppRoster.formation.map((row: number[], ri: number) => (
+                <div className="pm-pitch-row" key={ri}>
+                  {row.map((n, ci) => { const op = m.oppRoster.players.find((x: any) => x.num === n); return (
+                    <div className="pm-jersey" key={ci}>
+                      <Jersey c1={m.colorThem} c2={m.colorThem2} num={n} size={38} />
+                      <div className="nm">{op ? op.name : ""} {badges(n, "them")}</div>
+                      {scoreFor(n, "them")}
+                    </div>
+                  ); })}
                 </div>
               ))}
-              {m.subs && m.subs.length > 0 && (
+              {(() => { const os = (m.oppRoster.players || []).filter((p: any) => p.role === "sub"); return os.length > 0 ? (
                 <>
                   <div className="pm-subhead">Subs</div>
                   <div className="pm-pitch-row">
-                    {m.subs.map((p: any) => (
+                    {os.map((p: any) => (
                       <div className="pm-jersey" key={p.num}>
-                        <Jersey c1={m.colorUs} c2={m.colorUs2} num={p.num} size={34} />
-                        <div className="nm">{p.name} {badges(p.num, "us")}</div>
-                        {scoreFor(p.num, "us")}
+                        <Jersey c1={m.colorThem} c2={m.colorThem2} num={p.num} size={34} />
+                        <div className="nm">{p.name} {badges(p.num, "them")}</div>
+                        {scoreFor(p.num, "them")}
                       </div>
                     ))}
                   </div>
                 </>
-              )}
+              ) : null; })()}
             </div>
-          ) : (
-            <div className="pm-lineup-list">
-              {m.starters.map((p: any, i: number) => (
-                <span className="pm-lineup-item" key={i}>{p.num ? `${p.num}. ` : ""}{p.name}{lineupBadges(mForBadges, "us", p.num).subOff ? " ▼" : ""}</span>
-              ))}
-            </div>
-          )}
-          {!(m.formationRows && m.formationRows.length > 0) && m.subs && m.subs.length > 0 && <p className="pm-bench">Subs: {m.subs.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
-          {m.missing && m.missing.length > 0 && <p className="pm-bench">Missing: {m.missing.map((p: any) => `${p.num} ${p.name}`).join("  ·  ")}</p>}
-        </section>
-      )}
-      {m.oppRoster && m.oppRoster.formation && m.oppRoster.formation.length > 0 && (
-        <section className="pm-sec">
-          <p className="pm-label">Team · {(m.themName || "").toUpperCase()}</p>
-          <div className="pm-pitch">
-            {m.oppRoster.formation.map((row: number[], ri: number) => (
-              <div className="pm-pitch-row" key={ri}>
-                {row.map((n, ci) => { const op = m.oppRoster.players.find((x: any) => x.num === n); return (
-                  <div className="pm-jersey" key={ci}>
-                    <Jersey c1={m.colorThem} c2={m.colorThem2} num={n} size={38} />
-                    <div className="nm">{op ? op.name : ""} {badges(n, "them")}</div>
-                    {scoreFor(n, "them")}
-                  </div>
-                ); })}
-              </div>
-            ))}
-            {(() => { const os = (m.oppRoster.players || []).filter((p: any) => p.role === "sub"); return os.length > 0 ? (
-              <>
-                <div className="pm-subhead">Subs</div>
-                <div className="pm-pitch-row">
-                  {os.map((p: any) => (
-                    <div className="pm-jersey" key={p.num}>
-                      <Jersey c1={m.colorThem} c2={m.colorThem2} num={p.num} size={34} />
-                      <div className="nm">{p.name} {badges(p.num, "them")}</div>
-                      {scoreFor(p.num, "them")}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : null; })()}
-          </div>
-        </section>
-      )}
+          </section>
+        ) : null;
+        return m.homeAway === "home"
+          ? <>{usSection}{themSection}</>
+          : <>{themSection}{usSection}</>;
+      })()}
 
       {/* timeline */}
       {(m.timeline && m.timeline.length > 0) && (
         <section className="pm-sec">
           <p className="pm-label">Timeline</p>
-          <Timeline timeline={m.timeline} halfMarks={m.halfMarks} colorUs={m.colorUs} colorUs2={m.colorUs2} colorThem={m.colorThem} colorThem2={m.colorThem2} usName={m.usName} themName={m.themName} />
+          <Timeline timeline={m.timelineHA} halfMarks={m.halfMarks} colorHome={m.homeColors[0]} colorHome2={m.homeColors[1]} colorAway={m.awayColors[0]} colorAway2={m.awayColors[1]} nameHome={m.homeName} nameAway={m.awayName} />
         </section>
       )}
 

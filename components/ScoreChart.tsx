@@ -14,14 +14,14 @@ function chartColor(c: string): string {
   return `#${h(r)}${h(g)}${h(b)}`;
 }
 
-export default function ScoreChart({ series, goalDots, chartMarkers = [], htLine, colorUs, colorThem, mode = "gaa" }: {
+export default function ScoreChart({ series, goalDots, chartMarkers = [], htLine, colorHome, colorAway, mode = "gaa" }: {
   series: any[]; goalDots: any[]; chartMarkers?: any[]; htLine: any;
-  colorUs: string; colorThem: string; nameUs?: string; nameThem?: string; mode?: string;
+  colorHome: string; colorAway: string; mode?: string;
 }) {
   const W = 720, H = 300, L = 40, Rp = 48, Tp = 34, Bp = 46;
-  const cUs = chartColor(colorUs), cThem = chartColor(colorThem);
+  const cHome = chartColor(colorHome), cAway = chartColor(colorAway);
   const xMax = Math.max(1, ...series.map((p) => p.x));
-  const yMax = Math.max(1, ...series.map((p) => Math.max(p.us, p.them)));
+  const yMax = Math.max(1, ...series.map((p) => Math.max(p.home, p.away)));
   const pX = (x: number) => L + (W - L - Rp) * (x / xMax);
   const pY = (v: number) => (H - Bp) - ((H - Bp) - Tp) * (v / yMax);
   const railY = H - Bp + 16;
@@ -60,8 +60,8 @@ export default function ScoreChart({ series, goalDots, chartMarkers = [], htLine
         </g>
       )}
 
-      <path d={stepPath("them")} fill="none" stroke={cThem} strokeWidth="2.5" />
-      <path d={stepPath("us")} fill="none" stroke={cUs} strokeWidth="3" />
+      <path d={stepPath("away")} fill="none" stroke={cAway} strokeWidth="2.5" />
+      <path d={stepPath("home")} fill="none" stroke={cHome} strokeWidth="3" />
 
       {/* goals: ⚽ in soccer; a square green flag (umpire convention) in GAA */}
       {goalDots.map((d, i) => {
@@ -85,8 +85,8 @@ export default function ScoreChart({ series, goalDots, chartMarkers = [], htLine
       {/* end-point cumulative score labels */}
       {last && (
         <g>
-          <text x={W - Rp + 6} y={pY(last.us) + 4} fontSize="13" fontWeight="700" fill={cUs}>{last.usScore}</text>
-          <text x={W - Rp + 6} y={pY(last.them) + 4} fontSize="13" fontWeight="700" fill={cThem}>{last.themScore}</text>
+          <text x={W - Rp + 6} y={pY(last.home) + 4} fontSize="13" fontWeight="700" fill={cHome}>{last.homeScore}</text>
+          <text x={W - Rp + 6} y={pY(last.away) + 4} fontSize="13" fontWeight="700" fill={cAway}>{last.awayScore}</text>
         </g>
       )}
 
