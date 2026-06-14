@@ -4,8 +4,6 @@ import React from "react";
 import { useMatchEditor } from "@/components/match-tracker/useMatchEditor";
 import DetailsView from "@/components/match-tracker/DetailsView";
 import MinuteStep from "@/components/MinuteStep";
-import RosterPitch from "@/components/RosterPitch";
-import Jersey from "@/components/Jersey";
 import ShareSheet from "@/components/ShareSheet";
 import ShareImageModal from "@/components/ShareImageModal";
 import TeamPicker from "@/components/TeamPicker";
@@ -14,7 +12,7 @@ import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
 import GameModeView from "@/components/match-tracker/GameModeView";
 import NewMatchWizard from "@/components/match-tracker/NewMatchWizard";
-import { addPlayer } from "@/lib/team-roster";
+import LineupView from "@/components/match-tracker/LineupView";
 import { evIcon } from "@/lib/event-icons";
 import { gpTotal, contrastOn, fmtDateDow } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
@@ -282,109 +280,18 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           />
         )}
 
-        {view === "lineup" && (editLineup ? (() => {
-          const side = editLineup === "away" ? "away" : "home";
-          const roster = (side === "away" ? awayRoster : homeRoster) || EMPTY_ROSTER;
-          const setRoster = side === "away" ? setAwayRoster : setHomeRoster;
-          const c1 = side === "away" ? colorAway : colorHome, c2 = side === "away" ? colorAway2 : colorHome2;
-          const nm = side === "away" ? awayName : homeName;
-          return (
-            <>
-              <div className="mt-row" style={{ marginBottom: 8 }}>
-                <span className="mt-h" style={{ margin: 0, flex: 1 }}>Edit {nm} — tap to rename/renumber; ⇄ Swap or ↕ Move</span>
-                <button className="mt-add" onClick={() => setEditLineup(false)}>✓ Done</button>
-              </div>
-              <RosterPitch roster={roster} color1={c1} color2={c2} editable onChange={setRoster} />
-              <div className="mt-row" style={{ marginTop: 8 }}>
-                <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "starting"))}>+ Player</button>
-                <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "sub"))}>+ Sub</button>
-              </div>
-            </>
-          );
-        })() : (() => {
-          // one editable pitch per side, keyed by venue; home then away
-          const renderEditPitch = (side) => {
-            const isHome = side === "home";
-            const rosterObj = isHome ? homeRoster : awayRoster;
-            const c1 = isHome ? colorHome : colorAway, c2 = isHome ? colorHome2 : colorAway2;
-            const nm = isHome ? homeName : awayName;
-            const players = (rosterObj && rosterObj.players) || [];
-            const rows = isHome
-              ? formationRows
-              : ((rosterObj && rosterObj.formation && rosterObj.formation.length)
-                  ? rosterObj.formation
-                  : chunk(players.filter((p) => p.role !== "sub").map((p) => p.num), 3));
-            const sideStarters = isHome ? starters : players.filter((p) => p.role !== "sub" && p.role !== "missing");
-            const sideSubs = isHome ? subs : players.filter((p) => p.role === "sub");
-            const sideMissing = isHome ? missing : players.filter((p) => p.role === "missing");
-            const hasLineup = isHome ? formationRows.length > 0 : (rosterObj && rosterObj.formation && rosterObj.formation.length > 0);
-            return (
-              <React.Fragment key={side}>
-                <div className="mt-row" style={{ marginTop: isHome ? 0 : 18, marginBottom: 6 }}>
-                  <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nm}</span>
-                  <button className="mt-add alt" onClick={() => setEditLineup(side)}>✎ Edit lineup</button>
-                </div>
-                {hasLineup ? (
-                  <div className="mt-pitch" style={{ background: `linear-gradient(${c2}22, #0c3b2a 60%)` }}>
-                    {rows.map((row, ri) => (
-                      <div className="mt-line" key={ri}>
-                        {row.map((n) => {
-                          const p = sideStarters.find((x) => x.num === n);
-                          const picked = subPick && subPick.side === side && subPick.role === "off" && subPick.num === n;
-                          return (
-                            <div className="mt-jersey" key={n} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch", side)}>
-                              <Jersey c1={c1} c2={c2} num={n} size={isHome ? 44 : 40} />
-                              <div className="nm">{p ? p.name : ""} {subArrows(n, side)}{playerMarks(n, side)}</div>
-                              {scoreFor(n, side)}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                    {sideSubs.length > 0 && (
-                      <>
-                        <div className="rp-subhead">Subs</div>
-                        <div className="mt-line">
-                          {sideSubs.map((p) => {
-                            const picked = subPick && subPick.side === side && subPick.role === "on" && subPick.num === p.num;
-                            return (
-                              <div className="mt-jersey" key={p.num} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench", side)}>
-                                <Jersey c1={c1} c2={c2} num={p.num} size={36} />
-                                <div className="nm">{p.name} {subArrows(p.num, side)}{playerMarks(p.num, side)}</div>
-                                {scoreFor(p.num, side)}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-note">No {nm} lineup yet — tap Edit lineup to add players.</p>
-                )}
-                {sideMissing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{sideMissing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
-              </React.Fragment>
-            );
-          };
-          return (
-            <>
-              {renderEditPitch("home")}
-              {subPick ? (
-                <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
-                  <div className="mt-row">
-                    <span className="mt-h" style={{ margin: 0 }}>
-                      {subPick.role === "off" ? <>{subPick.num}. {subPick.name} off — now tap who comes on</> : <>{subPick.num}. {subPick.name} on — now tap who comes off</>}
-                    </span>
-                    <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setSubPick(null)}>Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-note" style={{ marginTop: 8 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
-              )}
-              {renderEditPitch("away")}
-            </>
-          );
-        })())}
+        {view === "lineup" && (
+          <LineupView
+            editLineup={editLineup} setEditLineup={setEditLineup}
+            homeRoster={homeRoster} awayRoster={awayRoster}
+            setHomeRoster={setHomeRoster} setAwayRoster={setAwayRoster} EMPTY_ROSTER={EMPTY_ROSTER}
+            colorHome={colorHome} colorAway={colorAway} colorHome2={colorHome2} colorAway2={colorAway2}
+            homeName={homeName} awayName={awayName}
+            formationRows={formationRows} chunk={chunk} starters={starters} subs={subs} missing={missing}
+            subPick={subPick} setSubPick={setSubPick} tapPlayer={tapPlayer}
+            subArrows={subArrows} playerMarks={playerMarks} scoreFor={scoreFor}
+          />
+        )}
 
         {view === "advanced" && (
           <>
