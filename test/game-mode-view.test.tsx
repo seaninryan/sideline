@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
 import React from "react";
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import GameModeView from "@/components/match-tracker/GameModeView";
-
-// auto-cleanup isn't registered (vitest config has no globals/setup file), so
-// unmount each render explicitly to avoid prior renders leaking into queries.
-afterEach(cleanup);
 
 function props(over: Partial<any> = {}) {
   return {

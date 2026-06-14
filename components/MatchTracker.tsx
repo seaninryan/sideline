@@ -3,23 +3,12 @@
 import React from "react";
 import { useMatchEditor } from "@/components/match-tracker/useMatchEditor";
 import DetailsView from "@/components/match-tracker/DetailsView";
-import MinuteStep from "@/components/MinuteStep";
-import RosterPitch from "@/components/RosterPitch";
-import Jersey from "@/components/Jersey";
-import ShareSheet from "@/components/ShareSheet";
-import ShareImageModal from "@/components/ShareImageModal";
-import TeamPicker from "@/components/TeamPicker";
-import SportIcon from "@/components/SportIcon";
-import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
-import ScoreHeader from "@/components/ScoreHeader";
 import GameModeView from "@/components/match-tracker/GameModeView";
-import { addPlayer } from "@/lib/team-roster";
-import { evIcon } from "@/lib/event-icons";
-import { gpTotal, contrastOn, fmtDateDow } from "@/lib/util";
-import { PALETTE, SPORTS } from "@/lib/constants";
-import { whoToken } from "@/lib/event-line";
-import { teamStore } from "@/lib/team-store";
+import NewMatchWizard from "@/components/match-tracker/NewMatchWizard";
+import LineupView from "@/components/match-tracker/LineupView";
+import NotationView from "@/components/match-tracker/NotationView";
+import EditorChrome from "@/components/match-tracker/EditorChrome";
 
 export default function MatchTracker({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
   const {
@@ -77,250 +66,37 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
   return (
     <div className="mt-root">
 
-      {/* frozen top chrome — header + scoreboard + tabs stay pinned while the body scrolls */}
-      <div className="mt-frozen">
-      {/* persistent header */}
-      {!nw && (
-        <AppHeader
-          email={userEmail}
-          onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
-          primary={
-            <button className="mt-btn ah-icn" aria-label="Share" title="Share" onClick={enterShare}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
-              </svg>
-            </button>
-          }
-          screen="editor"
-          isAdmin={userIsAdmin}
-        />
-      )}
-      {!nw && remoteConflict && (
-        <div className="mt-warn">
-          Updated on another device.
-          <button className="mt-add alt" style={{ marginLeft: 8 }} onClick={doResyncLatest}>Load latest</button>
-        </div>
-      )}
-      {nw && (
-        <AppHeader
-          email={userEmail}
-          onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
-          screen="editor"
-        />
-      )}
-
-      {!nw && shareModel && (
-        <ShareImageModal model={shareModel.model} filename={shareModel.filename} title={shareModel.title} onClose={() => setShareModel(null)} />
-      )}
-
-      {!nw && modal && (
-        <div className="mt-panel">
-          {modal.kind === "backup" && (
-            <>
-              <div className="mt-panel-head"><h3>Backup &amp; transfer</h3><button className="mt-add alt" onClick={() => setModal(null)}>Close</button></div>
-              <p className="hint">From the device that has your matches, tap Copy, then paste it into Import on the other device. ({modal.count} saved here.)</p>
-              <textarea readOnly value={exportText} onClick={(e) => e.target.select()} />
-              <div className="row"><button className="mt-add" onClick={copyExport}>Copy</button></div>
-              <p className="hint" style={{ marginTop: 14 }}>Import — paste a backup here to load every match onto this device:</p>
-              <textarea value={importText} placeholder="paste backup text here" onChange={(e) => setImportText(e.target.value)} />
-              <div className="row"><button className="mt-add" onClick={doImport} disabled={!importText.trim()}>Import</button></div>
-            </>
-          )}
-        </div>
-      )}
-
-      {!nw && share && curId && (
-        <ShareSheet
-          record={{ ...recordPayload(), savedAt: Date.now() }}
-          curId={curId}
-          onClose={() => setShare(false)}
-          onShareImage={() => { setShare(false); doExport(); }}
-          onApplied={({ nameDisplay }) => setNameDisplay(nameDisplay)}
-        />
-      )}
-
-      {/* score header (shared with the public page) — the editor adds an Edit-details toggle on the panel */}
-      {!nw && (() => {
-        const homeT = totals.home;
-        const awayT = totals.away;
-        return (
-          <ScoreHeader
-            homeName={homeName}
-            awayName={awayName}
-            homeStr={homeT.str}
-            awayStr={awayT.str}
-            homeColors={[homeColor, homeColor2]}
-            awayColors={[awayColor, awayColor2]}
-            grade={header.label || sportLabel || ""}
-            dateStr={matchDate ? fmtDateDow(matchDate) : ""}
-            homeTotal={gpTotal(homeT.g, homeT.p, effMode)}
-            awayTotal={gpTotal(awayT.g, awayT.p, effMode)}
-            phase={phase}
-            live={phase === "play" || phase === "ht"}
-            homeSquad={homeSquadV}
-            awaySquad={awaySquadV}
-            action={<button className="sh-edit" onClick={() => { setShowDetails((o) => !o); if (showDetails) setColorPick(null); }}>{showDetails ? "▾ Hide" : "✎ Edit"}</button>}
-          />
-        );
-      })()}
-
-      {/* match details panel — drops below the scoreboard */}
-      {!nw && showDetails && (
-      <div className="mt-settings">
-        <label>Date <input type="date" value={(matchDate || "").slice(0, 10)} onChange={(e) => e.target.value && setMatchDate(`${e.target.value}T${(matchDate || "").slice(11, 16) || "12:00"}`)} />
-          <input type="time" value={(matchDate || "").slice(11, 16)} onChange={(e) => e.target.value && setMatchDate(`${(matchDate || "").slice(0, 10)}T${e.target.value}`)} /></label>
-        <label>Home team <input type="text" value={homeTeam} onChange={(e) => onHomeTeamChange(e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorHome }} onClick={() => setColorPick(colorPick === "home" ? null : "home")} /><button className="mt-swatch" title="Secondary" style={{ background: colorHome2 }} onClick={() => setColorPick(colorPick === "home2" ? null : "home2")} /></label>
-        <button className="mt-btn" title="Swap home/away" onClick={doSwap}>⇄ Swap</button>
-        <label>Away team <input type="text" value={awayTeam} placeholder="Away team"
-          onChange={(e) => setHeaderField("away", e.target.value)} /> <button className="mt-swatch" title="Primary" style={{ background: colorAway }} onClick={() => setColorPick(colorPick === "away" ? null : "away")} /><button className="mt-swatch" title="Secondary" style={{ background: colorAway2 }} onClick={() => setColorPick(colorPick === "away2" ? null : "away2")} /></label>
-        <label>Sport
-          <select className="mt-sel" style={{ color: "#222", background: "#fffdf6", borderColor: "#d8cfb8" }}
-            value={sport}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === sport) return;
-              setReTeam({ sport: v, prevSport: sport, home: null, away: null });
-              if (userUid) teamStore.list(userUid).then(setNwTeams).catch(() => {});
-            }}>
-            {!sport && <option value="" disabled>— choose sport —</option>}
-            {Object.entries(SPORTS).map(([k, s]) => <option key={k} value={k}>{s.emoji} {s.label}</option>)}
-          </select>
-        </label>
-        {reTeam && (
-          <div className="mt-live" style={{ marginTop: 10 }}>
-            <div className="mt-row">
-              <span className="mt-h" style={{ margin: 0, flex: 1 }}>Re-pick teams for {SPORTS[reTeam.sport]?.label || "new sport"}</span>
-              <button className="mt-add alt" onClick={() => setReTeam(null)}>✕ Cancel</button>
-            </div>
-            {!reTeam.home ? (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
-                <TeamPicker teams={nwTeams} sport={reTeam.sport} onPick={reTeamPickHome} onCreate={reTeamCreateHome} />
-              </>
-            ) : (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Home team: <b>{reTeam.home.name}</b>. Now pick the away team{reTeam.away ? <> — <b>{reTeam.away.name}</b></> : ", or create one"}.</p>
-                <TeamPicker teams={nwTeams} sport={reTeam.sport} exclude={reTeam.home.id} onPick={reTeamPickAway} onCreate={reTeamCreateAway} />
-                <div className="mt-row" style={{ marginTop: 10 }}>
-                  <button className="mt-add alt" onClick={() => setReTeam({ ...reTeam, home: null, away: null })}>← Back</button>
-                  <button className="mt-add" style={{ flex: 1, marginLeft: 8 }} disabled={!reTeam.away} onClick={reTeamApply}>Apply {SPORTS[reTeam.sport]?.label} teams</button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      )}
-
-      {!nw && showDetails && colorPick && (() => {
-        const map = {
-          home: [colorHome, setColorHome, `${homeName} — primary`], home2: [colorHome2, setColorHome2, `${homeName} — secondary`],
-          away: [colorAway, setColorAway, `${awayName} — primary`], away2: [colorAway2, setColorAway2, `${awayName} — secondary`],
-        };
-        const [val, setVal, label] = map[colorPick];
-        const sw = (c) => (
-          <button key={c} className={"mt-swatch big" + (c === (val || "").toLowerCase() ? " on" : "")}
-            style={{ background: c }} onClick={() => { setVal(c); setColorPick(null); }} title={c} />
-        );
-        return (
-          <div className="mt-live" style={{ marginTop: 0 }}>
-            <div className="mt-row">
-              <span className="mt-h" style={{ margin: 0 }}>Colour — {label}</span>
-              <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setColorPick(null)}>Done</button>
-            </div>
-            {usedColors.length > 0 && <>
-              <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Used before</p>
-              <div className="mt-row">{usedColors.map(sw)}</div>
-            </>}
-            <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Palette</p>
-            <div className="mt-row">{PALETTE.filter((c) => !usedColors.includes(c)).map(sw)}</div>
-            <p className="mt-note" style={{ marginTop: 10, marginBottom: 4 }}>Advanced — exact colour
-              <input type="color" value={val} onChange={(e) => setVal(e.target.value)} style={{ marginLeft: 8, verticalAlign: "middle" }} /></p>
-          </div>
-        );
-      })()}
-
-      {/* tabs */}
-      {!nw && (
-      <div className="mt-tabs">
-        {tabs.map(([id, lbl]) => (
-          <button key={id} className={"mt-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{lbl}</button>
-        ))}
-      </div>
-      )}
-      </div>{/* /mt-frozen */}
-      {savedMsg && <div className="mt-toast">{savedMsg}</div>}
+      <EditorChrome
+        nw={nw} userEmail={userEmail} userIsAdmin={userIsAdmin} userUid={userUid}
+        onSignOut={async () => { await sb.auth.signOut(); router.push("/"); }}
+        enterShare={enterShare} remoteConflict={remoteConflict} doResyncLatest={doResyncLatest}
+        shareModel={shareModel} setShareModel={setShareModel}
+        modal={modal} setModal={setModal} exportText={exportText} copyExport={copyExport}
+        importText={importText} setImportText={setImportText} doImport={doImport}
+        share={share} curId={curId} recordPayload={recordPayload} setShare={setShare}
+        doExport={doExport} setNameDisplay={setNameDisplay}
+        totals={totals} homeName={homeName} awayName={awayName}
+        homeColor={homeColor} homeColor2={homeColor2} awayColor={awayColor} awayColor2={awayColor2}
+        header={header} sportLabel={sportLabel} matchDate={matchDate} effMode={effMode}
+        phase={phase} homeSquadV={homeSquadV} awaySquadV={awaySquadV}
+        showDetails={showDetails} setShowDetails={setShowDetails} setColorPick={setColorPick} colorPick={colorPick}
+        setMatchDate={setMatchDate} homeTeam={homeTeam} onHomeTeamChange={onHomeTeamChange}
+        colorHome={colorHome} colorHome2={colorHome2} doSwap={doSwap} awayTeam={awayTeam} setHeaderField={setHeaderField} colorAway={colorAway} colorAway2={colorAway2}
+        sport={sport} setReTeam={setReTeam} setNwTeams={setNwTeams} reTeam={reTeam} nwTeams={nwTeams}
+        reTeamPickHome={reTeamPickHome} reTeamCreateHome={reTeamCreateHome}
+        reTeamPickAway={reTeamPickAway} reTeamCreateAway={reTeamCreateAway} reTeamApply={reTeamApply}
+        setColorHome={setColorHome} setColorHome2={setColorHome2} setColorAway={setColorAway} setColorAway2={setColorAway2}
+        usedColors={usedColors} tabs={tabs} tab={tab} setTab={setTab} savedMsg={savedMsg}
+      />
 
       <div className="mt-body">
         {view === "new" && (
-          <div className="mt-game nw">
-            <div className="mt-row" style={{ marginBottom: 8 }}>
-              <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nw.stage === "home" ? "Home team" : nw.stage === "away" ? "Away team" : "New match"}</span>
-              <button className="mt-add alt" onClick={() => router.push("/")}>✕ Cancel</button>
-            </div>
-
-            {(() => {
-              const idx = nw.stage === "date" ? 0 : nw.stage === "home" ? 1 : 2;
-              return (
-                <div className="nw-steps" aria-label={`Step ${idx + 1} of 3`}>
-                  {[0, 1, 2].map((i) => (
-                    <React.Fragment key={i}>
-                      {i > 0 && <span className={"nw-bar" + (i <= idx ? " done" : "")} />}
-                      <span className={"nw-dot" + (i === idx ? " on" : i < idx ? " done" : "")}>{i + 1}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              );
-            })()}
-
-            {/* stage 1 — when + sport */}
-            {nw.stage === "date" && (
-              <>
-                <p className="nw-prompt">First, choose when the match will be</p>
-                <div className="mt-row nw-date">
-                  <input type="date" value={nw.date.slice(0, 10)} onChange={(e) => e.target.value && setNw({ ...nw, date: `${e.target.value}T${nw.date.slice(11, 16)}` })} />
-                  <input type="time" value={nw.date.slice(11, 16)} onChange={(e) => e.target.value && setNw({ ...nw, date: `${nw.date.slice(0, 10)}T${e.target.value}` })} />
-                </div>
-                {(() => { const d = new Date(nw.date); return isNaN(d.getTime()) ? null : <p className="nw-dow">{d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</p>; })()}
-                <p className="nw-prompt" style={{ marginTop: 18 }}>…and which sport</p>
-                <div className="nw-sports">
-                  {Object.entries(SPORTS).map(([k, s]) => (
-                    <button key={k} className={"nw-sport" + (nw.sport === k ? " on" : "")} onClick={() => setNw({ ...nw, sport: k, home: null, away: null })}>
-                      <SportIcon sport={k} size={22} /> <span>{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="nw-nav">
-                  <span className="grow" />
-                  <button className="nw-link" disabled={!nw.sport} onClick={() => setNw({ ...nw, stage: "home" })}>Next →</button>
-                </div>
-              </>
-            )}
-
-            {/* stage 2 — home team */}
-            {nw.stage === "home" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the home team, or create one.</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} onPick={nwPickHome} onCreate={nwCreateHome} />
-                <div className="nw-nav">
-                  <button className="nw-link" onClick={() => setNw({ ...nw, stage: "date" })}>← Back</button>
-                </div>
-              </>
-            )}
-
-            {/* stage 3 — away team (Create finishes) */}
-            {nw.stage === "away" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>Pick the away team{nw.away ? <> — <b>{nw.away.name}</b></> : ", or create one"}.</p>
-                <TeamPicker teams={nwTeams} sport={nw.sport} exclude={nw.home && nw.home.id} onPick={nwPickAway} onCreate={nwCreateAway} />
-                <div className="nw-nav">
-                  <button className="nw-link" onClick={() => setNw({ ...nw, stage: "home", away: null })}>← Back</button>
-                  <button className="mt-big gm-team" style={{ flex: 1, marginLeft: 10 }} disabled={!nw.home || !nw.away} onClick={finishNew}>Create match →</button>
-                </div>
-              </>
-            )}
-          </div>
+          <NewMatchWizard
+            nw={nw} setNw={setNw} nwTeams={nwTeams}
+            nwPickHome={nwPickHome} nwCreateHome={nwCreateHome}
+            nwPickAway={nwPickAway} nwCreateAway={nwCreateAway}
+            finishNew={finishNew} onCancel={() => router.push("/")}
+          />
         )}
         {view === "game" && (
           <GameModeView
@@ -343,241 +119,31 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           />
         )}
 
-        {view === "lineup" && (editLineup ? (() => {
-          const side = editLineup === "away" ? "away" : "home";
-          const roster = (side === "away" ? awayRoster : homeRoster) || EMPTY_ROSTER;
-          const setRoster = side === "away" ? setAwayRoster : setHomeRoster;
-          const c1 = side === "away" ? colorAway : colorHome, c2 = side === "away" ? colorAway2 : colorHome2;
-          const nm = side === "away" ? awayName : homeName;
-          return (
-            <>
-              <div className="mt-row" style={{ marginBottom: 8 }}>
-                <span className="mt-h" style={{ margin: 0, flex: 1 }}>Edit {nm} — tap to rename/renumber; ⇄ Swap or ↕ Move</span>
-                <button className="mt-add" onClick={() => setEditLineup(false)}>✓ Done</button>
-              </div>
-              <RosterPitch roster={roster} color1={c1} color2={c2} editable onChange={setRoster} />
-              <div className="mt-row" style={{ marginTop: 8 }}>
-                <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "starting"))}>+ Player</button>
-                <button className="mt-add alt" onClick={() => setRoster(addPlayer(roster, "sub"))}>+ Sub</button>
-              </div>
-            </>
-          );
-        })() : (() => {
-          // one editable pitch per side, keyed by venue; home then away
-          const renderEditPitch = (side) => {
-            const isHome = side === "home";
-            const rosterObj = isHome ? homeRoster : awayRoster;
-            const c1 = isHome ? colorHome : colorAway, c2 = isHome ? colorHome2 : colorAway2;
-            const nm = isHome ? homeName : awayName;
-            const players = (rosterObj && rosterObj.players) || [];
-            const rows = isHome
-              ? formationRows
-              : ((rosterObj && rosterObj.formation && rosterObj.formation.length)
-                  ? rosterObj.formation
-                  : chunk(players.filter((p) => p.role !== "sub").map((p) => p.num), 3));
-            const sideStarters = isHome ? starters : players.filter((p) => p.role !== "sub" && p.role !== "missing");
-            const sideSubs = isHome ? subs : players.filter((p) => p.role === "sub");
-            const sideMissing = isHome ? missing : players.filter((p) => p.role === "missing");
-            const hasLineup = isHome ? formationRows.length > 0 : (rosterObj && rosterObj.formation && rosterObj.formation.length > 0);
-            return (
-              <React.Fragment key={side}>
-                <div className="mt-row" style={{ marginTop: isHome ? 0 : 18, marginBottom: 6 }}>
-                  <span className="mt-h" style={{ margin: 0, flex: 1 }}>{nm}</span>
-                  <button className="mt-add alt" onClick={() => setEditLineup(side)}>✎ Edit lineup</button>
-                </div>
-                {hasLineup ? (
-                  <div className="mt-pitch" style={{ background: `linear-gradient(${c2}22, #0c3b2a 60%)` }}>
-                    {rows.map((row, ri) => (
-                      <div className="mt-line" key={ri}>
-                        {row.map((n) => {
-                          const p = sideStarters.find((x) => x.num === n);
-                          const picked = subPick && subPick.side === side && subPick.role === "off" && subPick.num === n;
-                          return (
-                            <div className="mt-jersey" key={n} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: n, name: p ? p.name : String(n) }, "pitch", side)}>
-                              <Jersey c1={c1} c2={c2} num={n} size={isHome ? 44 : 40} />
-                              <div className="nm">{p ? p.name : ""} {subArrows(n, side)}{playerMarks(n, side)}</div>
-                              {scoreFor(n, side)}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                    {sideSubs.length > 0 && (
-                      <>
-                        <div className="rp-subhead">Subs</div>
-                        <div className="mt-line">
-                          {sideSubs.map((p) => {
-                            const picked = subPick && subPick.side === side && subPick.role === "on" && subPick.num === p.num;
-                            return (
-                              <div className="mt-jersey" key={p.num} style={{ cursor: "pointer", outline: picked ? "2px solid #f5c518" : "none", outlineOffset: 2, borderRadius: 8 }} onClick={() => tapPlayer({ num: p.num, name: p.name }, "bench", side)}>
-                                <Jersey c1={c1} c2={c2} num={p.num} size={36} />
-                                <div className="nm">{p.name} {subArrows(p.num, side)}{playerMarks(p.num, side)}</div>
-                                {scoreFor(p.num, side)}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-note">No {nm} lineup yet — tap Edit lineup to add players.</p>
-                )}
-                {sideMissing.length > 0 && <><p className="mt-h" style={{ marginTop: 14 }}>Missing</p><div className="mt-bench">{sideMissing.map((p) => <span className="b miss" key={p.num}>{p.num}. {p.name}</span>)}</div></>}
-              </React.Fragment>
-            );
-          };
-          return (
-            <>
-              {renderEditPitch("home")}
-              {subPick ? (
-                <div className="mt-live" style={{ marginTop: 10, marginBottom: 0 }}>
-                  <div className="mt-row">
-                    <span className="mt-h" style={{ margin: 0 }}>
-                      {subPick.role === "off" ? <>{subPick.num}. {subPick.name} off — now tap who comes on</> : <>{subPick.num}. {subPick.name} on — now tap who comes off</>}
-                    </span>
-                    <button className="mt-add alt" style={{ marginLeft: "auto" }} onClick={() => setSubPick(null)}>Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-note" style={{ marginTop: 8 }}>Substitution: tap the player going off and the sub coming on (either order). The minute is filled in for you — edit it in Notation any time.</p>
-              )}
-              {renderEditPitch("away")}
-            </>
-          );
-        })())}
+        {view === "lineup" && (
+          <LineupView
+            editLineup={editLineup} setEditLineup={setEditLineup}
+            homeRoster={homeRoster} awayRoster={awayRoster}
+            setHomeRoster={setHomeRoster} setAwayRoster={setAwayRoster} EMPTY_ROSTER={EMPTY_ROSTER}
+            colorHome={colorHome} colorAway={colorAway} colorHome2={colorHome2} colorAway2={colorAway2}
+            homeName={homeName} awayName={awayName}
+            formationRows={formationRows} chunk={chunk} starters={starters} subs={subs} missing={missing}
+            subPick={subPick} setSubPick={setSubPick} tapPlayer={tapPlayer}
+            subArrows={subArrows} playerMarks={playerMarks} scoreFor={scoreFor}
+          />
+        )}
 
         {view === "advanced" && (
-          <>
-            <div className="mt-row" style={{ marginTop: 0, marginBottom: 6 }}>
-              <p className="mt-h" style={{ margin: 0, flex: 1 }}>{notaView === "blocks" ? "Notation — tap a line to edit" : "Raw notation (edit freely — re-parses instantly)"}</p>
-              {canUndo && <button className="mt-add alt" onClick={undoRaw}>↩ Undo</button>}
-              <button className="mt-add alt" onClick={() => { setBlkEdit(null); setBlkIns(null); setLineupEdit(null); setNotaView(notaView === "blocks" ? "text" : "blocks"); }}>
-                {notaView === "blocks" ? "Edit as text" : "Blocks"}
-              </button>
-            </div>
-            {notaView === "text" ? (
-              <>
-                <textarea className="mt-ta" value={raw} onChange={(e) => setRaw(e.target.value)} spellCheck={false} />
-                <p className="mt-note" style={{ marginTop: 8 }}>
-                  Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Rick</code> ·
-                  start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal|own goal|'65|'45]</code> ·
-                  opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · cards <code>min who yellow|red card</code> ·
-                  corners <code>min [T] corner</code> · added time <code>min HT +3</code> · notes anything else.
-                </p>
-              </>
-            ) : (
-              <div className="mt-blks">
-                {blocks.list.map((b) => (
-                  <React.Fragment key={b.idx}>
-                    {blkEdit && blkEdit.idx === b.idx ? (
-                      <div className="mt-blk editing">
-                        {blkEdit.minute != null && <MinuteStep val={blkEdit.minute} onChange={(m) => setBlkEdit({ ...blkEdit, minute: m, confirmDel: false })} />}
-                        <input className="mt-blkta" style={{ marginTop: blkEdit.minute != null ? 7 : 0 }} value={blkEdit.rest}
-                          onChange={(e) => setBlkEdit({ ...blkEdit, rest: e.target.value, confirmDel: false })} spellCheck={false} />
-                        <div className="mt-blkrow">
-                          <button className="mt-add" onClick={blkOk}>OK</button>
-                          <button className="mt-add alt" onClick={() => setBlkEdit(null)}>Cancel</button>
-                          {blkEdit.kind !== "half" && (
-                            <button className={"mt-add danger" + (blkEdit.confirmDel ? " armed" : "")} onClick={blkDelete}>
-                              {blkEdit.confirmDel ? "Tap again to delete" : "Delete"}
-                            </button>
-                          )}
-                        </div>
-                        {blkEdit.minute != null && <p className="mt-note" style={{ margin: "6px 0 0" }}>OK re-parses — changing the minute moves the line to its spot in the half.</p>}
-                      </div>
-                    ) : (
-                      <div className="mt-blk">
-                        <button className="mt-blk-main" onClick={() => openBlk(b)}>{blkPill(b)}<span className="t">{b.text}</span></button>
-                        <button className="mt-blk-add" onClick={() => openInsert(b)} title="Insert event after this line" aria-label="Insert after">＋</button>
-                      </div>
-                    )}
-                    {blkIns && blkIns.afterIdx === b.idx && (
-                      <div className="mt-blk editing">
-                        <p className="mt-h" style={{ margin: "0 0 6px" }}>Insert after "{b.text.slice(0, 24)}…"</p>
-                        {blkIns.stage !== "note" && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
-
-                        {/* stage 1 — what happened? (+ sub / note) */}
-                        {blkIns.stage === "event" && (
-                          <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>What happened?</p>
-                            <div className="mt-grid">
-                              {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
-                                <button key={ev.key} className="mt-big sm ev" onClick={() => setBlkIns({ ...blkIns, stage: "team", ev: ev.key })}>{evIcon(ev.key, effMode)}<span>{ev.label}</span></button>
-                              ))}
-                            </div>
-                            <div className="mt-grid" style={{ marginTop: 7 }}>
-                              <button className="mt-big sm ev" onClick={() => setBlkIns({ ...blkIns, stage: "team", ev: "sub" })}>{evIcon("sub")}<span>Sub</span></button>
-                              <button className="mt-big sm" onClick={() => setBlkIns({ ...blkIns, stage: "note" })}>Note</button>
-                            </div>
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns(null)}>Cancel</button></div>
-                          </>
-                        )}
-
-                        {/* stage 2 — which team? */}
-                        {blkIns.stage === "team" && (
-                          <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} — which team?</p>
-                            <div className="mt-grid">
-                              <button className="mt-big sm" style={{ background: colorHome, color: contrastOn(colorHome) }} onClick={() => insPickTeam("home")}>{homeName}</button>
-                              <button className="mt-big sm" style={{ background: colorAway, color: contrastOn(colorAway) }} onClick={() => insPickTeam("away")}>{awayName}</button>
-                            </div>
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event", ev: null })}>← Back</button></div>
-                          </>
-                        )}
-
-                        {/* stage 3 — which player? */}
-                        {blkIns.stage === "who" && (
-                          <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{evLabel(blkIns.ev)} · {blkIns.team === "away" ? awayName : homeName} — who?</p>
-                            {gmPicker(blkIns.team, (p) => insCommit(buildEventLine(blkIns.ev, blkIns.team, p, blkIns.minute)), { allowUnknown: true })}
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button></div>
-                          </>
-                        )}
-
-                        {/* sub flow — off then on, on the team's jersey pitch (eligibility tracked) */}
-                        {blkIns.stage === "subOff" && (
-                          <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{blkIns.team === "away" ? awayName : homeName} sub — who goes off?</p>
-                            {gmPicker(blkIns.team, (p) => setBlkIns({ ...blkIns, stage: "subOn", off: p }), { eligible: onPitchSet(blkIns.team) })}
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "team" })}>← Back</button></div>
-                          </>
-                        )}
-                        {blkIns.stage === "subOn" && (
-                          <>
-                            <p className="mt-note" style={{ margin: "7px 0 4px" }}>{subWho(blkIns.off)} off — who comes on?</p>
-                            {gmPicker(blkIns.team, (p) => insCommit(`${blkIns.minute} ${whoToken(p, blkIns.team, whoCtx())} for ${whoToken(blkIns.off, blkIns.team, whoCtx())}`), { eligible: benchSet(blkIns.team) })}
-                            <div className="mt-blkrow"><button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "subOff" })}>← Back</button></div>
-                          </>
-                        )}
-
-                        {/* note flow */}
-                        {blkIns.stage === "note" && (
-                          <>
-                            <input className="mt-blkta" style={{ marginTop: 7 }} placeholder="note text" value={blkIns.noteText} onChange={(e) => setBlkIns({ ...blkIns, noteText: e.target.value })} />
-                            <label className="mt-note" style={{ display: "block", marginTop: 6 }}>
-                              <input type="checkbox" checked={blkIns.noteMin} onChange={(e) => setBlkIns({ ...blkIns, noteMin: e.target.checked })} /> attach a minute
-                            </label>
-                            {blkIns.noteMin && <MinuteStep val={blkIns.minute} onChange={(m) => setBlkIns({ ...blkIns, minute: m })} />}
-                            {notePhantom && <p className="mt-note" style={{ color: "#c0392b", margin: "4px 0 0" }}>Careful — a minuted line with no note keyword reads as a score. Leave the minute off for a plain note.</p>}
-                            <div className="mt-blkrow">
-                              <button className="mt-add" disabled={!noteLine()} onClick={() => insCommit(noteLine())}>OK</button>
-                              <button className="mt-add alt" onClick={() => setBlkIns({ ...blkIns, stage: "event" })}>← Back</button>
-                            </div>
-                          </>
-                        )}
-
-                        {["event", "team", "who", "subOff", "subOn"].includes(blkIns.stage) && (
-                          <p className="mt-note" style={{ margin: "8px 0 0" }}>Lands by minute within the half — may sit further down than where you tapped.</p>
-                        )}
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-                {blocks.list.length === 0 && <p className="mt-note">Nothing yet — tap Start half above at throw-in, or Edit as text.</p>}
-              </div>
-            )}
-          </>
+          <NotationView
+            notaView={notaView} setNotaView={setNotaView} canUndo={canUndo} undoRaw={undoRaw}
+            setBlkEdit={setBlkEdit} setBlkIns={setBlkIns} setLineupEdit={setLineupEdit}
+            raw={raw} setRaw={setRaw} blocks={blocks} blkEdit={blkEdit} blkIns={blkIns}
+            blkOk={blkOk} blkDelete={blkDelete} blkPill={blkPill} openBlk={openBlk} openInsert={openInsert}
+            liveEvents={liveEvents} effMode={effMode} evLabel={evLabel}
+            colorHome={colorHome} colorAway={colorAway} homeName={homeName} awayName={awayName}
+            gmPicker={gmPicker} insCommit={insCommit} insPickTeam={insPickTeam} buildEventLine={buildEventLine}
+            subWho={subWho} whoCtx={whoCtx} onPitchSet={onPitchSet} benchSet={benchSet}
+            notePhantom={notePhantom} noteLine={noteLine}
+          />
         )}
         {view !== "game" && view !== "new" && curId && (
           <section className="mt-danger">
