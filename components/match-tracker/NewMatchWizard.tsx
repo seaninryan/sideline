@@ -9,9 +9,9 @@ export interface NewMatchWizardProps {
   setNw: (nw: any) => void;
   nwTeams: any[];
   nwPickHome: (team: any) => void;
-  nwCreateHome: (name: string) => void;
+  nwCreateHome: (name: string, squad?: string) => void | Promise<void>;
   nwPickAway: (team: any) => void;
-  nwCreateAway: (name: string) => void;
+  nwCreateAway: (name: string, squad?: string) => void | Promise<void>;
   finishNew: () => void;
   onCancel: () => void;
 }
