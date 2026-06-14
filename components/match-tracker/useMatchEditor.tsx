@@ -148,7 +148,7 @@ export function useMatchEditor({ initialId = null, wizard = false } = {}) {
   const creatingRef = useRef(false); // guards finishNew against a double-tap minting two matches
 
   const parsed = useMemo(() => parseMatch(raw, { homeTeam, awayTeam, scoringMode: scoringModeForSport(sport), label, homeRoster, awayRoster }), [raw, homeTeam, awayTeam, sport, label, homeRoster, awayRoster]);
-  const { header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
+  const { header, roster, totals, result, series, goalDots, twoPtDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = SPORTS[sport] ? SPORTS[sport].label : header.sport; // chosen sport beats one named in the notation
 
@@ -439,6 +439,7 @@ export function useMatchEditor({ initialId = null, wizard = false } = {}) {
       case "pointfree": return `${min} ${who} free`;
       case "point65": return `${min} ${who} '65`;
       case "point45": return `${min} ${who} '45`;
+      case "point2": return `${min} ${who} 2pt`;
       case "og": return `${min} ${who} own goal`;
       case "yellow": return `${min} ${who} yellow card`;
       case "red": return `${min} ${who} red card`;
@@ -733,7 +734,8 @@ export function useMatchEditor({ initialId = null, wizard = false } = {}) {
   // live entry: "Who?" buttons laid out like the lineup pitch, plus the sport-relevant events
   const liveRows = formationRows.map((row) => row.map((n) => roster.find((p) => p.num === n)).filter(Boolean)).filter((r) => r.length);
   const liveEvents = LIVE_EVENTS.filter((ev) => (effMode === "goals" ? !ev.gaa : !ev.goalsOnly))
-    .filter((ev) => !(ev.key === "point65" && sportLabel === "Gaelic Football") && !(ev.key === "point45" && /hurling|camogie/i.test(sportLabel || "")));
+    .filter((ev) => !(ev.key === "point65" && sportLabel === "Gaelic Football") && !(ev.key === "point45" && /hurling|camogie/i.test(sportLabel || "")))
+    .filter((ev) => !(ev.key === "point2" && /hurling|camogie/i.test(sportLabel || ""))); // 2-pointer is football-only
   // match phase gates the buttons: before throw-in or at half time only "Start half"
   // works (anything else would land in the roster block / dead time), after FT nothing.
   // Subs aren't gated — the lineup tab stays live for half-time changes.
@@ -808,7 +810,7 @@ export function useMatchEditor({ initialId = null, wizard = false } = {}) {
     tab, setTab, view, tabs,
     canUndo, undoRaw, doUndo, undoTarget,
     // parsed + derived
-    parsed, header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine,
+    parsed, header, roster, totals, result, series, goalDots, twoPtDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine,
     effMode, sportLabel, homeName, awayName, usedColors,
     timeline, timelineHA, homeScorers, awayScorers, homeSeries,
     homeColor, awayColor, homeColor2, awayColor2, homeSquadV, awaySquadV,

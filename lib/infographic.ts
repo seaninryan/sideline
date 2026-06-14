@@ -181,6 +181,11 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
     if (m.effMode === "goals") body.push(`<text x="${gx}" y="${gy}" font-size="16" text-anchor="middle" dominant-baseline="central">⚽</text>`);
     else body.push(`<g transform="translate(-6 4) rotate(30 ${gx} ${gy})"><line x1="${gx}" y1="${gy}" x2="${gx}" y2="${gy - 16}" stroke="#0c3b2a" stroke-width="1.5"/><rect x="${gx}" y="${gy - 16}" width="8" height="8" fill="#1f9d3f" stroke="#0c3b2a" stroke-width="0.6"/></g>`);
   });
+  // 2-pointers (Gaelic football): a tilted orange flag, echoing the green goal flag
+  (m.twoPtDots || []).forEach((d: any) => {
+    const gx = pX(d.x), gy = pY(d.y);
+    body.push(`<g transform="translate(-6 4) rotate(30 ${gx} ${gy})"><line x1="${gx}" y1="${gy}" x2="${gx}" y2="${gy - 16}" stroke="#0c3b2a" stroke-width="1.5"/><rect x="${gx}" y="${gy - 16}" width="8" height="8" fill="#e67e22" stroke="#0c3b2a" stroke-width="0.6"/></g>`);
+  });
   // end-point cumulative score labels
   const lastPt = chartSeries[chartSeries.length - 1];
   if (lastPt) {
@@ -341,8 +346,9 @@ export function buildInfographicSVG(m: Model): { svg: string; width: number; hei
         const name = descriptive ? (it.desc || it.scorer) : evName;
         // a small pill conveys goal / free / set-piece, like the on-screen timeline
         const chip = it.type === "goal" ? { t: "GOAL", bg: "#c0392b", fg: "#fff" }
-          : it.fromFree ? { t: "FREE", bg: "#e7dec6", fg: "#5a7a4a" }
-            : it.setPiece ? { t: `'${it.setPiece}`, bg: "#e7dec6", fg: "#5a7a4a" } : null;
+          : it.twoPointer ? { t: "2PT", bg: "#e67e22", fg: "#fff" }
+            : it.fromFree ? { t: "FREE", bg: "#e7dec6", fg: "#5a7a4a" }
+              : it.setPiece ? { t: `'${it.setPiece}`, bg: "#e7dec6", fg: "#5a7a4a" } : null;
         const chipW = chip ? estW(chip.t, 8) + 12 : 0;
         const nameCol = descriptive ? MUTE : INK;
         tlBody.push(C(railX, cy, it.type === "goal" ? 6 : 4.5, col, { stroke: ring, sw: 2 }));

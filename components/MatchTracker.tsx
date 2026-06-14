@@ -36,7 +36,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
     showDetails, setShowDetails,
     tab, setTab, view, tabs,
     canUndo, undoRaw, doUndo, undoTarget,
-    parsed, header, roster, totals, result, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine,
+    parsed, header, roster, totals, result, series, goalDots, twoPtDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine,
     effMode, sportLabel, homeName, awayName, usedColors,
     timeline, timelineHA, homeScorers, awayScorers, homeSeries,
     homeColor, awayColor, homeColor2, awayColor2, homeSquadV, awaySquadV,
@@ -113,7 +113,7 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         {view === "details" && (
           <DetailsView
             parsed={parsed} effMode={effMode} homeName={homeName} awayName={awayName} maxLeadVenue={maxLeadVenue}
-            homeSeries={homeSeries} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} halfMarks={halfMarks}
+            homeSeries={homeSeries} goalDots={goalDots} twoPtDots={twoPtDots} chartMarkers={chartMarkers} htLine={htLine} halfMarks={halfMarks}
             homeScorers={homeScorers} awayScorers={awayScorers} timelineHA={timelineHA}
             homeColor={homeColor} awayColor={awayColor} homeColor2={homeColor2} awayColor2={awayColor2}
           />

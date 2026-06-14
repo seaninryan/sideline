@@ -27,6 +27,7 @@ export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
   const series = pe.series.map((p: any) => ({ ...p, home: p.a, away: p.b, homeScore: p.aScore, awayScore: p.bScore }));
   const scorers = pe.scorers.map((sc: any) => ({ ...sc, side: mapSide(sc.side) }));
   const goalDots = pe.goalDots.map((d: any) => ({ ...d, side: mapSide(d.side) }));
+  const twoPtDots = (pe.twoPtDots || []).map((d: any) => ({ ...d, side: mapSide(d.side) }));
   const chartMarkers = (pe.chartMarkers || []).map((mk: any) => ({ ...mk, side: mk.side ? mapSide(mk.side) : null }));
   const header = { raw: "", sport: "", away: awayName, label: label || "" };
 
@@ -34,7 +35,7 @@ export function parseMatch(raw: string, settings: Settings = {}): ParsedMatch {
     header,
     roster: homeRoster ? homeRoster.players : [],
     formationRows: homeRoster ? homeRoster.formation : [],
-    scoring, notes, halfMarks: pe.halfMarks, series, goalDots, chartMarkers, scorers,
+    scoring, notes, halfMarks: pe.halfMarks, series, goalDots, twoPtDots, chartMarkers, scorers,
     totals: { home: pe.totals.A, away: pe.totals.B },
     leadChanges: pe.leadChanges, timesLevel: pe.timesLevel, maxLead: pe.maxLead,
     maxLeadSide: pe.maxLeadSide == null ? null : mapSide(pe.maxLeadSide),

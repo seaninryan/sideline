@@ -59,6 +59,7 @@ export interface ParsedEvents {
   halfMarks: any[];
   series: any[];
   goalDots: any[];
+  twoPtDots: any[];
   chartMarkers: any[];
   scorers: any[];
   leadChanges: number;
@@ -182,10 +183,15 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
       const isGoal = /goal/i.test(restFull);
       const isFree = /\bfree\b/i.test(restFull) || /\bf\b/i.test(restFull);
       const isOg = /\bown goal\b|\bog\b/i.test(restFull);
+      // Gaelic football "2-pointer" (a point from outside the 40m arc, worth two
+      // points). Forms: 2pt / 2-pt / 2 pt / 2point / 2-pointer / two-pointer. It's a
+      // point, never a goal — so a "goal" keyword wins.
+      const twoPtRe = /\b(?:2\s*-?\s*p(?:oin)?t(?:er|s)?|two[\s-]?point(?:er)?)\b/i;
+      const isTwoPt = twoPtRe.test(restFull) && !isGoal;
       const setPiece = ((text.match(/(?:^|\s)['']?(45|65)(?=\s|$)/) || [])[1]) || null;
-      const scorerText = text.replace(/['']?\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
+      const scorerText = text.replace(twoPtRe, "").replace(/['']?\b(goal|free|point|pts?|pen|penalty|own|og|45|65)\b/gi, "").replace(/\?/g, "").trim();
       // a bare minute on its own line marks the start of a half
-      if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree) {
+      if (!scorerText && scoreToks.length === 0 && !isGoal && !isFree && !isTwoPt) {
         half += 1; startMin = minute; halfMaxElapsed = -1; halfMarks.push({ half, startMin: minute, srcLine }); continue;
       }
 
@@ -203,7 +209,7 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
         scorer = `own goal${r.name ? ` (${r.name})` : ""}`;
       }
       lastElapsed = elapsed;
-      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, setPiece, scorer, desc: text, og: isOg, ogNum: isOg && r.num ? r.num : null, playerNum: !isOg && num ? num : null, scoreToks, srcLine });
+      scoring.push({ seq: seq++, minute, half: half || 1, elapsed, side, sure, type: isGoal ? "goal" : "point", fromFree: isFree && !isGoal, twoPointer: isTwoPt, setPiece, scorer, desc: text, og: isOg, ogNum: isOg && r.num ? r.num : null, playerNum: !isOg && num ? num : null, scoreToks, srcLine });
     } else if (/^(ht|ft|half ?time|full ?time)$/i.test(line)) {
       halfMarks.push({ half: half || 1, marker: /^f/i.test(line) ? "FT" : "HT", minute: null, elapsed: lastElapsed, srcLine });
     } else if (/^\+\d{1,2}(\s+added)?$/i.test(line)) {
@@ -249,25 +255,28 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
   const xOf = (s: any) => (s.half === 1 ? s.elapsed : h1max + GAP + s.elapsed);
   const series: any[] = [{ x: 0, half: 1, a: 0, b: 0, mmin: "0", aScore: fmtScore(0, 0, mode), bScore: fmtScore(0, 0, mode), label: "Throw-in" }];
   const goalDots: any[] = [];
+  const twoPtDots: any[] = [];
   const scorers: Record<string, any> = {};
-  const bump = (name: string, side: Side, type: string, free: boolean, num: number | null) => {
+  const bump = (name: string, side: Side, type: string, free: boolean, num: number | null, twoPt = false) => {
     const k = side + ":" + squash(name);
-    if (!scorers[k]) scorers[k] = { name: titleCase(name), side, g: 0, p: 0, frees: 0, num: num || null };
+    if (!scorers[k]) scorers[k] = { name: titleCase(name), side, g: 0, p: 0, frees: 0, tp: 0, num: num || null };
     if (/[A-Z]/.test(name) && !/[A-Z]/.test(scorers[k].name)) scorers[k].name = name;
-    if (type === "goal") scorers[k].g++; else scorers[k].p++;
+    if (type === "goal") scorers[k].g++; else scorers[k].p += twoPt ? 2 : 1; // a 2-pointer is two points
     if (free) scorers[k].frees++;
+    if (twoPt) scorers[k].tp++;
   };
 
   let leadChanges = 0, prevLeader = 0, maxLead = 0, maxLeadSide: Side | null = null, timesLevel = 0, prevEqual = true;
   for (const s of scoring) {
     const effType = mode === "goals" ? "goal" : s.type;
-    if (s.side === "A") { if (effType === "goal") ag++; else ap++; }
-    else if (s.side === "B") { if (effType === "goal") bg++; else bp++; }
+    const ptVal = s.twoPointer ? 2 : 1; // a 2-pointer counts for two points
+    if (s.side === "A") { if (effType === "goal") ag++; else ap += ptVal; }
+    else if (s.side === "B") { if (effType === "goal") bg++; else bp += ptVal; }
     // (side null → unattributed: keep the item but don't count it for either team)
 
     if (s.side && s.scorer) {
       if (effType === "goal") bump(s.scorer, s.side, "goal", false, s.playerNum);
-      else bump(s.scorer, s.side, "point", s.fromFree, s.playerNum);
+      else bump(s.scorer, s.side, "point", s.fromFree, s.playerNum, s.twoPointer);
     }
 
     const aT = gpTotal(ag, ap, mode), bT = gpTotal(bg, bp, mode);
@@ -285,10 +294,11 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     series.push({
       x, half: s.half, minute: s.minute, mmin: s.mmin, a: aT, b: bT,
       aScore: fmtScore(ag, ap, mode), bScore: fmtScore(bg, bp, mode),
-      label: `${s.scorer || (s.side === "A" ? teamA.name : s.side === "B" ? teamB.name : "")}${effType === "goal" ? " GOAL" : s.fromFree ? " (free)" : s.setPiece ? ` ('${s.setPiece})` : ""}`,
+      label: `${s.scorer || (s.side === "A" ? teamA.name : s.side === "B" ? teamB.name : "")}${effType === "goal" ? " GOAL" : s.twoPointer ? " (2-pointer)" : s.fromFree ? " (free)" : s.setPiece ? ` ('${s.setPiece})` : ""}`,
       side: s.side, type: effType,
     });
     if (effType === "goal" && s.side) goalDots.push({ x, y: s.side === "A" ? aT : bT, side: s.side, label: `${s.mmin}' Goal — ${s.scorer || (s.side === "A" ? teamA.name : teamB.name)}${s.fromFree ? " (free)" : ""}` });
+    else if (s.twoPointer && s.side) twoPtDots.push({ x, y: s.side === "A" ? aT : bT, side: s.side, label: `${s.mmin}' 2-pointer — ${s.scorer || (s.side === "A" ? teamA.name : teamB.name)}${s.fromFree ? " (free)" : ""}` });
   }
 
   const totals = {
@@ -319,5 +329,5 @@ export function parseEvents(raw: string, settings: EventSettings): ParsedEvents 
     })
     .sort((a, b) => a.x - b.x);
 
-  return { mode, totals, result, scoring, notes, halfMarks, series, goalDots, chartMarkers, scorers: Object.values(scorers), leadChanges, timesLevel, maxLead, maxLeadSide, htLine, warnings };
+  return { mode, totals, result, scoring, notes, halfMarks, series, goalDots, twoPtDots, chartMarkers, scorers: Object.values(scorers), leadChanges, timesLevel, maxLead, maxLeadSide, htLine, warnings };
 }

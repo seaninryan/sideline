@@ -116,7 +116,7 @@ table.mt-tbl{width:100%; border-collapse:collapse; font-size:14px;}
   margin:14px auto 4px; position:relative;}
 .mt-pill{display:inline-block; font-family:var(--font-oswald); font-size:10px; text-transform:uppercase; letter-spacing:1px;
   padding:1px 7px; border-radius:20px; margin-left:6px;}
-.mt-pill.goal{background:#c0392b; color:#fff;} .mt-pill.free{background:#e7dec6; color:#5a4;} .mt-pill.sub{background:#dfeee6; color:#0c3b2a;}
+.mt-pill.goal{background:#c0392b; color:#fff;} .mt-pill.free{background:#e7dec6; color:#5a4;} .mt-pill.sub{background:#dfeee6; color:#0c3b2a;} .mt-pill.twopt{background:#e67e22; color:#fff;}
 textarea.mt-ta{width:100%; min-height:300px; font-family:'SFMono-Regular',ui-monospace,Menlo,monospace; font-size:12.5px;
   border:1px solid var(--line); border-radius:10px; padding:12px; background:#fffdf6; color:#222; line-height:1.5; resize:vertical;}
 .mt-live{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:16px;}

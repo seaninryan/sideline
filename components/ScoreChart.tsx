@@ -14,8 +14,8 @@ function chartColor(c: string): string {
   return `#${h(r)}${h(g)}${h(b)}`;
 }
 
-export default function ScoreChart({ series, goalDots, chartMarkers = [], htLine, colorHome, colorAway, mode = "gaa" }: {
-  series: any[]; goalDots: any[]; chartMarkers?: any[]; htLine: any;
+export default function ScoreChart({ series, goalDots, twoPtDots = [], chartMarkers = [], htLine, colorHome, colorAway, mode = "gaa" }: {
+  series: any[]; goalDots: any[]; twoPtDots?: any[]; chartMarkers?: any[]; htLine: any;
   colorHome: string; colorAway: string; mode?: string;
 }) {
   const W = 720, H = 300, L = 40, Rp = 48, Tp = 34, Bp = 46;
@@ -78,6 +78,20 @@ export default function ScoreChart({ series, goalDots, chartMarkers = [], htLine
                 <rect x={x} y={y - 18} width={9} height={9} fill="#1f9d3f" stroke="#0c3b2a" strokeWidth="0.6" />
               </g>
             )}
+          </g>
+        );
+      })}
+
+      {/* 2-pointers (Gaelic football): a tilted orange flag, echoing the green goal flag */}
+      {twoPtDots.map((d, i) => {
+        const x = pX(d.x), y = pY(d.y);
+        return (
+          <g key={i} style={{ cursor: "default" }}>
+            <title>{d.label}</title>
+            <g transform={`translate(-6 4) rotate(30 ${x} ${y})`}>
+              <line x1={x} y1={y} x2={x} y2={y - 18} stroke="#0c3b2a" strokeWidth="1.5" />
+              <rect x={x} y={y - 18} width={9} height={9} fill="#e67e22" stroke="#0c3b2a" strokeWidth="0.6" />
+            </g>
           </g>
         );
       })}

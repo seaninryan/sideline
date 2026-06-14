@@ -189,7 +189,7 @@ export default function PublicMatch({ model: initialModel, id }: { model: Model;
       <section className="pm-sec">
         <p className="pm-label">Score progression</p>
         <div className="pm-chart">
-          <ScoreChart series={m.homeSeries} goalDots={m.goalDots} chartMarkers={m.chartMarkers} htLine={m.htLine} colorHome={m.homeColors[0]} colorAway={m.awayColors[0]} mode={m.effMode} />
+          <ScoreChart series={m.homeSeries} goalDots={m.goalDots} twoPtDots={m.twoPtDots} chartMarkers={m.chartMarkers} htLine={m.htLine} colorHome={m.homeColors[0]} colorAway={m.awayColors[0]} mode={m.effMode} />
         </div>
       </section>
 

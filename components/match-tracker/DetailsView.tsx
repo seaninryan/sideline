@@ -14,6 +14,7 @@ export interface DetailsViewProps {
   maxLeadVenue: "home" | "away" | null;
   homeSeries: any[];
   goalDots: any[];
+  twoPtDots: any[];
   chartMarkers: any[];
   htLine: any;
   halfMarks: any[];
@@ -30,7 +31,7 @@ export interface DetailsViewProps {
 // Extracted from MatchTracker (decomposition ③) — behaviour-identical; first typed view.
 export default function DetailsView({
   parsed, effMode, homeName, awayName, maxLeadVenue,
-  homeSeries, goalDots, chartMarkers, htLine, halfMarks,
+  homeSeries, goalDots, twoPtDots, chartMarkers, htLine, halfMarks,
   homeScorers, awayScorers, timelineHA,
   homeColor, awayColor, homeColor2, awayColor2,
 }: DetailsViewProps) {
@@ -51,7 +52,7 @@ export default function DetailsView({
 
       <p className="mt-h">Score progression</p>
       <div style={{ width: "100%" }}>
-        <ScoreChart series={homeSeries} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorHome={homeColor} colorAway={awayColor} mode={effMode} />
+        <ScoreChart series={homeSeries} goalDots={goalDots} twoPtDots={twoPtDots} chartMarkers={chartMarkers} htLine={htLine} colorHome={homeColor} colorAway={awayColor} mode={effMode} />
       </div>
 
       <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>

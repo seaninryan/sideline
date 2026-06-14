@@ -19,7 +19,7 @@ export function buildModel(record: any): Model {
     scoringMode: scoringModeForSport(r.sport),
     label: r.label, homeRoster: r.homeRoster, awayRoster: r.awayRoster,
   });
-  const { roster, totals, series, goalDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
+  const { roster, totals, series, goalDots, twoPtDots, chartMarkers, scorers, scoring, notes, halfMarks, htLine } = parsed;
   const effMode = parsed.mode;
   const sportLabel = sp ? sp.label : parsed.header.sport;
   const homeName = r.homeTeam || "Home";
@@ -48,7 +48,7 @@ export function buildModel(record: any): Model {
     effMode, ht,
     leadChanges: parsed.leadChanges, timesLevel: parsed.timesLevel,
     maxLead: parsed.maxLead, maxLeadVenue: parsed.maxLeadSide,
-    series, goalDots, chartMarkers, htLine, halfMarks, timeline,
+    series, goalDots, twoPtDots, chartMarkers, htLine, halfMarks, timeline,
     nameDisplay: r.nameDisplay || "full",
     homeName, awayName,
     homeColors: [cHome, cHome2], awayColors: [cAway, cAway2],

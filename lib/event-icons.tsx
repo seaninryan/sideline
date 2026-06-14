@@ -15,6 +15,7 @@ export function evIcon(key: string, mode?: string): React.ReactNode {
   switch (key) {
     case "goal": case "goalfree": case "og": return mode === "goals" ? <span aria-hidden="true">⚽</span> : <Flag fill="#1f9d3f" />;
     case "point": case "pointfree": case "point65": case "point45": return <Flag fill="#fbfbf5" />;
+    case "point2": return <Flag fill="#e67e22" />;
     case "yellow": return <span aria-hidden="true">🟨</span>;
     case "red": return <span aria-hidden="true">🟥</span>;
     case "corner": return <span aria-hidden="true">🚩</span>;

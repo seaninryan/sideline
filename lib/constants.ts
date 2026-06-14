@@ -1,5 +1,5 @@
 // Shown in the footer at the bottom of the app — bump on every deployed change so a stale cached page is obvious.
-export const APP_VERSION = "v89";
+export const APP_VERSION = "v90";
 
 // Brand lockup — shared across the public page, the poster image, and the OG card.
 export const BRAND_HOME = "/";                       // home link target (relative — portable across prod/preview/localhost)
@@ -20,6 +20,7 @@ export const LIVE_EVENTS = [
   { key: "pointfree", label: "Point · free", gaa: true },
   { key: "point65", label: "Point · '65", gaa: true },
   { key: "point45", label: "Point · '45", gaa: true },
+  { key: "point2", label: "2-pointer", gaa: true },
   { key: "goal", label: "Goal" },
   { key: "goalfree", label: "Goal · free" },
   { key: "og", label: "Own goal" },
@@ -31,7 +32,7 @@ export const LIVE_EVENTS = [
   { key: "ft", label: "FT" },
 ];
 
-export const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "point65", "point45", "og", "yellow", "red"];
+export const LIVE_PLAYER_EVENTS = ["goal", "point", "goalfree", "pointfree", "point65", "point45", "point2", "og", "yellow", "red"];
 
 // Rolling window for the match list's "Live" section: a started, unfinished match
 // counts as live while its kickoff or last edit is within this span of now.

@@ -399,3 +399,44 @@ describe("chartMarkers", () => {
     expect(r.notes.some((n: any) => n.type === "sub")).toBe(false); // not treated as a sub
   });
 });
+
+describe("parseEvents — 2-pointers (Gaelic football)", () => {
+  it("a 2-pointer is a point worth two; flagged twoPointer; not a goal", () => {
+    const r = parseEvents("18:00\n5 Morty 2pt", teamsGaa);
+    expect(r.scoring[0]).toMatchObject({ type: "point", twoPointer: true, side: "A" });
+    expect(r.totals.A).toMatchObject({ g: 0, p: 2, str: "0-2" });   // two points, not one
+  });
+  it("accepts 2-pt / 2 point / 2-pointer / two-pointer spellings", () => {
+    for (const kw of ["2-pt", "2 point", "2-pointer", "two-pointer", "2pointer"]) {
+      const r = parseEvents(`18:00\n5 Morty ${kw}`, teamsGaa);
+      expect(r.scoring[0]).toMatchObject({ twoPointer: true });
+      expect(r.totals.A.p).toBe(2);
+    }
+  });
+  it("tracks 2-pointers per scorer (p doubled, tp counts them)", () => {
+    const r = parseEvents("18:00\n5 Morty 2pt\n10 Morty\n15 Morty 2pt", teamsGaa);
+    expect(r.scorers.find((s: any) => s.name === "Morty")).toMatchObject({ p: 5, tp: 2 }); // 2+1+2 = 5 points
+    expect(r.totals.A.str).toBe("0-5");
+  });
+  it("a 2-pointer adds an orange-flag chart dot at the cumulative score", () => {
+    const r = parseEvents("18:00\n5 Morty 2pt", teamsGaa);
+    expect(r.twoPtDots).toHaveLength(1);
+    expect(r.twoPtDots[0]).toMatchObject({ side: "A", y: 2 });
+    expect(r.goalDots).toHaveLength(0);
+  });
+  it("a 2-pointer from a free counts twice and is still a free", () => {
+    const r = parseEvents("18:00\n5 Morty 2pt free", teamsGaa);
+    expect(r.scoring[0]).toMatchObject({ twoPointer: true, fromFree: true });
+    expect(r.scorers.find((s: any) => s.name === "Morty")).toMatchObject({ p: 2, frees: 1, tp: 1 });
+  });
+  it("the 'goal' keyword still wins — a goal is never a 2-pointer", () => {
+    const r = parseEvents("18:00\n5 Morty 2pt goal", teamsGaa);
+    expect(r.scoring[0]).toMatchObject({ type: "goal", twoPointer: false });
+    expect(r.totals.A).toMatchObject({ g: 1, p: 0 });
+  });
+  it("a regular point is not flagged as a 2-pointer", () => {
+    const r = parseEvents("18:00\n5 Morty", teamsGaa);
+    expect(r.scoring[0]).toMatchObject({ twoPointer: false });
+    expect(r.totals.A.p).toBe(1);
+  });
+});

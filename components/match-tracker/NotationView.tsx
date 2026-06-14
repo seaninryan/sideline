@@ -66,7 +66,7 @@ export default function NotationView(props: NotationViewProps) {
                 <textarea className="mt-ta" value={raw} onChange={(e) => setRaw(e.target.value)} spellCheck={false} />
                 <p className="mt-note" style={{ marginTop: 8 }}>
                   Format reminder: header <code>Team @ Opp</code> (@ = away, v = home) · roster <code>11. Rick</code> ·
-                  start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal|own goal|'65|'45]</code> ·
+                  start each half with the clock time on its own line · scoring lines <code>min scorer [free|goal|own goal|'65|'45|2pt]</code> ·
                   opposition = <code>T</code> / <code>T11</code> · subs <code>X for Y</code> · cards <code>min who yellow|red card</code> ·
                   corners <code>min [T] corner</code> · added time <code>min HT +3</code> · notes anything else.
                 </p>

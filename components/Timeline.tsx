@@ -32,7 +32,7 @@ export default function Timeline({ timeline = [], halfMarks = [], colorHome, col
                     <span>
                       {descriptive
                         ? <>{it.type === "goal" && <span className="mt-pill goal" style={{ marginLeft: 0, marginRight: 6 }}>goal</span>}<span style={{ color: "#6f7d72" }}>{it.desc || it.scorer}</span></>
-                        : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">&apos;{it.setPiece}</span> : ""}</>}
+                        : <>{evName}{it.type === "goal" ? <span className="mt-pill goal">goal</span> : it.twoPointer ? <span className="mt-pill twopt">2pt</span> : it.fromFree ? <span className="mt-pill free">free</span> : it.setPiece ? <span className="mt-pill free">&apos;{it.setPiece}</span> : ""}</>}
                     </span>
                     <span className="sc"><span className={it.side === "home" ? "chg" : ""}>{it.homeScore}</span> – <span className={it.side === "away" ? "chg" : ""}>{it.awayScore}</span></span>
                   </div>
