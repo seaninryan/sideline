@@ -13,37 +13,13 @@ import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
-import Timeline from "@/components/Timeline";
+import GameModeView from "@/components/match-tracker/GameModeView";
 import { addPlayer } from "@/lib/team-roster";
+import { evIcon } from "@/lib/event-icons";
 import { gpTotal, contrastOn, fmtDateDow } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
 import { whoToken } from "@/lib/event-line";
 import { teamStore } from "@/lib/team-store";
-
-// little flag on a pole — the GAA goal (green) / point (white) motif, matching the chart
-function Flag({ fill }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" style={{ flex: "none" }}>
-      <line x1="3.5" y1="1.5" x2="3.5" y2="14.5" stroke="#3a3a3a" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M3.5 2 L13 4.4 L3.5 7.6 Z" fill={fill} stroke="#3a3a3a" strokeWidth="0.9" strokeLinejoin="round" />
-    </svg>
-  );
-}
-// icon for a live-entry event button; goal/point are mode-aware (GAA flags vs a soccer ball)
-function evIcon(key, mode) {
-  switch (key) {
-    case "goal": case "goalfree": case "og": return mode === "goals" ? <span aria-hidden="true">⚽</span> : <Flag fill="#1f9d3f" />;
-    case "point": case "pointfree": case "point65": case "point45": return <Flag fill="#fbfbf5" />;
-    case "yellow": return <span aria-hidden="true">🟨</span>;
-    case "red": return <span aria-hidden="true">🟥</span>;
-    case "corner": return <span aria-hidden="true">🚩</span>;
-    case "sub": return <span aria-hidden="true">🔁</span>;
-    case "half": return <span aria-hidden="true">▶️</span>;
-    case "ht": return <span aria-hidden="true">⏸️</span>;
-    case "ft": return <span aria-hidden="true">🏁</span>;
-    default: return null;
-  }
-}
 
 export default function MatchTracker({ initialId = null, wizard = false }: { initialId?: string | null; wizard?: boolean }) {
   const {
@@ -347,96 +323,15 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
           </div>
         )}
         {view === "game" && (
-          <div className="mt-game">
-            <div className={"gm-phase gm-phase--" + phase}>
-              <span className="dot" />
-              <span className="lbl">
-                {phase === "pre" ? "Before throw-in" : phase === "ht" ? "Half time" : phase === "over" ? "Full time" : `Half ${halfMarks.filter((m) => !m.marker).length} · in play`}
-              </span>
-            </div>
-
-            {/* full time: only Undo + a pointer to Advanced */}
-            {phase === "over" && (
-              <p className="mt-note" style={{ marginTop: 0 }}>
-                <b>Full time — match closed.</b> Need to change something? Edit it in the <b>Advanced</b> tab. (Or undo the FT line below to keep adding.)
-              </p>
-            )}
-
-            {/* stage 1 — what happened? all events here; team is picked next where it matters */}
-            {phase !== "over" && gmStage.stage === "event" && (
-              (phase === "pre" || phase === "ht") ? (
-                <>
-                  <div className="mt-grid">
-                    <button className="mt-big gm-team ev" onClick={() => addLive("half", null)}>{evIcon("half")}<span>Start half</span></button>
-                  </div>
-                  <p className="mt-note" style={{ marginTop: 10, marginBottom: 0 }}>
-                    {phase === "pre" ? "Tap Start half at throw-in to open scoring." : "Half time — Start half opens the second half."}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>What happened?</p>
-                  <div className="mt-grid">
-                    {liveEvents.filter((ev) => !["half", "ht", "ft"].includes(ev.key)).map((ev) => (
-                      <button key={ev.key} className="mt-big ev" onClick={() => setGmStage({ stage: "team", ev: ev.key })}>{evIcon(ev.key, effMode)}<span>{ev.label}</span></button>
-                    ))}
-                    <button className="mt-big ev" onClick={() => setGmStage({ stage: "team", ev: "sub" })}>{evIcon("sub")}<span>Sub</span></button>
-                  </div>
-                  <div className="mt-grid" style={{ marginTop: 10 }}>
-                    <button className="mt-big ev" onClick={() => addLive("ht", null)}>{evIcon("ht")}<span>HT</span></button>
-                    <button className="mt-big ev" onClick={() => addLive("ft", null)}>{evIcon("ft")}<span>FT</span></button>
-                  </div>
-                </>
-              )
-            )}
-
-            {/* stage 2 — which team? (scores, cards, corner, sub) */}
-            {phase !== "over" && gmStage.stage === "team" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} — which team?</p>
-                <div className="mt-grid">
-                  <button className="mt-big gm-team" style={{ background: colorHome, color: contrastOn(colorHome) }} onClick={() => pickGmTeam("home")}>{homeName}</button>
-                  <button className="mt-big gm-team" style={{ background: colorAway, color: contrastOn(colorAway) }} onClick={() => pickGmTeam("away")}>{awayName}</button>
-                </div>
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "event" })}>← Back</button>
-              </>
-            )}
-
-            {/* stage 3 — which player? (scores / cards) */}
-            {phase !== "over" && gmStage.stage === "who" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{evLabel(gmStage.ev)} · {gmStage.team === "away" ? awayName : homeName} — who?</p>
-                {gmPicker(gmStage.team, (p) => { addLive(gmStage.ev, p, gmStage.team); setGmStage({ stage: "event" }); }, { allowUnknown: true })}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team", ev: gmStage.ev })}>← Back</button>
-              </>
-            )}
-
-            {/* sub flow — off then on, on the team's jersey pitch */}
-            {phase !== "over" && gmStage.stage === "subOff" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.team === "away" ? awayName : homeName} sub — who goes off?</p>
-                {gmPicker(gmStage.team, (p) => setGmStage({ ...gmStage, stage: "subOn", off: p }), { eligible: onPitchSet(gmStage.team) })}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ stage: "team", ev: "sub" })}>← Back</button>
-              </>
-            )}
-            {phase !== "over" && gmStage.stage === "subOn" && (
-              <>
-                <p className="mt-note" style={{ marginTop: 0, marginBottom: 8 }}>{gmStage.off.name || gmStage.off.num} off — who comes on?</p>
-                {gmPicker(gmStage.team, (p) => { completeSub(p, gmStage.off, gmStage.team); setGmStage({ stage: "event" }); }, { eligible: benchSet(gmStage.team) })}
-                <button className="mt-add alt" style={{ marginTop: 12 }} onClick={() => setGmStage({ ...gmStage, stage: "subOff" })}>← Back</button>
-              </>
-            )}
-
-            {/* pinned bottom: last entry + undo */}
-            <div className="gm-undo">
-              <span className="t">{undoTarget ? `Last: ${undoTarget.text}` : "Nothing added yet"}</span>
-              <button className="mt-add alt" disabled={!canUndo} onClick={undoRaw}>↩ Undo</button>
-            </div>
-
-            {/* running timeline beneath the controls */}
-            <p className="mt-h" style={{ marginTop: 16 }}>Timeline</p>
-            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={homeColor} colorHome2={homeColor2} colorAway={awayColor} colorAway2={awayColor2} nameHome={homeName} nameAway={awayName} />
-          </div>
+          <GameModeView
+            phase={phase} halfMarks={halfMarks} gmStage={gmStage} setGmStage={setGmStage}
+            liveEvents={liveEvents} effMode={effMode} homeName={homeName} awayName={awayName}
+            colorHome={colorHome} colorAway={colorAway} colorHome2={colorHome2} colorAway2={colorAway2}
+            homeColor={homeColor} awayColor={awayColor} homeColor2={homeColor2} awayColor2={awayColor2}
+            timelineHA={timelineHA} undoTarget={undoTarget} canUndo={canUndo} evLabel={evLabel}
+            addLive={addLive} pickGmTeam={pickGmTeam} gmPicker={gmPicker}
+            onPitchSet={onPitchSet} benchSet={benchSet} completeSub={completeSub} undoRaw={undoRaw}
+          />
         )}
 
         {view === "details" && (
