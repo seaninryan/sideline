@@ -2,8 +2,8 @@
 "use client";
 import React from "react";
 import { useMatchEditor } from "@/components/match-tracker/useMatchEditor";
+import DetailsView from "@/components/match-tracker/DetailsView";
 import MinuteStep from "@/components/MinuteStep";
-import ScoreChart from "@/components/ScoreChart";
 import RosterPitch from "@/components/RosterPitch";
 import Jersey from "@/components/Jersey";
 import ShareSheet from "@/components/ShareSheet";
@@ -13,14 +13,11 @@ import SportIcon from "@/components/SportIcon";
 import AppHeader from "@/components/AppHeader";
 import BrandFooter from "@/components/BrandFooter";
 import ScoreHeader from "@/components/ScoreHeader";
-import StatGrid from "@/components/StatGrid";
-import Scorers from "@/components/Scorers";
 import Timeline from "@/components/Timeline";
 import { addPlayer } from "@/lib/team-roster";
 import { gpTotal, contrastOn, fmtDateDow } from "@/lib/util";
 import { PALETTE, SPORTS } from "@/lib/constants";
 import { whoToken } from "@/lib/event-line";
-import { htScore } from "@/lib/half-time";
 import { teamStore } from "@/lib/team-store";
 
 // little flag on a pole — the GAA goal (green) / point (white) motif, matching the chart
@@ -443,31 +440,12 @@ export default function MatchTracker({ initialId = null, wizard = false }: { ini
         )}
 
         {view === "details" && (
-          <>
-            {parsed.warnings.length > 0 && (
-              <div className="mt-warn">
-                <b>Heads up — check {parsed.warnings.length} {parsed.warnings.length === 1 ? "entry" : "entries"}.</b>
-                <span> {parsed.warnings.map((w) => `${w.minute}' — ${w.msg}`).join("; ")}.</span>
-              </div>
-            )}
-            <StatGrid stats={[
-              { k: "Half-time", v: htScore(parsed.series, effMode) },
-              { k: "Lead changes", v: parsed.leadChanges },
-              { k: "Times level", v: parsed.timesLevel },
-              { k: `Biggest lead${maxLeadVenue ? " · " + (maxLeadVenue === "home" ? homeName : awayName) : ""}`, v: parsed.maxLead },
-            ]} />
-
-            <p className="mt-h">Score progression</p>
-            <div style={{ width: "100%" }}>
-              <ScoreChart series={homeSeries} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} colorHome={homeColor} colorAway={awayColor} mode={effMode} />
-            </div>
-
-            <p className="mt-h" style={{ marginTop: 18 }}>Scorers</p>
-            <Scorers home={homeScorers} away={awayScorers} colorHome={homeColor} colorHome2={homeColor2} colorAway={awayColor} colorAway2={awayColor2} mode={effMode} />
-
-            <p className="mt-h" style={{ marginTop: 18 }}>Timeline</p>
-            <Timeline timeline={timelineHA} halfMarks={halfMarks} colorHome={homeColor} colorHome2={homeColor2} colorAway={awayColor} colorAway2={awayColor2} nameHome={homeName} nameAway={awayName} />
-          </>
+          <DetailsView
+            parsed={parsed} effMode={effMode} homeName={homeName} awayName={awayName} maxLeadVenue={maxLeadVenue}
+            homeSeries={homeSeries} goalDots={goalDots} chartMarkers={chartMarkers} htLine={htLine} halfMarks={halfMarks}
+            homeScorers={homeScorers} awayScorers={awayScorers} timelineHA={timelineHA}
+            homeColor={homeColor} awayColor={awayColor} homeColor2={homeColor2} awayColor2={awayColor2}
+          />
         )}
 
         {view === "lineup" && (editLineup ? (() => {
